@@ -1,0 +1,25 @@
+[Unit]
+Description=Overlord — WhatsApp Claude Bridge
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/overlord
+ExecStart=/usr/bin/node index.js
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Environment
+Environment=NODE_ENV=production
+Environment=ADMIN_NUMBER=18681234567
+Environment=BOT_NAME=Claude
+Environment=CLAUDE_PATH=/usr/local/bin/claude
+
+# Security (optional hardening)
+NoNewPrivileges=false
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,16 @@
+{
+  "name": "overlord",
+  "version": "1.0.0",
+  "description": "WhatsApp ↔ Claude Code bridge — Overlord",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "@hapi/boom": "^10.0.1",
+    "pino": "^9.0.0",
+    "node-cache": "^5.1.2"
+  }
+}
