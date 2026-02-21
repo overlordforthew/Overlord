@@ -1,0 +1,31 @@
+services:
+  overlord:
+    build: .
+    container_name: overlord
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./auth:/app/auth
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./media:/app/media
+      # Claude CLI — credentials (read-only)
+      - /root/.claude/.credentials.json:/root/.claude/.credentials.json:ro
+      - /root/.claude/settings.json:/root/.claude/settings.json:ro
+      - /root/.claude/settings.local.json:/root/.claude/settings.local.json:ro
+      # Claude CLI — runtime dirs (read-write, needed for operation)
+      - /root/.claude/debug:/root/.claude/debug
+      - /root/.claude/todos:/root/.claude/todos
+      - /root/.claude/projects:/root/.claude/projects
+      - /root/.claude/cache:/root/.claude/cache
+      - /root/.claude/session-env:/root/.claude/session-env
+      # Project directories — mount root (has .git for Claude sandbox) + Overlord override
+      - /root/projects:/projects
+      - /root/overlord:/projects/Overlord
+    networks:
+      - coolify
+
+networks:
+  coolify:
+    external: true
