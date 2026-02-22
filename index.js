@@ -1088,7 +1088,10 @@ async function startBot() {
       const code = (lastDisconnect?.error)?.output?.statusCode;
       if (code !== DisconnectReason.loggedOut) {
         logger.info('🔄 Reconnecting in 5s...');
-        setTimeout(startBot, 5000);
+        setTimeout(async () => {
+          const newSock = await startBot();
+          sockRef.sock = newSock;
+        }, 5000);
       } else {
         logger.error('🚫 Logged out. Delete ./auth and restart.');
       }
@@ -1252,8 +1255,12 @@ console.log(`
 ╚══════════════════════════════════════════════════════════╝
 `);
 
+// Mutable wrapper so the HTTP server always uses the latest socket after reconnects
+const sockRef = { sock: null };
+
 startBot().then((sock) => {
-  startServer(sock, sendResponse);
+  sockRef.sock = sock;
+  startServer(sockRef, sendResponse);
 }).catch((err) => {
   console.error('💥 Fatal:', err);
   process.exit(1);
