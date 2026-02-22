@@ -3,7 +3,7 @@
 # Usage: codex-review.sh [--commit SHA] [--base BRANCH] [--uncommitted]
 # Default: reviews the latest commit
 
-set -euo pipefail
+set -uo pipefail
 
 LOG="/root/overlord/logs/codex-review.log"
 TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M UTC')
@@ -23,8 +23,16 @@ done
 
 echo "[$TIMESTAMP] Running Codex review ($MODE)..." | tee -a "$LOG"
 
-# Run review, capture output
-REVIEW=$(codex review $MODE 2>&1) || true
+# Run review, capture output and exit code
+REVIEW=$(codex review $MODE 2>&1)
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -ne 0 ]; then
+    echo "[$TIMESTAMP] Codex review FAILED (exit $EXIT_CODE):" | tee -a "$LOG"
+    echo "$REVIEW" | tee -a "$LOG"
+    echo "ERROR: Codex review failed — check auth or network"
+    exit 1
+fi
 
 echo "$REVIEW" | tee -a "$LOG"
 
