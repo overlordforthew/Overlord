@@ -288,11 +288,18 @@ async function checkURLChanges(sockRef) {
 // LOG MONITORING
 // ============================================================
 
+// Coolify internals + infrastructure that produce noisy but harmless errors
+const DEFAULT_EXCLUDE_CONTAINERS = [
+  'coolify-sentinel', 'coolify-db', 'coolify-redis', 'coolify-realtime',
+];
+
 async function loadLogConfig() {
   return await readJSON(LOG_MONITOR_FILE, {
     enabled: true,
     containers: [],
+    excludeContainers: DEFAULT_EXCLUDE_CONTAINERS,
     patterns: ['ERROR', 'FATAL', 'SIGKILL', 'OOMKilled', 'panic'],
+    ignorePatterns: ['sentinel/push', 'context deadline exceeded'],
     lastCheck: null,
     alertedHashes: [],
   });
@@ -329,8 +336,9 @@ async function checkContainerLogs(sockRef) {
   const since = config.lastCheck || new Date(Date.now() - 5 * 60000).toISOString();
   config.lastCheck = new Date().toISOString();
 
-  // If no specific containers, check all running ones
+  // If no specific containers, check all running ones (minus excluded)
   let containers = config.containers;
+  const exclude = config.excludeContainers || DEFAULT_EXCLUDE_CONTAINERS;
   if (containers.length === 0) {
     try {
       const { stdout } = await execAsync('docker ps --format "{{.Names}}" 2>/dev/null', { timeout: 5000 });
@@ -339,8 +347,10 @@ async function checkContainerLogs(sockRef) {
       return;
     }
   }
+  containers = containers.filter(c => !exclude.includes(c));
 
   const pattern = config.patterns.join('\\|');
+  const ignorePatterns = config.ignorePatterns || [];
   const alerts = [];
 
   for (const container of containers) {
@@ -351,11 +361,17 @@ async function checkContainerLogs(sockRef) {
       );
 
       if (stdout.trim()) {
-        const errorHash = crypto.createHash('md5').update(stdout.trim()).digest('hex');
+        // Filter out suppressed patterns
+        const filtered = stdout.trim().split('\n')
+          .filter(line => !ignorePatterns.some(ip => line.includes(ip)))
+          .join('\n');
+        if (!filtered.trim()) continue;
+
+        const errorHash = crypto.createHash('md5').update(filtered).digest('hex');
 
         // Deduplicate — don't alert same errors repeatedly
         if (!config.alertedHashes.includes(errorHash)) {
-          alerts.push(`🐳 ${container}:\n${stdout.trim().substring(0, 300)}`);
+          alerts.push(`🐳 ${container}:\n${filtered.substring(0, 300)}`);
           config.alertedHashes.push(errorHash);
           // Keep only last 100 hashes
           if (config.alertedHashes.length > 100) config.alertedHashes = config.alertedHashes.slice(-100);
