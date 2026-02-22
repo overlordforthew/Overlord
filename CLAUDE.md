@@ -94,12 +94,20 @@ See **skills/REGISTRY.md** for the full list. Key skills with executable tools:
 - **Make chart:** `python3 /app/skills/data-analysis/chart.py data.csv --type bar --x col1 --y col2`
 
 ### LLM Tools (alternative models via OpenRouter)
+- **Setup (done at container start):** Key auto-set from OPENROUTER_KEY env var; manual: `llm keys set openrouter`
 - **Auto-free (best available):** `llm -m openrouter/openrouter/free "question"`
 - **DeepSeek R1 (reasoning):** `llm -m openrouter/deepseek/deepseek-r1-0528:free "prompt"`
 - **Llama 3.3 70B:** `llm -m openrouter/meta-llama/llama-3.3-70b-instruct:free "prompt"`
 - **Qwen3 Coder:** `llm -m openrouter/qwen/qwen3-coder:free "prompt"`
 - **Pipe data:** `echo "text" | llm -m openrouter/openrouter/free "summarize"`
 - **List all models:** `llm models` | **Free models:** `llm models | grep :free`
+
+### Code Review (Codex CLI — free via ChatGPT)
+- **Review last commit:** `codex review --commit HEAD`
+- **Review vs branch:** `codex review --base main`
+- **Review uncommitted:** `codex review --uncommitted`
+- **Wrapper script:** `/root/overlord/scripts/codex-review.sh`
+- **RULE:** Run `codex review --commit HEAD` after every significant code commit. Fix any P0/P1 issues found.
 
 ### Instruction-Only Skills (read SKILL.md for procedures)
 - Server work → skills/server-admin/SKILL.md

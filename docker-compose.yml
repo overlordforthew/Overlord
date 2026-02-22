@@ -23,6 +23,8 @@ services:
       # Git credentials for push access (staged to tmp, copied at startup)
       - /root/.gitconfig:/tmp/.gitconfig-host:ro
       - /root/.git-credentials:/tmp/.git-credentials-host:ro
+      # Codex CLI — auth and config
+      - /root/.codex:/root/.codex
       # Docker socket — allows container management from inside
       - /var/run/docker.sock:/var/run/docker.sock
       # Project directories — mount root (has .git for Claude sandbox) + Overlord override
