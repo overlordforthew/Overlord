@@ -294,7 +294,11 @@ async function createSticker(imagePath) {
 async function generateTTS(text, voice = 'en-US-GuyNeural') {
   const outFile = `/tmp/tts_${Date.now()}.mp3`;
   try {
-    await execAsync(`python3 /app/scripts/tts.py "${text.replace(/"/g, '\\"')}" "${outFile}" --voice "${voice}"`, { timeout: 30000 });
+    await new Promise((resolve, reject) => {
+      const proc = spawn('python3', ['/app/scripts/tts.py', text, outFile, '--voice', voice], { timeout: 30000 });
+      proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`TTS exit code ${code}`)));
+      proc.on('error', reject);
+    });
     return outFile;
   } catch (err) {
     console.error('TTS generation failed:', err.message);
@@ -463,8 +467,8 @@ function parseTimeToCron(timeStr) {
     if (unit.startsWith('h')) return `0 */${num} * * *`;
   }
 
-  // "every hour"
-  if (lower === 'every hour' || lower === 'hourly') return '0 * * * *';
+  // "every hour" or "every hour <message>"
+  if (lower.startsWith('every hour') || lower.startsWith('hourly')) return '0 * * * *';
 
   // "daily at Xam/pm" or "every day at X"
   match = lower.match(/(?:daily|every\s*day)\s*(?:at\s*)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
@@ -1269,7 +1273,7 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
     const cronExpr = parseTimeToCron(rest);
     if (cronExpr) {
       // Extract message after the time pattern
-      const msgMatch = rest.match(/(?:every\s+\S+\s+\S+\s+(?:at\s+\S+\s*(?:am|pm)?\s*)?|daily\s+at\s+\S+\s*(?:am|pm)?\s*|hourly\s*)(.+)/i);
+      const msgMatch = rest.match(/(?:every\s+hour\s+|every\s+\S+\s+\S+\s+(?:at\s+\S+\s*(?:am|pm)?\s*)?|daily\s+at\s+\S+\s*(?:am|pm)?\s*|hourly\s+)(.+)/i);
       const msg = msgMatch ? msgMatch[1].trim() : rest;
       const reminder = await addReminder(chatJid, cronExpr, msg, false, sockRef);
       if (reminder) return `⏰ Recurring reminder set (${cronExpr})\nID: ${reminder.id}\nMessage: ${msg}`;
@@ -1594,16 +1598,18 @@ async function startBot() {
                 await sock.sendMessage(chatJid, { delete: reactKey });
                 logger.info('🗑️ Deleted message via ❌ reaction');
               } else if (emoji === '🔖') {
-                // Bookmark — find the reacted-to message text in context
+                // Bookmark — find the reacted-to message by its key ID in context
+                const reactedId = reactKey?.id;
                 const ctx = conversationContext.get(chatJid, 50);
-                const target = ctx.find(m => m.text && m.timestamp);
-                if (target) {
-                  const bookmarkDir = contactDir(chatJid);
-                  const bookmarkFile = path.join(bookmarkDir, 'bookmarks.md');
-                  const entry = `\n- [${new Date().toISOString()}] ${target.text.substring(0, 200)}\n`;
-                  await fs.appendFile(bookmarkFile, entry);
-                  logger.info('🔖 Message bookmarked');
-                }
+                const target = reactedId
+                  ? ctx.find(m => m.messageId === reactedId)
+                  : null;
+                const textToSave = target?.text || `[message ${reactedId || 'unknown'}]`;
+                const bookmarkDir = contactDir(chatJid);
+                const bookmarkFile = path.join(bookmarkDir, 'bookmarks.md');
+                const entry = `\n- [${new Date().toISOString()}] ${textToSave.substring(0, 200)}\n`;
+                await fs.appendFile(bookmarkFile, entry);
+                logger.info('🔖 Message bookmarked');
               }
             } catch (err) {
               logger.error({ err }, 'Reaction handler error');
@@ -1631,6 +1637,7 @@ async function startBot() {
 
         // Add ALL messages to context (even ones we won't respond to)
         conversationContext.add(chatJid, {
+          messageId: msg.key.id,
           sender: senderNumber(senderJid), senderName, role: 'user',
           type: parsed.type, text: parsed.text, caption: parsed.caption,
           filePath: mediaResult?.filePath, fileName: parsed.fileName,

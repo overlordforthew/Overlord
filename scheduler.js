@@ -91,6 +91,11 @@ function scheduleReminder(reminder, sockRef) {
 }
 
 export async function addReminder(chatJid, cronExpr, text, oneshot, sockRef) {
+  // Validate cron expression BEFORE persisting
+  if (!cron.validate(cronExpr)) {
+    return null;
+  }
+
   const id = crypto.randomBytes(4).toString('hex');
   const reminder = {
     id,
@@ -101,12 +106,13 @@ export async function addReminder(chatJid, cronExpr, text, oneshot, sockRef) {
     createdAt: new Date().toISOString(),
   };
 
+  scheduleReminder(reminder, sockRef);
+
   const reminders = await loadReminders();
   reminders.push(reminder);
   await saveReminders(reminders);
 
-  const success = scheduleReminder(reminder, sockRef);
-  return success ? reminder : null;
+  return reminder;
 }
 
 export async function removeReminder(id) {
