@@ -35,6 +35,7 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     lxml \
     feedparser \
     matplotlib \
+    edge-tts \
     llm \
     llm-openrouter
 
@@ -48,7 +49,7 @@ COPY package.json ./
 RUN npm install
 
 # Copy app files
-COPY index.js server.js CLAUDE.md traefik-watcher.sh ./
+COPY index.js server.js scheduler.js CLAUDE.md traefik-watcher.sh ./
 
 # Copy skills and scripts into container
 COPY skills/ ./skills/

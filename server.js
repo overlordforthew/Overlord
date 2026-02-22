@@ -5,6 +5,7 @@
 
 import express from 'express';
 import crypto from 'crypto';
+import { addReminder, removeReminder, listReminders } from './scheduler.js';
 
 const WEBHOOK_TOKEN = process.env.WEBHOOK_TOKEN || '';
 const WEBHOOK_PORT = parseInt(process.env.WEBHOOK_PORT || '3001');
@@ -91,6 +92,51 @@ export function startServer(sockRef, sendResponse) {
       const text = msg || `Coolify: ${project || 'unknown'} deploy ${status || 'update'} (${environment || 'production'})`;
       await sockRef.sock.sendMessage(ADMIN_JID, { text });
       res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ---- Schedule Management ----
+
+  // POST /api/schedule — create reminder via API
+  app.post('/api/schedule', requireToken, async (req, res) => {
+    try {
+      const { cron: cronExpr, text, chatJid, oneshot } = req.body;
+      if (!cronExpr || !text) {
+        return res.status(400).json({ error: 'Missing cron or text' });
+      }
+      const jid = chatJid || ADMIN_JID;
+      const reminder = await addReminder(jid, cronExpr, text, oneshot, sockRef);
+      if (reminder) {
+        res.json({ success: true, reminder });
+      } else {
+        res.status(400).json({ error: 'Invalid cron expression' });
+      }
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/schedules — list active schedules
+  app.get('/api/schedules', requireToken, async (_req, res) => {
+    try {
+      const reminders = await listReminders();
+      res.json({ schedules: reminders });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // DELETE /api/schedule/:id — cancel schedule
+  app.delete('/api/schedule/:id', requireToken, async (req, res) => {
+    try {
+      const removed = await removeReminder(req.params.id);
+      if (removed) {
+        res.json({ success: true });
+      } else {
+        res.status(404).json({ error: 'Schedule not found' });
+      }
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

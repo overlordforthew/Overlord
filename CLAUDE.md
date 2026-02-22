@@ -56,14 +56,65 @@ Check STATUS.md for current state. Known services:
 - **Docker:** `docker ps`, `docker restart <name>`, `docker logs <name>`, `docker stop/start` — manage all containers
 - **Git:** commit, push, pull in any project under /projects/ — pushes auto-deploy via Coolify webhooks
 - **Code:** Read, edit, create files in any project
-- **Media:** Analyze images, PDFs, documents, screenshots
+- **Media:** Analyze images, PDFs, documents, screenshots, QR codes, stickers, TTS
 - **Web:** Search the web, fetch URLs, research topics
 - **Memory:** Remember things, update memory files
+- **Deploy:** Trigger redeployments, restart containers
+- **Database:** Query PostgreSQL databases with SQL
+- **Scheduling:** Set reminders, monitor URLs, monitor container logs
 
 ### Regular Users — Chat Only
 - Conversational AI, no shell commands or file access
 - Can share media for analysis
+- Can generate QR codes (/qr) and voice notes (/tts)
 - Can ask questions, get help
+
+### Proactive Features (Automatic)
+- **Daily Briefing:** Server health summary sent at 8am
+- **URL Monitoring:** Checks watched URLs every 15 minutes for changes
+- **Log Monitoring:** Scans container logs every 5 minutes for errors/fatals
+- **Reminders:** Scheduled one-time or recurring messages via cron
+
+## WHATSAPP COMMANDS
+
+### Core
+- `/help` — Show all commands
+- `/status` — Server info (admin)
+- `/memory` — Chat memory
+- `/clear` — Reset session
+- `/context` — Message buffer
+- `/mode [all|smart|mention]` — Response mode
+- `/threshold [0.0-1.0]` — Smart mode chattiness
+
+### Reminders (Admin)
+- `/remind <time> <message>` — Set a reminder (e.g., "5 minutes check oven", "every hour drink water", "daily at 9am standup")
+- `/reminders` — List active reminders
+- `/cancel <id>` — Cancel a reminder
+- `/briefing` — Trigger daily server briefing on demand
+
+### Monitoring (Admin)
+- `/watch <url>` — Monitor URL for content changes (checks every 15min)
+- `/unwatch <url|id>` — Stop monitoring
+- `/watches` — List all watched URLs
+- `/monitor` — Show log monitor status
+- `/monitor add <container>` — Add container to log watch
+- `/monitor remove <container>` — Remove container from log watch
+
+### Media
+- `/qr <text or URL>` — Generate QR code image
+- `/tts <text>` or `/say <text>` — Convert text to voice note (edge-tts)
+- Send image with caption "sticker" — Convert to WhatsApp sticker
+
+### Admin Operations
+- `/deploy <project>` — Trigger git pull + push (auto-deploys via Coolify)
+- `/restart <container>` — Restart a Docker container
+- `/db list` — Show available databases
+- `/db schema <name>` — Show database schema
+- `/db <name> <SQL>` — Execute SQL query (read-only enforced)
+
+### Reactions (Admin)
+- React ❌ to bot message → Delete that message
+- React 🔖 to any message → Bookmark it
 
 ## PROJECTS (mounted at /projects/)
 

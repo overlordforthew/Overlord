@@ -36,6 +36,14 @@ import crypto from 'crypto';
 import qrcode from 'qrcode-terminal';
 
 import { startServer } from './server.js';
+import {
+  startScheduler, addReminder, removeReminder, listReminders,
+  generateBriefing, addURLWatch, removeURLWatch, listURLWatches,
+  getLogMonitorStatus, addLogMonitorContainer, removeLogMonitorContainer,
+} from './scheduler.js';
+import QRCode from 'qrcode';
+import sharp from 'sharp';
+import pg from 'pg';
 
 const execAsync = promisify(exec);
 
@@ -256,6 +264,235 @@ async function transcribeAudio(filePath) {
     logger.error({ err }, 'Transcription failed');
     return null;
   }
+}
+
+// ============================================================
+// QR CODE GENERATION
+// ============================================================
+
+async function generateQR(text) {
+  const buffer = await QRCode.toBuffer(text, { type: 'png', width: 400, margin: 2 });
+  return buffer;
+}
+
+// ============================================================
+// STICKER CREATION
+// ============================================================
+
+async function createSticker(imagePath) {
+  const buffer = await sharp(imagePath)
+    .resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .webp({ quality: 80 })
+    .toBuffer();
+  return buffer;
+}
+
+// ============================================================
+// TEXT-TO-SPEECH
+// ============================================================
+
+async function generateTTS(text, voice = 'en-US-GuyNeural') {
+  const outFile = `/tmp/tts_${Date.now()}.mp3`;
+  try {
+    await execAsync(`python3 /app/scripts/tts.py "${text.replace(/"/g, '\\"')}" "${outFile}" --voice "${voice}"`, { timeout: 30000 });
+    return outFile;
+  } catch (err) {
+    console.error('TTS generation failed:', err.message);
+    return null;
+  }
+}
+
+// ============================================================
+// DEPLOY HELPERS
+// ============================================================
+
+const PROJECT_PATHS = {
+  beastmode: '/projects/BeastMode',
+  namibarden: '/projects/NamiBarden',
+  elsalvador: '/projects/ElSalvador',
+  lumina: '/projects/Lumina',
+  overlord: '/projects/Overlord',
+};
+
+async function triggerDeploy(projectName) {
+  const key = projectName.toLowerCase();
+  const projectPath = PROJECT_PATHS[key];
+  if (!projectPath) return { success: false, error: `Unknown project: ${projectName}. Known: ${Object.keys(PROJECT_PATHS).join(', ')}` };
+
+  try {
+    const { stdout, stderr } = await execAsync(
+      `cd "${projectPath}" && git pull origin main 2>&1 && git push 2>&1`,
+      { timeout: 30000 }
+    );
+    return { success: true, output: (stdout + '\n' + stderr).trim().substring(0, 500) };
+  } catch (err) {
+    return { success: false, error: err.message.substring(0, 300) };
+  }
+}
+
+// ============================================================
+// DATABASE QUERY HELPERS
+// ============================================================
+
+const DB_CONNECTIONS = {};
+
+function parseDBConnections() {
+  const raw = process.env.DB_CONNECTIONS || '';
+  if (!raw) return;
+  for (const entry of raw.split(',')) {
+    const [name, host, port, database, user, password] = entry.split(':');
+    if (name && host) {
+      DB_CONNECTIONS[name.toLowerCase()] = {
+        host, port: parseInt(port) || 5432,
+        database: database || name,
+        user: user || 'postgres',
+        password: password || '',
+      };
+    }
+  }
+}
+parseDBConnections();
+
+async function listDatabases() {
+  const names = Object.keys(DB_CONNECTIONS);
+  if (names.length === 0) {
+    // Try to discover from running postgres containers
+    try {
+      const { stdout } = await execAsync(
+        'docker ps --filter "ancestor=postgres" --format "{{.Names}}" 2>/dev/null',
+        { timeout: 5000 }
+      );
+      const containers = stdout.trim().split('\n').filter(Boolean);
+      return containers.length > 0
+        ? `PostgreSQL containers found:\n${containers.join('\n')}\n\nSet DB_CONNECTIONS env var to enable queries.\nFormat: name:host:port:database:user:password`
+        : 'No databases configured. Set DB_CONNECTIONS env var.';
+    } catch {
+      return 'No databases configured. Set DB_CONNECTIONS env var.';
+    }
+  }
+  return `Available databases:\n${names.map(n => `  - ${n} (${DB_CONNECTIONS[n].host}:${DB_CONNECTIONS[n].port}/${DB_CONNECTIONS[n].database})`).join('\n')}`;
+}
+
+async function queryDatabase(dbName, sql) {
+  const config = DB_CONNECTIONS[dbName.toLowerCase()];
+  if (!config) return { error: `Unknown database: ${dbName}. Use /db list to see available databases.` };
+
+  const client = new pg.Client(config);
+  try {
+    await client.connect();
+    const result = await client.query(sql);
+
+    if (result.rows && result.rows.length > 0) {
+      // Format as readable table
+      const cols = Object.keys(result.rows[0]);
+      const rows = result.rows.slice(0, 50); // Cap at 50 rows
+      let output = cols.join(' | ') + '\n' + cols.map(() => '---').join(' | ') + '\n';
+      for (const row of rows) {
+        output += cols.map(c => String(row[c] ?? 'NULL')).join(' | ') + '\n';
+      }
+      if (result.rows.length > 50) output += `\n... and ${result.rows.length - 50} more rows`;
+      return { data: output, rowCount: result.rowCount };
+    }
+    return { data: `Query executed. Rows affected: ${result.rowCount}`, rowCount: result.rowCount };
+  } catch (err) {
+    return { error: err.message };
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
+
+async function getDBSchema(dbName) {
+  const config = DB_CONNECTIONS[dbName.toLowerCase()];
+  if (!config) return null;
+
+  const client = new pg.Client(config);
+  try {
+    await client.connect();
+    const { rows } = await client.query(`
+      SELECT table_name, column_name, data_type, is_nullable
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+      ORDER BY table_name, ordinal_position
+    `);
+
+    const tables = {};
+    for (const row of rows) {
+      if (!tables[row.table_name]) tables[row.table_name] = [];
+      tables[row.table_name].push(`${row.column_name} (${row.data_type}${row.is_nullable === 'YES' ? ', nullable' : ''})`);
+    }
+
+    return Object.entries(tables).map(([t, cols]) => `${t}:\n  ${cols.join('\n  ')}`).join('\n\n');
+  } catch (err) {
+    return `Error: ${err.message}`;
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
+
+// ============================================================
+// NATURAL LANGUAGE TIME PARSER
+// ============================================================
+
+function parseTimeToDelay(timeStr) {
+  // Parse "5 minutes", "1 hour", "30 seconds", "2 hours", "1 day"
+  const match = timeStr.match(/(\d+)\s*(second|minute|min|hour|hr|day|week|month)s?/i);
+  if (!match) return null;
+
+  const num = parseInt(match[1]);
+  const unit = match[2].toLowerCase();
+
+  const ms = {
+    second: 1000, minute: 60000, min: 60000,
+    hour: 3600000, hr: 3600000,
+    day: 86400000, week: 604800000, month: 2592000000,
+  }[unit];
+
+  return ms ? num * ms : null;
+}
+
+function parseTimeToCron(timeStr) {
+  // Parse "every 5 minutes", "every hour", "daily at 9am", "every day at 3pm"
+  const lower = timeStr.toLowerCase().trim();
+
+  // "every N minutes/hours"
+  let match = lower.match(/every\s+(\d+)\s*(minute|min|hour|hr)s?/);
+  if (match) {
+    const num = parseInt(match[1]);
+    const unit = match[2];
+    if (unit.startsWith('min')) return `*/${num} * * * *`;
+    if (unit.startsWith('h')) return `0 */${num} * * *`;
+  }
+
+  // "every hour"
+  if (lower === 'every hour' || lower === 'hourly') return '0 * * * *';
+
+  // "daily at Xam/pm" or "every day at X"
+  match = lower.match(/(?:daily|every\s*day)\s*(?:at\s*)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
+  if (match) {
+    let hour = parseInt(match[1]);
+    const min = parseInt(match[2] || '0');
+    if (match[3] === 'pm' && hour < 12) hour += 12;
+    if (match[3] === 'am' && hour === 12) hour = 0;
+    return `${min} ${hour} * * *`;
+  }
+
+  // "every monday/tuesday..." at optional time
+  const days = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+  for (const [dayName, dayNum] of Object.entries(days)) {
+    if (lower.includes(dayName)) {
+      match = lower.match(/at\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
+      let hour = 9, min = 0;
+      if (match) {
+        hour = parseInt(match[1]);
+        min = parseInt(match[2] || '0');
+        if (match[3] === 'pm' && hour < 12) hour += 12;
+        if (match[3] === 'am' && hour === 12) hour = 0;
+      }
+      return `${min} ${hour} * * ${dayNum}`;
+    }
+  }
+
+  return null;
 }
 
 // ============================================================
@@ -984,8 +1221,9 @@ function checkRateLimit(jid) {
 // SPECIAL COMMANDS
 // ============================================================
 
-async function handleSpecialCommand(text, chatJid, senderJid) {
+async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
   const cmd = text.toLowerCase().trim();
+  const fullText = text.trim();
 
   if (cmd === '/status' && isAdmin(senderJid)) {
     try {
@@ -1023,23 +1261,228 @@ async function handleSpecialCommand(text, chatJid, senderJid) {
     return '❌ Use a value between 0.0 and 1.0';
   }
 
+  // ---- REMINDER COMMANDS ----
+  if (cmd.startsWith('/remind ') && isAdmin(senderJid)) {
+    const rest = fullText.substring(8).trim();
+
+    // Try "every ..." pattern for recurring
+    const cronExpr = parseTimeToCron(rest);
+    if (cronExpr) {
+      // Extract message after the time pattern
+      const msgMatch = rest.match(/(?:every\s+\S+\s+\S+\s+(?:at\s+\S+\s*(?:am|pm)?\s*)?|daily\s+at\s+\S+\s*(?:am|pm)?\s*|hourly\s*)(.+)/i);
+      const msg = msgMatch ? msgMatch[1].trim() : rest;
+      const reminder = await addReminder(chatJid, cronExpr, msg, false, sockRef);
+      if (reminder) return `⏰ Recurring reminder set (${cronExpr})\nID: ${reminder.id}\nMessage: ${msg}`;
+      return '❌ Failed to set reminder. Check the time format.';
+    }
+
+    // Try oneshot: "5 minutes <message>"
+    const delayMs = parseTimeToDelay(rest);
+    if (delayMs) {
+      const msgMatch = rest.match(/\d+\s*\w+s?\s+(.+)/);
+      const msg = msgMatch ? msgMatch[1].trim() : rest;
+      const fireAt = new Date(Date.now() + delayMs);
+      const cronExpr = `${fireAt.getMinutes()} ${fireAt.getHours()} ${fireAt.getDate()} ${fireAt.getMonth() + 1} *`;
+      const reminder = await addReminder(chatJid, cronExpr, msg, true, sockRef);
+      if (reminder) return `⏰ Reminder set for ${fireAt.toLocaleTimeString()}\nID: ${reminder.id}`;
+      return '❌ Failed to set reminder.';
+    }
+
+    return '❌ Could not parse time. Try:\n/remind 5 minutes check the oven\n/remind every hour drink water\n/remind daily at 9am standup';
+  }
+
+  if (cmd === '/reminders') {
+    const reminders = await listReminders(isAdmin(senderJid) ? null : chatJid);
+    if (reminders.length === 0) return '📋 No active reminders.';
+    return '⏰ Active reminders:\n\n' + reminders.map(r =>
+      `• ${r.id} — ${r.text}\n  Cron: ${r.cron} | ${r.oneshot ? 'One-time' : 'Recurring'}`
+    ).join('\n\n');
+  }
+
+  if (cmd.startsWith('/cancel ') && isAdmin(senderJid)) {
+    const id = cmd.split(' ')[1];
+    const removed = await removeReminder(id);
+    return removed ? `✅ Reminder ${id} cancelled.` : `❌ Reminder ${id} not found.`;
+  }
+
+  if (cmd === '/briefing') {
+    const briefing = await generateBriefing();
+    return briefing;
+  }
+
+  // ---- URL MONITORING COMMANDS ----
+  if (cmd.startsWith('/watch ') && isAdmin(senderJid)) {
+    const url = fullText.substring(7).trim();
+    if (!url.startsWith('http')) return '❌ Provide a valid URL starting with http:// or https://';
+    const watch = await addURLWatch(url, chatJid);
+    if (watch) return `👁️ Now watching: ${url}\nID: ${watch.id}\nChecking every 15 minutes.`;
+    return '❌ Already watching that URL in this chat.';
+  }
+
+  if (cmd.startsWith('/unwatch ') && isAdmin(senderJid)) {
+    const target = fullText.substring(9).trim();
+    const removed = await removeURLWatch(target, chatJid);
+    return removed ? `✅ Stopped watching: ${target}` : `❌ Not found: ${target}`;
+  }
+
+  if (cmd === '/watches') {
+    const watches = await listURLWatches(isAdmin(senderJid) ? null : chatJid);
+    if (watches.length === 0) return '👁️ No active URL watches.';
+    return '👁️ Active URL watches:\n\n' + watches.map(w =>
+      `• ${w.id} — ${w.url}\n  Last checked: ${w.lastChecked || 'never'}`
+    ).join('\n\n');
+  }
+
+  // ---- LOG MONITOR COMMANDS ----
+  if (cmd === '/monitor' && isAdmin(senderJid)) {
+    const status = await getLogMonitorStatus();
+    const containers = status.containers.length > 0 ? status.containers.join(', ') : 'all running containers';
+    return `📋 Log Monitor\nEnabled: ${status.enabled}\nWatching: ${containers}\nPatterns: ${status.patterns.join(', ')}\nLast check: ${status.lastCheck || 'never'}`;
+  }
+
+  if (cmd.startsWith('/monitor add ') && isAdmin(senderJid)) {
+    const name = cmd.split(' ').slice(2).join(' ');
+    await addLogMonitorContainer(name);
+    return `✅ Added ${name} to log monitor.`;
+  }
+
+  if (cmd.startsWith('/monitor remove ') && isAdmin(senderJid)) {
+    const name = cmd.split(' ').slice(2).join(' ');
+    await removeLogMonitorContainer(name);
+    return `✅ Removed ${name} from log monitor.`;
+  }
+
+  // ---- QR CODE ----
+  if (cmd.startsWith('/qr ')) {
+    const content = fullText.substring(4).trim();
+    if (!content) return '❌ Usage: /qr <text or URL>';
+    try {
+      const buffer = await generateQR(content);
+      const filePath = `/tmp/qr_${Date.now()}.png`;
+      await fs.writeFile(filePath, buffer);
+      await sockRef.sock.sendMessage(chatJid, { image: buffer, caption: `QR: ${content}` });
+      return null; // Already sent the image
+    } catch (err) {
+      return `❌ QR generation failed: ${err.message}`;
+    }
+  }
+
+  // ---- TTS ----
+  if (cmd.startsWith('/tts ') || cmd.startsWith('/say ')) {
+    const prefix = cmd.startsWith('/tts') ? 5 : 5;
+    const ttsText = fullText.substring(prefix).trim();
+    if (!ttsText) return '❌ Usage: /tts <text to speak>';
+    try {
+      const audioFile = await generateTTS(ttsText);
+      if (!audioFile) return '❌ TTS generation failed.';
+      const buffer = await fs.readFile(audioFile);
+      await sockRef.sock.sendMessage(chatJid, {
+        audio: buffer,
+        mimetype: 'audio/mpeg',
+        ptt: true,
+      });
+      await fs.unlink(audioFile).catch(() => {});
+      return null; // Already sent
+    } catch (err) {
+      return `❌ TTS failed: ${err.message}`;
+    }
+  }
+
+  // ---- STICKER ----
+  // (handled in message handler when image is present, not here)
+
+  // ---- DEPLOY COMMANDS (Admin) ----
+  if (cmd.startsWith('/deploy ') && isAdmin(senderJid)) {
+    const project = fullText.substring(8).trim();
+    const result = await triggerDeploy(project);
+    if (result.success) return `🚀 Deploy triggered for ${project}\n\n${result.output}`;
+    return `❌ Deploy failed: ${result.error}`;
+  }
+
+  if (cmd.startsWith('/restart ') && isAdmin(senderJid)) {
+    const container = fullText.substring(9).trim();
+    try {
+      await execAsync(`docker restart "${container}"`, { timeout: 30000 });
+      return `🔄 Restarted container: ${container}`;
+    } catch (err) {
+      return `❌ Restart failed: ${err.message}`;
+    }
+  }
+
+  // ---- DATABASE COMMANDS (Admin) ----
+  if (cmd === '/db list' && isAdmin(senderJid)) {
+    return await listDatabases();
+  }
+
+  if (cmd.startsWith('/db schema ') && isAdmin(senderJid)) {
+    const dbName = cmd.split(' ')[2];
+    const schema = await getDBSchema(dbName);
+    return schema || '❌ Could not get schema.';
+  }
+
+  if (cmd.startsWith('/db ') && !cmd.startsWith('/db list') && !cmd.startsWith('/db schema') && isAdmin(senderJid)) {
+    // /db <dbname> <query or natural language>
+    const parts = fullText.substring(4).trim().split(/\s+/);
+    const dbName = parts[0];
+    const query = parts.slice(1).join(' ');
+    if (!query) return '❌ Usage: /db <database> <SQL query>';
+
+    // If it looks like SQL, execute directly
+    const isSQL = /^(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|WITH|EXPLAIN)\b/i.test(query.trim());
+    if (isSQL) {
+      // Safety: block destructive queries unless explicitly allowed
+      if (/^(DROP|DELETE|TRUNCATE|ALTER)\b/i.test(query.trim())) {
+        return '⚠️ Destructive queries blocked for safety. Use a direct database client for these.';
+      }
+      const result = await queryDatabase(dbName, query);
+      if (result.error) return `❌ ${result.error}`;
+      return `📊 Results (${result.rowCount} rows):\n\n${result.data}`;
+    }
+
+    // Natural language — pass to Claude for SQL generation (through main flow)
+    return null; // Let it fall through to Claude
+  }
+
+  // ---- HELP ----
   if (cmd === '/help') {
     return [
-      `🤖 *${CONFIG.botName} v2.0*`,
+      `🤖 *${CONFIG.botName} v3.0*`,
       '',
       '💬 I read all messages and respond when I have something useful to add.',
       '📎 Send images, docs, PDFs — I analyze them.',
       '↩️ Reply to my messages to continue a thread.',
       '',
-      '⚡ Commands:',
+      '⚡ Core Commands:',
       '/help — This',
       '/status — Server info (admin)',
       '/memory — Chat memory',
       '/clear — Reset session',
       '/context — Message buffer',
-      '/mode — View response mode',
-      '/mode [all|smart|mention] — Change mode',
-      '/threshold [0.0-1.0] — Smart mode chattiness',
+      '/mode [all|smart|mention] — Response mode',
+      '/briefing — Server health summary',
+      '',
+      '⏰ Reminders:',
+      '/remind <time> <msg> — Set a reminder',
+      '/reminders — List active reminders',
+      '/cancel <id> — Cancel a reminder',
+      '',
+      '👁️ Monitoring:',
+      '/watch <url> — Monitor URL for changes',
+      '/unwatch <url> — Stop monitoring',
+      '/watches — List watched URLs',
+      '/monitor — Log monitor status',
+      '',
+      '🎨 Media:',
+      '/qr <text> — Generate QR code',
+      '/tts <text> — Text to voice note',
+      '/say <text> — Alias for /tts',
+      'Send image + "sticker" — Create sticker',
+      '',
+      '🚀 Admin:',
+      '/deploy <project> — Trigger redeployment',
+      '/restart <container> — Restart container',
+      '/db list — Show databases',
+      '/db <name> <SQL> — Query database',
     ].join('\n');
   }
 
@@ -1133,12 +1576,39 @@ async function startBot() {
         const parsed = parseMessage(msg);
         if (!parsed) continue;
 
-        // Reactions: log only, don't process further
+        // Reactions: handle special actions, then continue
         if (parsed.type === 'reaction') {
           conversationContext.add(chatJid, {
             sender: senderNumber(senderJid), senderName, role: 'user',
             type: 'reaction', emoji: parsed.emoji,
           });
+
+          // Only process reaction actions from admin
+          if (isAdmin(senderJid) && msg.message?.reactionMessage) {
+            const reactKey = msg.message.reactionMessage.key;
+            const emoji = parsed.emoji;
+
+            try {
+              if (emoji === '❌' && reactKey) {
+                // Delete bot's message
+                await sock.sendMessage(chatJid, { delete: reactKey });
+                logger.info('🗑️ Deleted message via ❌ reaction');
+              } else if (emoji === '🔖') {
+                // Bookmark — find the reacted-to message text in context
+                const ctx = conversationContext.get(chatJid, 50);
+                const target = ctx.find(m => m.text && m.timestamp);
+                if (target) {
+                  const bookmarkDir = contactDir(chatJid);
+                  const bookmarkFile = path.join(bookmarkDir, 'bookmarks.md');
+                  const entry = `\n- [${new Date().toISOString()}] ${target.text.substring(0, 200)}\n`;
+                  await fs.appendFile(bookmarkFile, entry);
+                  logger.info('🔖 Message bookmarked');
+                }
+              }
+            } catch (err) {
+              logger.error({ err }, 'Reaction handler error');
+            }
+          }
           continue;
         }
 
@@ -1185,11 +1655,27 @@ async function startBot() {
         // Read receipts
         if (CONFIG.readReceipts) await sock.readMessages([msg.key]).catch(() => {});
 
+        // Sticker command: user sends image + "sticker" or /sticker on quoted image
+        if (parsed.hasMedia && parsed.type === 'image' && mediaResult && !mediaResult.skipped) {
+          const textLower = (parsed.text || '').toLowerCase();
+          if (textLower.includes('sticker') || textLower === '/sticker') {
+            try {
+              const stickerBuffer = await createSticker(mediaResult.filePath);
+              await sock.sendMessage(chatJid, { sticker: stickerBuffer });
+              logger.info('🎨 Sent sticker');
+              conversationContext.add(chatJid, { sender: 'bot', senderName: CONFIG.botName, role: 'bot', type: 'text', text: '[Created sticker]' });
+              continue;
+            } catch (err) {
+              logger.error({ err }, 'Sticker creation failed');
+            }
+          }
+        }
+
         // Special commands
         if (parsed.type === 'text' && parsed.text?.startsWith('/')) {
-          const cmdResp = await handleSpecialCommand(parsed.text, chatJid, senderJid);
+          const cmdResp = await handleSpecialCommand(parsed.text, chatJid, senderJid, sockRef);
           if (cmdResp) {
-            await sock.sendMessage(chatJid, { text: cmdResp });
+            await sendResponse(sock, chatJid, cmdResp);
             conversationContext.add(chatJid, { sender: 'bot', senderName: CONFIG.botName, role: 'bot', type: 'text', text: cmdResp });
             await logMessage(chatJid, senderJid, 'bot', cmdResp);
             continue;
@@ -1245,14 +1731,14 @@ process.on('SIGTERM', () => { console.log('\n👋 Bye!'); process.exit(0); });
 // START
 // ============================================================
 console.log(`
-╔══════════════════════════════════════════════════════╗
-║   WhatsApp ↔ Claude Code Bridge v2.0                 ║
-║                                                       ║
-║   🖼️  Media: Images, Docs, PDFs, Audio, Location      ║
-║   🧠 Smart: Reads everything, responds intelligently   ║
-║   💾 Memory: Per-chat persistent context                ║
-║   ⚡ Modes: all | smart | mention                       ║
-╚══════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════╗
+║   OVERLORD v3.0 — WhatsApp AI Infrastructure             ║
+║                                                           ║
+║   🖼️  Media: Images, Docs, PDFs, Audio, Stickers, TTS    ║
+║   🧠 Smart: Reads everything, responds intelligently     ║
+║   ⏰ Proactive: Reminders, Briefings, Monitors            ║
+║   🚀 Admin: Deploy, Restart, DB Queries                   ║
+╚══════════════════════════════════════════════════════════════╝
 `);
 
 // Mutable wrapper so the HTTP server always uses the latest socket after reconnects
@@ -1261,6 +1747,7 @@ const sockRef = { sock: null };
 startBot().then((sock) => {
   sockRef.sock = sock;
   startServer(sockRef, sendResponse);
+  startScheduler(sockRef);
 }).catch((err) => {
   console.error('💥 Fatal:', err);
   process.exit(1);
