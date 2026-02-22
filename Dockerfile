@@ -1,11 +1,15 @@
 FROM node:20-bookworm-slim
 
-# Install dependencies for Claude CLI, git, and Docker CLI
+# Install system dependencies: git, Docker CLI, GitHub CLI, Python 3, jq
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     ca-certificates \
     curl \
     gnupg \
+    jq \
+    python3 \
+    python3-pip \
+    python3-venv \
     && install -m 0755 -d /etc/apt/keyrings \
     && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian bookworm stable" > /etc/apt/sources.list.d/docker.list \
@@ -20,6 +24,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Python packages for skills (scraping, APIs, data analysis)
+RUN pip3 install --no-cache-dir --break-system-packages \
+    requests \
+    beautifulsoup4 \
+    lxml \
+    feedparser \
+    matplotlib
+
 # Install Claude CLI globally
 RUN npm install -g @anthropic-ai/claude-code
 
@@ -31,6 +43,9 @@ RUN npm install
 
 # Copy app files
 COPY index.js CLAUDE.md traefik-watcher.sh ./
+
+# Copy skills into container
+COPY skills/ ./skills/
 
 # Create data directories
 RUN mkdir -p auth data logs media

@@ -80,7 +80,20 @@ All deploy automatically via Coolify webhooks on git push:
 
 ## SKILL LOADING
 
-When a task relates to a specific domain, read the relevant skill file:
+See **skills/REGISTRY.md** for the full list. Key skills with executable tools:
+
+### Tools You Can Run (inside container at /app/skills/)
+- **Crypto prices:** `python3 /app/skills/api-integrations/crypto.py bitcoin`
+- **Weather:** `python3 /app/skills/api-integrations/weather.py "Port of Spain"`
+- **News:** `python3 /app/skills/api-integrations/news.py --topic tech`
+- **Currency:** `python3 /app/skills/api-integrations/exchange.py 100 USD TTD`
+- **Scrape URL:** `python3 /app/skills/web-scraper/scrape.py "https://url"`
+- **RSS feeds:** `python3 /app/skills/web-scraper/rss.py "https://feed-url"`
+- **Service check:** `/app/skills/monitoring/service-check.sh`
+- **Analyze data:** `python3 /app/skills/data-analysis/analyze.py file.csv`
+- **Make chart:** `python3 /app/skills/data-analysis/chart.py data.csv --type bar --x col1 --y col2`
+
+### Instruction-Only Skills (read SKILL.md for procedures)
 - Server work → skills/server-admin/SKILL.md
 - WhatsApp behavior → skills/whatsapp/SKILL.md
 - Video content → skills/video-pipeline/SKILL.md
