@@ -106,11 +106,11 @@ export async function addReminder(chatJid, cronExpr, text, oneshot, sockRef) {
     createdAt: new Date().toISOString(),
   };
 
-  scheduleReminder(reminder, sockRef);
-
   const reminders = await loadReminders();
   reminders.push(reminder);
   await saveReminders(reminders);
+
+  scheduleReminder(reminder, sockRef);
 
   return reminder;
 }

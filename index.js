@@ -468,7 +468,7 @@ function parseTimeToCron(timeStr) {
   }
 
   // "every hour" or "every hour <message>"
-  if (lower.startsWith('every hour') || lower.startsWith('hourly')) return '0 * * * *';
+  if (/^every hour\b/.test(lower) || /^hourly\b/.test(lower)) return '0 * * * *';
 
   // "daily at Xam/pm" or "every day at X"
   match = lower.match(/(?:daily|every\s*day)\s*(?:at\s*)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
