@@ -694,7 +694,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
   const fullPrompt = prompt.join('\n');
 
   // Build CLI args
-  const args = ['-p', '--output-format', 'text'];
+  const args = ['-p', '--output-format', 'text', '--max-turns', '100'];
   if (CONFIG.claudeModel) args.push('--model', CONFIG.claudeModel);
   if (sessionId) args.push('--resume', sessionId);
   if (!isAdminUser) args.push('--allowedTools', 'Read,WebSearch,WebFetch');
@@ -713,45 +713,66 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
   ].join(' ');
   args.push('--append-system-prompt', sysPrompt);
 
-  return new Promise((resolve) => {
-    let stdout = '';
-    let stderr = '';
+  // Auto-retry on transient signal errors (SIGTERM=143, SIGKILL=137, SIGABRT=134)
+  const RETRYABLE_CODES = new Set([143, 137, 134]);
+  const MAX_RETRIES = 2;
 
-    const proc = spawn(CONFIG.claudePath, args, {
-      cwd: workDir,
-      timeout: CONFIG.maxResponseTime,
-      env: { ...process.env, TERM: 'dumb' },
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const result = await new Promise((resolve) => {
+      let stdout = '';
+      let stderr = '';
+
+      const proc = spawn(CONFIG.claudePath, args, {
+        cwd: workDir,
+        timeout: CONFIG.maxResponseTime,
+        env: { ...process.env, TERM: 'dumb' },
+      });
+
+      proc.stdin.write(fullPrompt);
+      proc.stdin.end();
+
+      proc.stdout.on('data', (d) => { stdout += d.toString(); });
+      proc.stderr.on('data', (d) => { stderr += d.toString(); });
+
+      proc.on('close', async (code) => {
+        if (code !== 0 && !stdout) {
+          logger.error({ code, stderr: stderr.substring(0, 300), attempt }, 'Claude error');
+          if (RETRYABLE_CODES.has(code) && attempt < MAX_RETRIES) {
+            logger.info({ code, attempt }, 'Retrying after transient error');
+            resolve({ retry: true });
+          } else {
+            resolve({ retry: false, text: `⚠️ Had a hiccup (code ${code}). Retried ${attempt}x.` });
+          }
+          return;
+        }
+
+        // Save session
+        const match = stderr.match(/session[:\s]+([a-f0-9-]+)/i);
+        if (match) await saveSessionId(chatJid, match[1]);
+
+        let response = stdout.trim();
+        if (response.length > 4000) {
+          response = response.substring(0, 3900) + '\n\n... [ask me to continue]';
+        }
+        resolve({ retry: false, text: response || "🤔 Nothing came to mind. Try rephrasing?" });
+      });
+
+      proc.on('error', (err) => {
+        logger.error({ err, attempt }, 'Spawn failed');
+        if (attempt < MAX_RETRIES) {
+          resolve({ retry: true });
+        } else {
+          resolve({ retry: false, text: '⚠️ Claude CLI unavailable.' });
+        }
+      });
     });
 
-    proc.stdin.write(fullPrompt);
-    proc.stdin.end();
+    if (!result.retry) return result.text;
 
-    proc.stdout.on('data', (d) => { stdout += d.toString(); });
-    proc.stderr.on('data', (d) => { stderr += d.toString(); });
-
-    proc.on('close', async (code) => {
-      if (code !== 0 && !stdout) {
-        logger.error({ code, stderr: stderr.substring(0, 300) }, 'Claude error');
-        resolve('⚠️ Had a hiccup. Try again?');
-        return;
-      }
-
-      // Save session
-      const match = stderr.match(/session[:\s]+([a-f0-9-]+)/i);
-      if (match) await saveSessionId(chatJid, match[1]);
-
-      let response = stdout.trim();
-      if (response.length > 4000) {
-        response = response.substring(0, 3900) + '\n\n... [ask me to continue]';
-      }
-      resolve(response || "🤔 Nothing came to mind. Try rephrasing?");
-    });
-
-    proc.on('error', (err) => {
-      logger.error({ err }, 'Spawn failed');
-      resolve('⚠️ Claude CLI unavailable.');
-    });
-  });
+    // Brief pause before retry
+    await new Promise(r => setTimeout(r, 2000));
+    logger.info({ attempt: attempt + 1 }, 'Retrying Claude subprocess...');
+  }
 }
 
 // ============================================================
