@@ -58,7 +58,7 @@ const CONFIG = {
   // Claude CLI
   claudePath: process.env.CLAUDE_PATH || 'claude',
   claudeModel: process.env.CLAUDE_MODEL || '',
-  maxResponseTime: 180_000,  // 3 min for media analysis
+  maxResponseTime: 600_000,  // 10 min for complex tasks (deployments, multi-file edits)
 
   // ---- RESPONSE BEHAVIOR ----
   // Mode: 'all' = respond to every message

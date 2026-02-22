@@ -10,8 +10,8 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
       - ./media:/app/media
-      # Claude CLI — credentials (read-only)
-      - /root/.claude/.credentials.json:/root/.claude/.credentials.json:ro
+      # Claude CLI — credentials (read-write so CLI can auto-refresh OAuth tokens)
+      - /root/.claude/.credentials.json:/root/.claude/.credentials.json
       - /root/.claude/settings.json:/root/.claude/settings.json:ro
       - /root/.claude/settings.local.json:/root/.claude/settings.local.json:ro
       # Claude CLI — runtime dirs (read-write, needed for operation)
@@ -20,6 +20,11 @@ services:
       - /root/.claude/projects:/root/.claude/projects
       - /root/.claude/cache:/root/.claude/cache
       - /root/.claude/session-env:/root/.claude/session-env
+      # Git credentials for push access (staged to tmp, copied at startup)
+      - /root/.gitconfig:/tmp/.gitconfig-host:ro
+      - /root/.git-credentials:/tmp/.git-credentials-host:ro
+      # Docker socket — allows container management from inside
+      - /var/run/docker.sock:/var/run/docker.sock
       # Project directories — mount root (has .git for Claude sandbox) + Overlord override
       - /root/projects:/projects
       - /root/overlord:/projects/Overlord

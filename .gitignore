@@ -5,3 +5,13 @@ logs/
 media/
 .env
 *.log
+
+# Runtime/generated
+STATUS.md
+archive/
+
+# Traefik watcher sidecar (separate deployment)
+namibarden-traefik-watcher/
+
+# Claude internal
+.claude/
