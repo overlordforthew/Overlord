@@ -22,6 +22,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
        > /etc/apt/sources.list.d/github-cli.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends gh \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends chromium \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python packages for skills (scraping, APIs, data analysis)
@@ -45,14 +48,15 @@ COPY package.json ./
 RUN npm install
 
 # Copy app files
-COPY index.js CLAUDE.md traefik-watcher.sh ./
+COPY index.js server.js CLAUDE.md traefik-watcher.sh ./
 
-# Copy skills into container
+# Copy skills and scripts into container
 COPY skills/ ./skills/
+COPY scripts/ ./scripts/
 
 # Create data directories
 RUN mkdir -p auth data logs media
 
-EXPOSE 0
+EXPOSE 3001
 
 CMD ["sh", "-c", "cp /tmp/.gitconfig-host /root/.gitconfig 2>/dev/null; cp /tmp/.git-credentials-host /root/.git-credentials 2>/dev/null; if [ -n \"$OPENROUTER_KEY\" ]; then llm keys set openrouter --value \"$OPENROUTER_KEY\" 2>/dev/null; fi; ./traefik-watcher.sh >> /app/logs/traefik-watcher.log 2>&1 & exec node index.js"]

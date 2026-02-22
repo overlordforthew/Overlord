@@ -35,6 +35,8 @@ import { existsSync, mkdirSync } from 'fs';
 import crypto from 'crypto';
 import qrcode from 'qrcode-terminal';
 
+import { startServer } from './server.js';
+
 const execAsync = promisify(exec);
 
 // ============================================================
@@ -107,6 +109,154 @@ if (process.env.ADMIN_LID) CONFIG.adminIds.add(process.env.ADMIN_LID);
 // LOGGER
 // ============================================================
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
+
+// ============================================================
+// MEDIA RESPONSE + MESSAGE SPLITTING
+// ============================================================
+
+const MEDIA_EXT_MAP = {
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
+  '.mp4': 'video/mp4', '.webm': 'video/webm',
+  '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg; codecs=opus', '.wav': 'audio/wav',
+  '.pdf': 'application/pdf', '.csv': 'text/csv', '.txt': 'text/plain',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.html': 'text/html', '.json': 'application/json',
+};
+
+// Match file paths in Claude's response pointing to generated/created files
+const FILE_PATH_REGEX = /(?:^|\s)(\/(?:app|projects|tmp|root\/videos|root\/overlord)[^\s"'`,)}\]]+\.(?:png|jpg|jpeg|gif|webp|svg|mp4|webm|mp3|ogg|wav|pdf|csv|txt|xlsx|docx|html|json|chart))\b/gim;
+
+function splitMessage(text, maxLen = 3900) {
+  if (text.length <= maxLen) return [text];
+  const chunks = [];
+  let remaining = text;
+  while (remaining.length > maxLen) {
+    let splitAt = maxLen;
+    // Try paragraph boundary
+    const para = remaining.lastIndexOf('\n\n', maxLen);
+    if (para > maxLen * 0.5) { splitAt = para; }
+    else {
+      // Try sentence boundary
+      const sent = remaining.lastIndexOf('. ', maxLen);
+      if (sent > maxLen * 0.5) { splitAt = sent + 1; }
+      else {
+        // Try line break
+        const line = remaining.lastIndexOf('\n', maxLen);
+        if (line > maxLen * 0.5) { splitAt = line; }
+      }
+    }
+    chunks.push(remaining.substring(0, splitAt).trim());
+    remaining = remaining.substring(splitAt).trim();
+  }
+  if (remaining) chunks.push(remaining);
+  return chunks;
+}
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function sendResponse(sock, chatJid, responseText) {
+  // Extract file paths from response
+  const filePaths = [];
+  let cleanText = responseText.replace(FILE_PATH_REGEX, (match, filePath) => {
+    filePaths.push(filePath.trim());
+    return '';
+  }).trim();
+
+  // Verify files exist
+  const validFiles = [];
+  for (const fp of filePaths) {
+    try {
+      await fs.access(fp);
+      validFiles.push(fp);
+    } catch { /* file doesn't exist, skip */ }
+  }
+
+  // Send media files
+  for (const fp of validFiles) {
+    try {
+      const ext = path.extname(fp).toLowerCase();
+      const mime = MEDIA_EXT_MAP[ext] || 'application/octet-stream';
+      const buffer = await fs.readFile(fp);
+      const fileName = path.basename(fp);
+
+      if (mime.startsWith('image/')) {
+        await sock.sendMessage(chatJid, { image: buffer, caption: '' });
+      } else if (mime.startsWith('video/')) {
+        await sock.sendMessage(chatJid, { video: buffer, caption: '' });
+      } else if (mime.startsWith('audio/')) {
+        await sock.sendMessage(chatJid, { audio: buffer, mimetype: mime });
+      } else {
+        await sock.sendMessage(chatJid, { document: buffer, mimetype: mime, fileName });
+      }
+      logger.info(`📎 Sent media: ${fileName} (${mime})`);
+    } catch (err) {
+      logger.error({ err, file: fp }, 'Failed to send media');
+    }
+  }
+
+  // Send text (auto-split if long)
+  if (cleanText) {
+    const chunks = splitMessage(cleanText);
+    for (let i = 0; i < chunks.length; i++) {
+      const prefix = chunks.length > 1 ? `(${i + 1}/${chunks.length}) ` : '';
+      await sock.sendMessage(chatJid, { text: prefix + chunks[i] });
+      if (i < chunks.length - 1) await sleep(500);
+    }
+  }
+}
+
+// ============================================================
+// AUDIO TRANSCRIPTION
+// ============================================================
+
+async function transcribeAudio(filePath) {
+  const provider = process.env.WHISPER_PROVIDER || 'groq';
+  let url, apiKey, model;
+
+  if (provider === 'openai') {
+    url = 'https://api.openai.com/v1/audio/transcriptions';
+    apiKey = process.env.OPENAI_API_KEY;
+    model = 'whisper-1';
+  } else {
+    url = 'https://api.groq.com/openai/v1/audio/transcriptions';
+    apiKey = process.env.GROQ_API_KEY;
+    model = 'whisper-large-v3-turbo';
+  }
+
+  if (!apiKey) {
+    logger.warn('No API key for audio transcription');
+    return null;
+  }
+
+  try {
+    const fileBuffer = await fs.readFile(filePath);
+    const fileName = path.basename(filePath);
+    const formData = new FormData();
+    formData.append('file', new Blob([fileBuffer]), fileName);
+    formData.append('model', model);
+    formData.append('response_format', 'text');
+
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+      body: formData,
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      logger.error({ status: resp.status, err: errText }, 'Whisper API error');
+      return null;
+    }
+
+    const text = await resp.text();
+    return text.trim() || null;
+  } catch (err) {
+    logger.error({ err }, 'Transcription failed');
+    return null;
+  }
+}
 
 // ============================================================
 // HELPERS
@@ -660,8 +810,14 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       prompt.push(`\n→ This is a PDF. Read it with: @${safePath}`);
       prompt.push(`→ Summarize the key contents.`);
     } else if (mediaResult.mimeType?.includes('audio') || mediaResult.mimeType?.includes('ogg') || mediaResult.mimeType?.includes('opus')) {
-      prompt.push(`\n→ This is a VOICE NOTE / AUDIO file. You cannot listen to audio files directly.`);
-      prompt.push(`→ Acknowledge you received a voice message but can't transcribe it yet.`);
+      if (parsed.transcription) {
+        prompt.push(`\n→ This is a VOICE NOTE that was transcribed:`);
+        prompt.push(`→ Transcription: "${parsed.transcription}"`);
+        prompt.push(`→ Respond naturally to what they said.`);
+      } else {
+        prompt.push(`\n→ This is a VOICE NOTE / AUDIO file. Transcription failed.`);
+        prompt.push(`→ Acknowledge you received a voice message but couldn't transcribe it. Ask them to text instead.`);
+      }
     } else if (['csv', 'plain', 'txt'].some(t => mediaResult.mimeType?.includes(t))) {
       prompt.push(`\n→ This is a TEXT/DATA file. Read it with: @${safePath}`);
     } else if (['wordprocessing', 'spreadsheet', 'docx', 'xlsx'].some(t => mediaResult.mimeType?.includes(t))) {
@@ -686,7 +842,9 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
   prompt.push(`- If you learn something important about this person, update memory.md`);
   prompt.push(`- If unsolicited (smart triage), keep it brief and add genuine value`);
   prompt.push(`- For images/docs: analyze the content, be specific about what you see`);
-  prompt.push(`- For voice notes: acknowledge receipt, suggest they text if it's important`);
+  prompt.push(`- For voice notes: respond naturally to the transcribed text`);
+  prompt.push(`- When creating files (charts, images, etc.), output the FULL ABSOLUTE PATH in your response. The bot auto-detects file paths and sends them as WhatsApp media.`);
+  prompt.push(`- To screenshot a URL: node /app/scripts/screenshot.js <url> /tmp/screenshot.png`);
   if (isGroup(chatJid)) {
     prompt.push(`- Group chat: match the energy, don't over-explain, be a good participant`);
   }
@@ -751,9 +909,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
         if (match) await saveSessionId(chatJid, match[1]);
 
         let response = stdout.trim();
-        if (response.length > 4000) {
-          response = response.substring(0, 3900) + '\n\n... [ask me to continue]';
-        }
+        // Long messages are auto-split by sendResponse() — no truncation needed
         resolve({ retry: false, text: response || "🤔 Nothing came to mind. Try rephrasing?" });
       });
 
@@ -990,6 +1146,16 @@ async function startBot() {
           if (mediaResult && !mediaResult.skipped) parsed.filePath = mediaResult.filePath;
         }
 
+        // Transcribe voice notes
+        if (mediaResult && !mediaResult.skipped && (parsed.type === 'ptt' || parsed.type === 'audio')) {
+          const transcription = await transcribeAudio(mediaResult.filePath);
+          if (transcription) {
+            parsed.transcription = transcription;
+            parsed.text = transcription;
+            logger.info(`🎤 Transcribed: "${transcription.substring(0, 100)}..."`);
+          }
+        }
+
         // Add ALL messages to context (even ones we won't respond to)
         conversationContext.add(chatJid, {
           sender: senderNumber(senderJid), senderName, role: 'user',
@@ -1047,8 +1213,8 @@ async function startBot() {
         // Stop typing
         if (CONFIG.typingIndicator) await sock.sendPresenceUpdate('paused', chatJid).catch(() => {});
 
-        // Send
-        await sock.sendMessage(chatJid, { text: response });
+        // Send (with media detection + auto-split)
+        await sendResponse(sock, chatJid, response);
 
         // Track in context
         conversationContext.add(chatJid, {
@@ -1086,7 +1252,9 @@ console.log(`
 ╚══════════════════════════════════════════════════════════╝
 `);
 
-startBot().catch((err) => {
+startBot().then((sock) => {
+  startServer(sock, sendResponse);
+}).catch((err) => {
   console.error('💥 Fatal:', err);
   process.exit(1);
 });
