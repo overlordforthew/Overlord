@@ -75,7 +75,7 @@ const CONFIG = {
 
   // Group behavior
   respondToGroups: true,
-  groupTriggerWords: ['claude', 'bot', 'ai', 'hey claude'],
+  groupTriggerWords: ['claude', 'bot', 'ai', 'hey claude', 'overlord', 'sage'],
 
   // Message batching: wait this long for more messages before responding
   batchWindowMs: 2000,
