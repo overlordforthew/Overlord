@@ -33,8 +33,7 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     feedparser \
     matplotlib \
     llm \
-    llm-gemini \
-    llm-groq
+    llm-openrouter
 
 # Install Claude CLI globally
 RUN npm install -g @anthropic-ai/claude-code

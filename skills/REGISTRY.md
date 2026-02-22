@@ -30,17 +30,19 @@ Quick reference of all available skills and their tools. Read the SKILL.md in ea
 All tools are at `/app/skills/<skill-name>/` inside the Docker container.
 From the host, they're at `/root/overlord/skills/<skill-name>/`.
 
-## LLM Tools (Alternative Models)
+## LLM Tools (via OpenRouter)
 
-Installed via `llm` CLI — universal interface to multiple LLM providers.
+Installed via `llm` CLI + `llm-openrouter` plugin. One API key, hundreds of models.
 
-| Tool | Command | Notes |
-|------|---------|-------|
-| **Gemini Flash** | `llm -m gemini-2.0-flash "prompt"` | Free tier, uses GOOGLE_API_KEY |
-| **Groq Llama** | `llm -m groq-llama3.3-70b "prompt"` | Free tier, ultra-fast (needs GROQ_API_KEY) |
-| **Pipe data** | `echo "text" \| llm "summarize"` | Works with any model |
+| Model | Command | Notes |
+|-------|---------|-------|
+| **Gemini Flash** | `llm -m openrouter/google/gemini-2.0-flash-exp:free "prompt"` | Free, fast |
+| **DeepSeek V3** | `llm -m openrouter/deepseek/deepseek-chat-v3-0324:free "prompt"` | Free, great for code |
+| **Llama 3.3 70B** | `llm -m openrouter/meta-llama/llama-3.3-70b-instruct:free "prompt"` | Free, general purpose |
+| **Gemma 3 27B** | `llm -m openrouter/google/gemma-3-27b-it:free "prompt"` | Free, Google |
+| **DeepSeek R1** | `llm -m openrouter/deepseek/deepseek-r1:free "prompt"` | Free, reasoning |
+| **Pipe data** | `echo "text" \| llm -m openrouter/... "summarize"` | Works with any model |
 | **List models** | `llm models` | Show all available |
-| **Set API key** | `llm keys set gemini` | Interactive key setup |
 
 ## Quick Examples
 ```bash

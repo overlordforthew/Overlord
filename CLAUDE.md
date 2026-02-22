@@ -93,11 +93,13 @@ See **skills/REGISTRY.md** for the full list. Key skills with executable tools:
 - **Analyze data:** `python3 /app/skills/data-analysis/analyze.py file.csv`
 - **Make chart:** `python3 /app/skills/data-analysis/chart.py data.csv --type bar --x col1 --y col2`
 
-### LLM Tools (alternative models for speed/cost optimization)
-- **llm (universal):** `llm -m gemini-2.0-flash "quick question"` or `echo "data" | llm "summarize this"`
-- **Gemini:** `llm -m gemini-2.0-flash "prompt"` (uses GOOGLE_API_KEY, free tier)
-- **Groq:** `llm -m groq-llama3.3-70b "prompt"` (needs GROQ_API_KEY, free tier — ultra fast)
-- **List models:** `llm models` | **Set keys:** `llm keys set gemini` / `llm keys set groq`
+### LLM Tools (alternative models via OpenRouter)
+- **Auto-free (best available):** `llm -m openrouter/openrouter/free "question"`
+- **DeepSeek R1 (reasoning):** `llm -m openrouter/deepseek/deepseek-r1-0528:free "prompt"`
+- **Llama 3.3 70B:** `llm -m openrouter/meta-llama/llama-3.3-70b-instruct:free "prompt"`
+- **Qwen3 Coder:** `llm -m openrouter/qwen/qwen3-coder:free "prompt"`
+- **Pipe data:** `echo "text" | llm -m openrouter/openrouter/free "summarize"`
+- **List all models:** `llm models` | **Free models:** `llm models | grep :free`
 
 ### Instruction-Only Skills (read SKILL.md for procedures)
 - Server work → skills/server-admin/SKILL.md
