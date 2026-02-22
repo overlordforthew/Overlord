@@ -93,6 +93,12 @@ See **skills/REGISTRY.md** for the full list. Key skills with executable tools:
 - **Analyze data:** `python3 /app/skills/data-analysis/analyze.py file.csv`
 - **Make chart:** `python3 /app/skills/data-analysis/chart.py data.csv --type bar --x col1 --y col2`
 
+### LLM Tools (alternative models for speed/cost optimization)
+- **llm (universal):** `llm -m gemini-2.0-flash "quick question"` or `echo "data" | llm "summarize this"`
+- **Gemini:** `llm -m gemini-2.0-flash "prompt"` (uses GOOGLE_API_KEY, free tier)
+- **Groq:** `llm -m groq-llama3.3-70b "prompt"` (needs GROQ_API_KEY, free tier — ultra fast)
+- **List models:** `llm models` | **Set keys:** `llm keys set gemini` / `llm keys set groq`
+
 ### Instruction-Only Skills (read SKILL.md for procedures)
 - Server work → skills/server-admin/SKILL.md
 - WhatsApp behavior → skills/whatsapp/SKILL.md

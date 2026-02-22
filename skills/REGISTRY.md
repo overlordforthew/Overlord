@@ -30,6 +30,18 @@ Quick reference of all available skills and their tools. Read the SKILL.md in ea
 All tools are at `/app/skills/<skill-name>/` inside the Docker container.
 From the host, they're at `/root/overlord/skills/<skill-name>/`.
 
+## LLM Tools (Alternative Models)
+
+Installed via `llm` CLI — universal interface to multiple LLM providers.
+
+| Tool | Command | Notes |
+|------|---------|-------|
+| **Gemini Flash** | `llm -m gemini-2.0-flash "prompt"` | Free tier, uses GOOGLE_API_KEY |
+| **Groq Llama** | `llm -m groq-llama3.3-70b "prompt"` | Free tier, ultra-fast (needs GROQ_API_KEY) |
+| **Pipe data** | `echo "text" \| llm "summarize"` | Works with any model |
+| **List models** | `llm models` | Show all available |
+| **Set API key** | `llm keys set gemini` | Interactive key setup |
+
 ## Quick Examples
 ```bash
 # Check if all services are running

@@ -25,12 +25,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python packages for skills (scraping, APIs, data analysis)
+# Plus llm CLI (universal LLM interface) with provider plugins
 RUN pip3 install --no-cache-dir --break-system-packages \
     requests \
     beautifulsoup4 \
     lxml \
     feedparser \
-    matplotlib
+    matplotlib \
+    llm \
+    llm-gemini \
+    llm-groq
 
 # Install Claude CLI globally
 RUN npm install -g @anthropic-ai/claude-code
