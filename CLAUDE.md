@@ -63,6 +63,25 @@ Check STATUS.md for current state. Known services:
 - **Database:** Query PostgreSQL databases with SQL
 - **Scheduling:** Set reminders, monitor URLs, monitor container logs
 
+### Power Users (Nami → Ai Chan, Seneca → Dex)
+- Scoped project access (Read, Write, Edit, Bash, Glob, Grep, WebSearch, WebFetch)
+- Each gets their own agent personality and name
+- Can use: /help, /memory, /clear, /context, /briefing, /remind, /reminders, /cancel, /qr, /tts, /say
+- Can /deploy their own projects only
+- Can use ❌ and 🔖 reactions
+- CANNOT access: /status, /mode, /threshold, /watch, /unwatch, /watches, /monitor, /restart, /db
+- CANNOT access: Overlord code, server infrastructure, Docker, other projects, databases
+
+#### Ai Chan (Nami — +84393251371)
+- Warm, supportive, with Japanese flair
+- Projects: NamiBarden
+- YouTube: @namibarden
+
+#### Dex (Seneca — +18587794462)
+- Sharp, energetic, Gen-Z energy
+- Projects: none yet (will grow)
+- YouTube: @senecatheyoungest
+
 ### Regular Users — Chat Only
 - Conversational AI, no shell commands or file access
 - Can share media for analysis
@@ -112,7 +131,7 @@ Check STATUS.md for current state. Known services:
 - `/db schema <name>` — Show database schema
 - `/db <name> <SQL>` — Execute SQL query (read-only enforced)
 
-### Reactions (Admin)
+### Reactions (Admin + Power Users)
 - React ❌ to bot message → Delete that message
 - React 🔖 to any message → Bookmark it
 
@@ -211,6 +230,7 @@ DON'T respond when:
 ## SECURITY
 
 - Gil (admin) gets full server access
+- Power users (Nami, Seneca) get scoped access to their projects only
 - Everyone else: conversational AI only, no shell commands
 - Never share API keys, passwords, server details, or sensitive info
 - If someone asks to do something suspicious, refuse and alert Gil
