@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "skills": {
+    "twitter": {
+      "version": "1.0.11",
+      "installedAt": 1771799294134
+    },
+    "polymarket-odds": {
+      "version": "1.0.0",
+      "installedAt": 1771799526633
+    },
+    "nano-banana-pro": {
+      "version": "1.0.1",
+      "installedAt": 1771799583096
+    },
+    "nano-pdf": {
+      "version": "1.0.0",
+      "installedAt": 1771799603529
+    },
+    "api-gateway": {
+      "version": "1.0.46",
+      "installedAt": 1771799655834
+    },
+    "humanizer": {
+      "version": "1.0.0",
+      "installedAt": 1771799726023
+    },
+    "openai-whisper": {
+      "version": "1.0.0",
+      "installedAt": 1771799853057
+    },
+    "mcporter": {
+      "version": "1.0.0",
+      "installedAt": 1771800017115
+    },
+    "gemini": {
+      "version": "1.0.0",
+      "installedAt": 1771800184026
+    },
+    "youtube-watcher": {
+      "version": "1.0.0",
+      "installedAt": 1771800325569
+    },
+    "ffmpeg": {
+      "version": "1.0.0",
+      "installedAt": 1771800428654
+    },
+    "stock-analysis": {
+      "version": "6.2.0",
+      "installedAt": 1771807465345
+    },
+    "stock-market-pro": {
+      "version": "1.2.12",
+      "installedAt": 1771807468355
+    },
+    "prompt-guard": {
+      "version": "3.5.0",
+      "installedAt": 1771807473481
+    }
+  }
+}
