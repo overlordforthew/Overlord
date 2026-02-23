@@ -121,6 +121,7 @@ const USER_PROFILES = {
     name: 'Gil', role: 'admin', agentName: 'Overlord',
     projects: ['*'],
     personality: null, // uses default CLAUDE.md personality
+    lid: '109457291874478',
   },
   '84393251371': {
     name: 'Nami', role: 'power', agentName: 'Ai Chan',
@@ -136,9 +137,20 @@ const USER_PROFILES = {
   },
 };
 
+// Reverse lookup: LID → phone number for group chats where WhatsApp sends LIDs
+const LID_TO_PHONE = {};
+for (const [phone, profile] of Object.entries(USER_PROFILES)) {
+  if (profile.lid) LID_TO_PHONE[profile.lid] = phone;
+}
+
 function getUserProfile(jid) {
   const num = senderNumber(jid);
-  return USER_PROFILES[num] || { name: 'User', role: 'user', agentName: 'Overlord', projects: [] };
+  // Direct match by phone number
+  if (USER_PROFILES[num]) return USER_PROFILES[num];
+  // LID match (groups send LIDs instead of phone numbers)
+  const phone = LID_TO_PHONE[num];
+  if (phone) return USER_PROFILES[phone];
+  return { name: 'User', role: 'user', agentName: 'Overlord', projects: [] };
 }
 
 function isPowerUser(jid) {
