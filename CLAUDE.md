@@ -63,30 +63,53 @@ Check STATUS.md for current state. Known services:
 - **Database:** Query PostgreSQL databases with SQL
 - **Scheduling:** Set reminders, monitor URLs, monitor container logs
 
-### Power Users (Nami → Ai Chan, Seneca → Dex)
+### Power Users (Nami → Ai Chan, Ailie → Britt, Seneca → Dex)
 - Scoped project access (Read, Write, Edit, Bash, Glob, Grep, WebSearch, WebFetch)
 - Each gets their own agent personality and name
+- **Hard-locked** to their assigned project directories only — cannot access other projects, server, or infrastructure
+- Bash is restricted: no docker, systemctl, apt, pip install -g, curl, wget, rm -rf, or system commands
+- Max 20 Claude CLI turns per message (prevents runaway sessions)
 - Can use: /help, /memory, /clear, /context, /briefing, /remind, /reminders, /cancel, /qr, /tts, /say
 - Can /deploy their own projects only
+- Can request new projects with `/newproject <name>` (requires Gil's approval)
 - Can use ❌ and 🔖 reactions
 - CANNOT access: /status, /mode, /threshold, /watch, /unwatch, /watches, /monitor, /restart, /db
-- CANNOT access: Overlord code, server infrastructure, Docker, other projects, databases
+- CANNOT access: Overlord code, server infrastructure, Docker, other projects, databases, .env files
 
 #### Ai Chan (Nami — +84393251371)
 - Warm, supportive, with Japanese flair
-- Projects: NamiBarden
+- Projects: NamiBarden, Lumina
 - YouTube: @namibarden
+- Gil has full oversight of all her project work
+
+#### Britt (Ailie — +817084189804)
+- Savvy, supportive, business-focused
+- Projects: SurfaBabe (SurfaBabe Wellness)
+- Ailie is 18, building her first business
+- Britt also powers the SurfaBabe WhatsApp bot for customers
 
 #### Dex (Seneca — +18587794462)
 - Sharp, energetic, Gen-Z energy
-- Projects: none yet (will grow)
+- Projects: none yet — can request projects via `/newproject <name>`, Gil approves
 - YouTube: @senecatheyoungest
+- Seneca is 15
+- Locked to his own chat + any projects Gil approves for him
+
+### Group Chat Behavior
+- In **group chats**, the bot ALWAYS responds as **Overlord/Sage** — never as Ai Chan, Britt, or Dex
+- Personal agents (Ai Chan, Britt, Dex) are only active in **DMs** with their respective users
+- Access restrictions still apply per user even in groups
 
 ### Regular Users — Chat Only
 - Conversational AI, no shell commands or file access
 - Can share media for analysis
 - Can generate QR codes (/qr) and voice notes (/tts)
 - Can ask questions, get help
+
+### Family Members (Regular Users)
+- Gil's Japanese niece — traveling the world, loves cooking, college online
+- Ayisha — Gil's Kazakh-Japanese niece, multilingual, college in USA
+- Gil's nephew — super smart, busy with school
 
 ### Proactive Features (Automatic)
 - **Daily Briefing:** Server health summary sent at 8am
@@ -131,6 +154,12 @@ Check STATUS.md for current state. Known services:
 - `/db schema <name>` — Show database schema
 - `/db <name> <SQL>` — Execute SQL query (read-only enforced)
 
+### Project Management
+- `/newproject <name>` — Request a new project (power users → notifies Gil for approval)
+- `/approve <name>` — Approve a pending project request (admin)
+- `/deny <name>` — Deny a pending project request (admin)
+- `/pending` — List pending project requests (admin)
+
 ### Reactions (Admin + Power Users)
 - React ❌ to bot message → Delete that message
 - React 🔖 to any message → Bookmark it
@@ -147,6 +176,7 @@ All deploy automatically via Coolify webhooks on git push:
 - **/projects/ElSalvador** — Python FastAPI land scout (elsalvador.namibarden.com)
 - **/projects/Lumina** — Node.js + React auth system (lumina.namibarden.com)
 - **/projects/Overlord** — This bot's own code
+- **/projects/SurfaBabe** — SurfaBabe Wellness WhatsApp bot (surfababe.namibarden.com)
 
 ## SKILL LOADING
 
