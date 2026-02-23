@@ -1139,7 +1139,8 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
 
   // Build CLI args
   const args = ['-p', '--output-format', 'text', '--max-turns', '100'];
-  if (CONFIG.claudeModel) args.push('--model', CONFIG.claudeModel);
+  const selectedModel = isAdminUser ? 'claude-opus-4-6' : (CONFIG.claudeModel || 'claude-sonnet-4-6');
+  args.push('--model', selectedModel);
   if (sessionId) args.push('--resume', sessionId);
 
   // Three-tier access: admin (all tools), power (scoped tools), user (read-only)
