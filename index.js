@@ -144,23 +144,33 @@ const USER_PROFILES = {
     // Phone: +81 70-8418-9804
   },
   // Family members below — regular users (conversational only)
-  '89159444205589': {
-    name: 'Japanese Niece', role: 'user', agentName: 'Overlord',
+  '818043122913': {
+    name: 'Monet', role: 'user', agentName: 'Overlord',
     projects: [],
     personality: null,
     note: "Gil's Japanese niece. Traveling the world, loves cooking, college online.",
+    lid: '89159444205589',
+    // Phone: +81 80-4312-2913 (Japan)
   },
-  '86973708558477': {
-    name: 'Kazakh-Japanese Niece', role: 'user', agentName: 'Overlord',
+  '77026140048': {
+    name: 'Ayisha', role: 'user', agentName: 'Overlord',
     projects: [],
     personality: null,
     note: "Gil's Kazakh-Japanese niece. Multilingual, very smart, college in USA.",
+    lid: '86973708558477',
+    // Phone: +7 702 614 0048 (Kazakhstan)
   },
   '59769184374789': {
     name: 'Nephew', role: 'user', agentName: 'Overlord',
     projects: [],
     personality: null,
     note: "Gil's nephew. Smart, capable, busy with school.",
+  },
+  '60142660059': {
+    name: 'Alan', role: 'user', agentName: 'Overlord',
+    projects: [],
+    personality: null,
+    // Phone: +60 14-266 0059 (Malaysia)
   },
 };
 
