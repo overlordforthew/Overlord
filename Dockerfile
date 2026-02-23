@@ -37,7 +37,9 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     matplotlib \
     edge-tts \
     llm \
-    llm-openrouter
+    llm-openrouter \
+    pyyaml \
+    langdetect
 
 # Install Claude CLI and Codex CLI globally
 RUN npm install -g @anthropic-ai/claude-code @openai/codex

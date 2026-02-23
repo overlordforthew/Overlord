@@ -361,9 +361,17 @@ async function checkContainerLogs(sockRef) {
       );
 
       if (stdout.trim()) {
-        // Filter out suppressed patterns
+        // Filter out suppressed patterns + low-severity Pino JSON logs
         const filtered = stdout.trim().split('\n')
           .filter(line => !ignorePatterns.some(ip => line.includes(ip)))
+          .filter(line => {
+            // If it's a Pino JSON log, only keep errors (level >= 50)
+            try {
+              const j = JSON.parse(line);
+              if (typeof j.level === 'number') return j.level >= 50;
+            } catch {}
+            return true; // non-JSON lines pass through
+          })
           .join('\n');
         if (!filtered.trim()) continue;
 

@@ -5,6 +5,8 @@
 
 import express from 'express';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import { addReminder, removeReminder, listReminders } from './scheduler.js';
 
 const WEBHOOK_TOKEN = process.env.WEBHOOK_TOKEN || '';
@@ -137,6 +139,131 @@ export function startServer(sockRef, sendResponse) {
       } else {
         res.status(404).json({ error: 'Schedule not found' });
       }
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ---- WhatsApp Admin Tools ----
+
+  // GET /api/contacts — fetch all contacts from WhatsApp groups (uses existing socket)
+  app.get('/api/contacts', requireToken, async (_req, res) => {
+    try {
+      const AUTH_DIR = process.env.AUTH_DIR || './auth';
+
+      // Load LID reverse mappings
+      const lidMappings = new Map();
+      try {
+        const files = fs.readdirSync(AUTH_DIR);
+        for (const file of files) {
+          if (file.startsWith('lid-mapping-') && file.endsWith('_reverse.json')) {
+            try {
+              const lid = file.replace('lid-mapping-', '').replace('_reverse.json', '');
+              const content = fs.readFileSync(path.join(AUTH_DIR, file), 'utf-8');
+              const phone = JSON.parse(content);
+              if (typeof phone === 'string') lidMappings.set(lid, phone);
+            } catch { /* skip invalid */ }
+          }
+        }
+      } catch { /* no mappings available */ }
+
+      const groups = await sockRef.sock.groupFetchAllParticipating();
+
+      const contacts = {};
+      const groupList = [];
+
+      for (const [jid, meta] of Object.entries(groups)) {
+        groupList.push({
+          id: jid,
+          subject: meta.subject,
+          participantCount: meta.participants?.length || 0,
+        });
+
+        for (const participant of meta.participants || []) {
+          let rawId = participant.id?.split('@')[0];
+          if (!rawId || rawId.includes(':')) continue;
+
+          let phone, lid;
+          if (lidMappings.has(rawId)) {
+            phone = `+${lidMappings.get(rawId)}`;
+            lid = rawId;
+          } else if (rawId.length > 15) {
+            phone = `LID:${rawId}`;
+            lid = rawId;
+          } else {
+            phone = `+${rawId}`;
+          }
+
+          if (!contacts[phone]) {
+            contacts[phone] = { phone, lid, groups: [], isAdmin: false };
+          }
+          contacts[phone].groups.push({
+            id: jid,
+            name: meta.subject,
+            isAdmin: !!participant.admin,
+          });
+          if (participant.admin) contacts[phone].isAdmin = true;
+        }
+      }
+
+      const sorted = Object.values(contacts).sort((a, b) => b.groups.length - a.groups.length);
+      const resolved = sorted.filter(c => !c.phone.startsWith('LID:'));
+      const unresolved = sorted.filter(c => c.phone.startsWith('LID:'));
+
+      res.json({
+        extracted: new Date().toISOString(),
+        stats: {
+          totalGroups: groupList.length,
+          totalContacts: sorted.length,
+          resolvedContacts: resolved.length,
+          unresolvedLids: unresolved.length,
+          lidMappingsLoaded: lidMappings.size,
+        },
+        groups: groupList.sort((a, b) => b.participantCount - a.participantCount),
+        contacts: resolved,
+        unresolvedContacts: unresolved.length > 0 ? unresolved : undefined,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/groups — create a WhatsApp group (uses existing socket)
+  app.post('/api/groups', requireToken, async (req, res) => {
+    try {
+      const { name, participants } = req.body;
+      if (!name || !Array.isArray(participants) || participants.length === 0) {
+        return res.status(400).json({ error: 'Missing name or participants array (E.164 phone numbers)' });
+      }
+
+      // Convert phone numbers to JIDs
+      const jids = participants.map(p => {
+        const cleaned = p.replace(/[^0-9]/g, '');
+        return `${cleaned}@s.whatsapp.net`;
+      });
+
+      const result = await sockRef.sock.groupCreate(name, jids);
+      res.json({
+        success: true,
+        group: {
+          id: result.id,
+          name: result.subject,
+          created: new Date(result.creation * 1000).toISOString(),
+        },
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // DELETE /api/groups/:jid — leave a WhatsApp group (uses existing socket)
+  app.delete('/api/groups/:jid', requireToken, async (req, res) => {
+    try {
+      const jid = req.params.jid;
+      const myId = sockRef.sock.user?.id?.replace(/:.*@/, '@');
+      if (!myId) return res.status(500).json({ error: 'Bot JID not available' });
+      await sockRef.sock.groupParticipantsUpdate(jid, [myId], 'remove');
+      res.json({ success: true, left: jid });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
