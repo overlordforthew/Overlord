@@ -10,6 +10,7 @@ Quick reference of all available skills and their tools. Read the SKILL.md in ea
 | **Web Scraper** | `skills/web-scraper/` | `scrape.py`, `rss.py`, `search-scrape.py` | Extract data from any URL, read RSS feeds, search the web |
 | **API Integrations** | `skills/api-integrations/` | `crypto.py`, `weather.py`, `news.py`, `exchange.py` | Live crypto prices, weather, news headlines, currency conversion |
 | **Data Analysis** | `skills/data-analysis/` | `analyze.py`, `chart.py` | Process CSV/JSON, statistics, filtering, chart generation |
+| **X Trends** | `skills/x-trends/` | `xtrends.py` | X/Twitter trending topics, tweet search, user profiles |
 
 ## Skills with Instructions Only
 

@@ -39,7 +39,8 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     llm \
     llm-openrouter \
     pyyaml \
-    langdetect
+    langdetect \
+    twikit
 
 # Install Claude CLI and Codex CLI globally
 RUN npm install -g @anthropic-ai/claude-code @openai/codex
