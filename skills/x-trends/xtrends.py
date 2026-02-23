@@ -73,14 +73,17 @@ async def get_client():
 
     client = Client("en-US")
 
-    # Try loading saved cookies first
+    # Try loading saved cookies first, validate with a lightweight call
     if COOKIE_PATH.exists():
         try:
             client.load_cookies(str(COOKIE_PATH))
+            # Validate session — if cookies are stale this will throw
+            await client.user()
             _client = client
             return client
         except Exception:
             print("Saved cookies expired, re-authenticating...", file=sys.stderr)
+            COOKIE_PATH.unlink(missing_ok=True)
 
     # Fresh login
     try:
