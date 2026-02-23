@@ -602,6 +602,109 @@ function sanitizeForPrompt(text) {
     .substring(0, 8000);
 }
 
+// ============================================================
+// PROMPT GUARD INTEGRATION
+// ============================================================
+const guardStats = { enabled: true, scanned: 0, blocked: 0, warned: 0, outputBlocked: 0, outputRedacted: 0, lastBlockedAt: null, lastBlockedReason: null };
+
+/**
+ * Analyze inbound message with Prompt Guard (input scanning).
+ * Spawns Python subprocess, 5s timeout, fail-open.
+ */
+async function analyzeWithGuard(text, userId, isGroupChat) {
+  if (!guardStats.enabled || !text) return { shouldBlock: false, severity: "SAFE", action: "allow", reasons: [] };
+
+  return new Promise((resolve) => {
+    const args = ["scripts/guard.py", "--mode", "input", "--sensitivity", "medium", "--user-id", userId || "unknown"];
+    if (isGroupChat) args.push("--is-group");
+
+    const proc = spawn("python3", args, { timeout: 5000 });
+    let stdout = "";
+    let stderr = "";
+
+    proc.stdout.on("data", (d) => { stdout += d; });
+    proc.stderr.on("data", (d) => { stderr += d; });
+
+    const timer = setTimeout(() => {
+      proc.kill();
+      logger.warn("Prompt Guard input scan timed out (5s), allowing message");
+      resolve({ shouldBlock: false, severity: "SAFE", action: "allow", reasons: ["timeout"] });
+    }, 5000);
+
+    proc.on("close", (code) => {
+      clearTimeout(timer);
+      if (code !== 0) {
+        logger.warn({ code, stderr: stderr.substring(0, 200) }, "Prompt Guard input scan failed, allowing message");
+        resolve({ shouldBlock: false, severity: "SAFE", action: "allow", reasons: ["error"] });
+        return;
+      }
+      try {
+        const result = JSON.parse(stdout);
+        guardStats.scanned++;
+        const shouldBlock = result.action === "block" || result.action === "block_notify";
+        const isWarn = result.action === "warn";
+        if (shouldBlock) {
+          guardStats.blocked++;
+          guardStats.lastBlockedAt = new Date().toISOString();
+          guardStats.lastBlockedReason = result.reasons.join(", ");
+        }
+        if (isWarn) guardStats.warned++;
+        resolve({ shouldBlock, severity: result.severity, action: result.action, reasons: result.reasons });
+      } catch (e) {
+        logger.warn({ err: e.message }, "Prompt Guard JSON parse failed, allowing message");
+        resolve({ shouldBlock: false, severity: "SAFE", action: "allow", reasons: ["parse_error"] });
+      }
+    });
+
+    proc.stdin.write(text);
+    proc.stdin.end();
+  });
+}
+
+/**
+ * Scan outbound response with Prompt Guard (output DLP).
+ * Redacts credentials, blocks if necessary. Fail-open.
+ */
+async function sanitizeOutputWithGuard(text) {
+  if (!guardStats.enabled || !text) return { blocked: false, wasModified: false, sanitizedText: text, redactedTypes: [] };
+
+  return new Promise((resolve) => {
+    const proc = spawn("python3", ["scripts/guard.py", "--mode", "output", "--sensitivity", "medium"], { timeout: 5000 });
+    let stdout = "";
+    let stderr = "";
+
+    proc.stdout.on("data", (d) => { stdout += d; });
+    proc.stderr.on("data", (d) => { stderr += d; });
+
+    const timer = setTimeout(() => {
+      proc.kill();
+      logger.warn("Prompt Guard output scan timed out (5s), sending response as-is");
+      resolve({ blocked: false, wasModified: false, sanitizedText: text, redactedTypes: [] });
+    }, 5000);
+
+    proc.on("close", (code) => {
+      clearTimeout(timer);
+      if (code !== 0) {
+        logger.warn({ code, stderr: stderr.substring(0, 200) }, "Prompt Guard output scan failed, sending as-is");
+        resolve({ blocked: false, wasModified: false, sanitizedText: text, redactedTypes: [] });
+        return;
+      }
+      try {
+        const result = JSON.parse(stdout);
+        if (result.blocked) guardStats.outputBlocked++;
+        if (result.wasModified) guardStats.outputRedacted++;
+        resolve(result);
+      } catch (e) {
+        logger.warn({ err: e.message }, "Prompt Guard output JSON parse failed, sending as-is");
+        resolve({ blocked: false, wasModified: false, sanitizedText: text, redactedTypes: [] });
+      }
+    });
+
+    proc.stdin.write(text);
+    proc.stdin.end();
+  });
+}
+
 function sanitizeFileName(name) {
   if (!name) return null;
   return name
@@ -1028,6 +1131,13 @@ Reply ONLY: YES or NO`;
     });
 
     const answer = triageResponse.toUpperCase();
+
+    // If triage got an API error, don't respond (avoid forwarding errors)
+    if (/CREDIT BALANCE|RATE LIMIT|OVERLOADED|BILLING|INSUFFICIENT/i.test(answer)) {
+      logger.warn('Triage got API error, skipping response');
+      return { shouldRespond: false, reason: 'triage_api_error' };
+    }
+
     if (answer.includes('YES')) {
       return { shouldRespond: true, reason: 'smart_triage_yes' };
     }
@@ -1253,6 +1363,28 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
         if (match) await saveSessionId(chatJid, match[1]);
 
         let response = stdout.trim();
+
+        // Detect Claude API errors forwarded as stdout
+        const API_ERROR_PATTERNS = [
+          /credit balance is too low/i,
+          /rate limit/i,
+          /overloaded/i,
+          /insufficient_quota/i,
+          /billing/i,
+          /authentication.*error/i,
+          /invalid.*api.?key/i,
+        ];
+        const isAPIError = API_ERROR_PATTERNS.some(p => p.test(response));
+        if (isAPIError) {
+          logger.error({ response: response.substring(0, 200) }, 'Claude API error in stdout');
+          if (attempt < MAX_RETRIES) {
+            resolve({ retry: true });
+            return;
+          }
+          resolve({ retry: false, text: '⚠️ I\'m temporarily unavailable. Try again in a few minutes.' });
+          return;
+        }
+
         // Long messages are auto-split by sendResponse() — no truncation needed
         resolve({ retry: false, text: response || "🤔 Nothing came to mind. Try rephrasing?" });
       });
@@ -1553,6 +1685,34 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
     return null; // Let it fall through to Claude
   }
 
+  // ---- PROMPT GUARD STATUS (Admin) ----
+  if (cmd === "/guard" && isAdmin(senderJid)) {
+    return [
+      "🛡️ *Prompt Guard Status*",
+      "",
+      `Enabled: ${guardStats.enabled ? "✅ Yes" : "❌ No"}`,
+      `Messages scanned: ${guardStats.scanned}`,
+      `Blocked: ${guardStats.blocked}`,
+      `Warnings: ${guardStats.warned}`,
+      `Output blocked (DLP): ${guardStats.outputBlocked}`,
+      `Output redacted: ${guardStats.outputRedacted}`,
+      "",
+      guardStats.lastBlockedAt
+        ? `Last blocked: ${guardStats.lastBlockedAt}\nReason: ${guardStats.lastBlockedReason}`
+        : "No messages blocked yet.",
+    ].join("\n");
+  }
+
+  if (cmd === "/guard on" && isAdmin(senderJid)) {
+    guardStats.enabled = true;
+    return "🛡️ Prompt Guard enabled.";
+  }
+
+  if (cmd === "/guard off" && isAdmin(senderJid)) {
+    guardStats.enabled = false;
+    return "🛡️ Prompt Guard disabled.";
+  }
+
   // ---- HELP ----
   if (cmd === '/help') {
     const profile = getUserProfile(senderJid);
@@ -1598,6 +1758,7 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
         '/restart <container> — Restart container',
         '/db list — Show databases',
         '/db <name> <SQL> — Query database',
+        '/guard — Prompt Guard status',
       ].join('\n');
     }
 
@@ -1826,6 +1987,19 @@ async function startBot() {
           continue;
         }
 
+        // ---- PROMPT GUARD: Input Scan ----
+        if (!isAdmin(senderJid) && parsed.text) {
+          const guardResult = await analyzeWithGuard(parsed.text, senderNumber(senderJid), isGroup(chatJid));
+          if (guardResult.shouldBlock) {
+            logger.warn({ reasons: guardResult.reasons, severity: guardResult.severity, sender: senderName }, "🛡️ Prompt Guard BLOCKED inbound message");
+            await sock.sendMessage(chatJid, { text: "⚠️ Message blocked for security reasons." });
+            continue;
+          }
+          if (guardResult.action === "warn") {
+            logger.warn({ reasons: guardResult.reasons, severity: guardResult.severity, sender: senderName }, "🛡️ Prompt Guard WARNING on inbound message");
+          }
+        }
+
         // Read receipts
         if (CONFIG.readReceipts) await sock.readMessages([msg.key]).catch(() => {});
 
@@ -1876,15 +2050,26 @@ async function startBot() {
         // Stop typing
         if (CONFIG.typingIndicator) await sock.sendPresenceUpdate('paused', chatJid).catch(() => {});
 
+        // ---- PROMPT GUARD: Output Scan (DLP) ----
+        const guardOut = await sanitizeOutputWithGuard(response);
+        let finalResponse = response;
+        if (guardOut.blocked) {
+          logger.warn({ redactedTypes: guardOut.redactedTypes }, "🛡️ Prompt Guard BLOCKED outbound response (credential leak)");
+          finalResponse = "I generated a response but it contained sensitive data that was blocked for security. Please rephrase your request.";
+        } else if (guardOut.wasModified) {
+          logger.info({ redactedTypes: guardOut.redactedTypes, count: guardOut.redactionCount }, "🛡️ Prompt Guard redacted credentials from response");
+          finalResponse = guardOut.sanitizedText;
+        }
+
         // Send (with media detection + auto-split)
-        await sendResponse(sock, chatJid, response);
+        await sendResponse(sock, chatJid, finalResponse);
 
         // Track in context
         conversationContext.add(chatJid, {
-          sender: 'bot', senderName: CONFIG.botName, role: 'bot', type: 'text', text: response,
+          sender: "bot", senderName: CONFIG.botName, role: "bot", type: "text", text: finalResponse,
         });
-        await logMessage(chatJid, senderJid, 'bot', response);
-        logger.info(`📤 → ${senderName}: ${response.substring(0, 100)}...`);
+        await logMessage(chatJid, senderJid, "bot", finalResponse);
+        logger.info(`📤 → ${senderName}: ${finalResponse.substring(0, 100)}...`);
 
       } catch (err) {
         logger.error({ err, key: msg.key }, 'Message handler error');
