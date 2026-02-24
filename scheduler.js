@@ -3,7 +3,7 @@
  *
  * Manages:
  * 1. Reminders — one-time or recurring cron-based messages
- * 2. Daily briefing — 8am server health summary
+ * 2. Daily briefing — 6am server health summary
  * 3. URL monitoring — periodic change detection
  * 4. Log monitoring — periodic error scanning
  */
@@ -27,6 +27,61 @@ const LOG_MONITOR_FILE = path.join(DATA_DIR, 'log-monitor.json');
 
 // Active cron jobs keyed by reminder ID
 const activeJobs = new Map();
+
+// Human-readable names for containers (static + cached dynamic lookups)
+const CONTAINER_NAMES = {
+  'coolify-proxy': 'Traefik Proxy',
+  'coolify': 'Coolify',
+  'coolify-realtime': 'Coolify Realtime',
+  'coolify-db': 'Coolify DB',
+  'coolify-redis': 'Coolify Redis',
+  'coolify-sentinel': 'Coolify Sentinel',
+  'overlord': 'Overlord (WhatsApp Bot)',
+  'surfagent': 'SurfaBabe (WhatsApp Bot)',
+  'mastercommander': 'MasterCommander',
+};
+
+// Resolve Coolify hash container names to project names via Docker labels
+async function resolveContainerName(name) {
+  if (CONTAINER_NAMES[name]) return CONTAINER_NAMES[name];
+  try {
+    // Use serviceName + projectName to build a clean friendly name
+    const { stdout } = await execAsync(
+      `docker inspect --format '{{index .Config.Labels "coolify.serviceName"}}|||{{index .Config.Labels "coolify.projectName"}}' "${name}" 2>/dev/null`,
+      { timeout: 3000 }
+    );
+    const [svc, proj] = stdout.trim().split('|||');
+    let friendly = '';
+    if (svc && svc !== '<no value>') {
+      // Clean up Coolify's verbose service names (e.g. "bluemele-beast-modemain-xxx" → use project name)
+      if (svc.startsWith('bluemele-') && proj && proj !== '<no value>') {
+        friendly = proj.charAt(0).toUpperCase() + proj.slice(1);
+      } else if (svc === 'api' && proj && proj !== '<no value>') {
+        friendly = `${proj.charAt(0).toUpperCase() + proj.slice(1)} API`;
+      } else {
+        friendly = svc.charAt(0).toUpperCase() + svc.slice(1);
+      }
+    }
+    if (friendly) {
+      CONTAINER_NAMES[name] = friendly; // cache it
+      return friendly;
+    }
+  } catch {}
+  return name; // fallback to raw name
+}
+
+async function friendlyContainerList(rawOutput) {
+  const lines = rawOutput.trim().split('\n').filter(Boolean);
+  const resolved = await Promise.all(lines.map(async (line) => {
+    const colonIdx = line.indexOf(':');
+    if (colonIdx === -1) return line;
+    const rawName = line.substring(0, colonIdx).trim();
+    const rest = line.substring(colonIdx);
+    const friendly = await resolveContainerName(rawName);
+    return `${friendly}${rest}`;
+  }));
+  return resolved.join('\n');
+}
 
 // ============================================================
 // PERSISTENCE HELPERS
@@ -147,22 +202,43 @@ async function runCmd(cmd, timeout = 10000) {
 }
 
 export async function generateBriefing() {
-  const [uptime, memory, disk, containers, dockerStats] = await Promise.all([
+  const [uptime, memory, disk, containers, dockerStats, fail2ban] = await Promise.all([
     runCmd('uptime -p'),
-    runCmd('free -h | tail -2'),
+    runCmd("free -h | awk '/Mem/{printf \"RAM: %s used / %s total (%s free)\", $3, $2, $4}; /Swap/{printf \"\\nSwap: %s used / %s total\", $3, $2}'"),
     runCmd("df -h / | tail -1 | awk '{print $3\"/\"$2\" (\"$5\" used)\"}'"),
     runCmd('docker ps --format "{{.Names}}: {{.Status}}" 2>/dev/null'),
     runCmd('docker stats --no-stream --format "{{.Name}}: CPU {{.CPUPerc}} / MEM {{.MemUsage}}" 2>/dev/null'),
+    runCmd('fail2ban-client status 2>/dev/null || echo "(not running)"'),
   ]);
+
+  // Resolve container names to human-readable
+  const friendlyContainers = containers ? await friendlyContainerList(containers) : '(none running)';
+  const friendlyStats = dockerStats ? await friendlyContainerList(dockerStats) : '(unavailable)';
+
+  // Get fail2ban banned count per jail
+  let f2bSummary = '';
+  try {
+    const { stdout } = await execAsync(
+      'for jail in $(fail2ban-client status 2>/dev/null | grep "Jail list" | sed "s/.*://;s/,//g"); do count=$(fail2ban-client status "$jail" 2>/dev/null | grep "Currently banned" | awk "{print \\$NF}"); total=$(fail2ban-client status "$jail" 2>/dev/null | grep "Total banned" | awk "{print \\$NF}"); echo "$jail: $count active / $total total"; done',
+      { timeout: 10000 }
+    );
+    f2bSummary = stdout.trim();
+  } catch { /* ignore */ }
 
   // Check for recent errors in container logs (last 6 hours)
   let recentErrors = '';
   try {
     const { stdout } = await execAsync(
-      'docker ps -q | xargs -I{} sh -c \'docker logs --since 6h {} 2>&1 | grep -i "error\\|fatal\\|oom\\|killed" | tail -3\' 2>/dev/null',
+      'docker ps --format "{{.Names}}" 2>/dev/null | while read name; do errs=$(docker logs --since 6h "$name" 2>&1 | grep -i "error\\|fatal\\|oom\\|killed" | tail -2); if [ -n "$errs" ]; then echo "[$name]"; echo "$errs"; fi; done',
       { timeout: 15000 }
     );
-    recentErrors = stdout.trim();
+    if (stdout.trim()) {
+      // Resolve container names in error output
+      recentErrors = stdout.trim();
+      for (const [raw, friendly] of Object.entries(CONTAINER_NAMES)) {
+        recentErrors = recentErrors.replaceAll(`[${raw}]`, `[${friendly}]`);
+      }
+    }
   } catch { /* ignore */ }
 
   const now = new Date();
@@ -172,13 +248,17 @@ export async function generateBriefing() {
     `☀️ Morning Briefing — ${dateStr}`,
     '',
     `⏱️ Uptime: ${uptime}`,
-    `💾 Memory:\n${memory}`,
+    `💾 ${memory}`,
     `💿 Disk: ${disk}`,
     '',
-    `🐳 Containers:\n${containers || '(none running)'}`,
+    `🐳 Containers:\n${friendlyContainers}`,
     '',
-    `📊 Resources:\n${dockerStats || '(unavailable)'}`,
+    `📊 Resources:\n${friendlyStats}`,
   ];
+
+  if (f2bSummary) {
+    lines.push('', `🛡️ Fail2ban:\n${f2bSummary}`);
+  }
 
   if (recentErrors) {
     lines.push('', `⚠️ Recent errors (6h):\n${recentErrors.substring(0, 500)}`);
@@ -379,7 +459,8 @@ async function checkContainerLogs(sockRef) {
 
         // Deduplicate — don't alert same errors repeatedly
         if (!config.alertedHashes.includes(errorHash)) {
-          alerts.push(`🐳 ${container}:\n${filtered.substring(0, 300)}`);
+          const friendly = await resolveContainerName(container);
+        alerts.push(`🐳 ${friendly}:\n${filtered.substring(0, 300)}`);
           config.alertedHashes.push(errorHash);
           // Keep only last 100 hashes
           if (config.alertedHashes.length > 100) config.alertedHashes = config.alertedHashes.slice(-100);
@@ -420,8 +501,8 @@ export async function startScheduler(sockRef) {
     console.error('Failed to load reminders:', err.message);
   }
 
-  // 2. Daily briefing at 8am
-  cron.schedule('0 8 * * *', async () => {
+  // 2. Daily briefing at 6am (Gil wakes ~5:30am)
+  cron.schedule('0 6 * * *', async () => {
     try {
       const briefing = await generateBriefing();
       await sockRef.sock.sendMessage(ADMIN_JID, { text: briefing });
@@ -430,7 +511,7 @@ export async function startScheduler(sockRef) {
       console.error('Failed to send daily briefing:', err.message);
     }
   });
-  console.log('☀️ Daily briefing scheduled (8:00 AM)');
+  console.log('☀️ Daily briefing scheduled (6:00 AM)');
 
   // 3. URL monitoring every 15 minutes
   cron.schedule('*/15 * * * *', async () => {
