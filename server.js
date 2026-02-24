@@ -316,7 +316,9 @@ export function startServer(sockRef, sendResponse) {
   let mcMailer = null;
   if (process.env.MC_SMTP_USER && process.env.MC_SMTP_PASS) {
     mcMailer = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
       auth: { user: process.env.MC_SMTP_USER, pass: process.env.MC_SMTP_PASS },
     });
   }
