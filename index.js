@@ -200,9 +200,10 @@ function isPowerUser(jid) {
 
 function canAccessProject(jid, projectName) {
   const profile = getUserProfile(jid);
-  if (profile.role === 'admin') return true;
+  if (profile.role === 'admin' || isAdmin(jid)) return true;
   if (profile.role === 'power') {
-    return profile.projects.includes(projectName) || profile.projects.includes('*');
+    const lower = projectName.toLowerCase();
+    return profile.projects.includes('*') || profile.projects.some(p => p.toLowerCase() === lower);
   }
   return false;
 }
@@ -414,6 +415,7 @@ const PROJECT_PATHS = {
 };
 
 const PENDING_PROJECTS_FILE = path.join(CONFIG.dataDir, 'pending-projects.json');
+const APPROVED_PROJECTS_FILE = path.join(CONFIG.dataDir, 'approved-projects.json');
 
 async function loadPendingProjects() {
   try {
@@ -427,6 +429,35 @@ async function loadPendingProjects() {
 async function savePendingProjects(projects) {
   ensureDir(CONFIG.dataDir);
   await fs.writeFile(PENDING_PROJECTS_FILE, JSON.stringify(projects, null, 2));
+}
+
+// Load approved projects and merge into PROJECT_PATHS + USER_PROFILES on startup
+async function loadApprovedProjects() {
+  try {
+    const data = await fs.readFile(APPROVED_PROJECTS_FILE, 'utf-8');
+    const approved = JSON.parse(data);
+    for (const entry of approved) {
+      PROJECT_PATHS[entry.name.toLowerCase()] = entry.path;
+      if (entry.userPhone && USER_PROFILES[entry.userPhone]) {
+        if (!USER_PROFILES[entry.userPhone].projects.includes(entry.name)) {
+          USER_PROFILES[entry.userPhone].projects.push(entry.name);
+        }
+      }
+    }
+  } catch {
+    // No approved projects file yet
+  }
+}
+
+async function saveApprovedProject(name, projectPath, userPhone) {
+  ensureDir(CONFIG.dataDir);
+  let approved = [];
+  try {
+    const data = await fs.readFile(APPROVED_PROJECTS_FILE, 'utf-8');
+    approved = JSON.parse(data);
+  } catch { /* empty */ }
+  approved.push({ name, path: projectPath, userPhone });
+  await fs.writeFile(APPROVED_PROJECTS_FILE, JSON.stringify(approved, null, 2));
 }
 
 /**
@@ -648,7 +679,8 @@ function mediaPathFor(jid) {
 }
 
 function isAdmin(jid) {
-  return getUserProfile(jid).role === 'admin';
+  const num = senderNumber(jid);
+  return getUserProfile(jid).role === 'admin' || CONFIG.adminIds.has(num);
 }
 
 function isGroup(jid) {
@@ -1825,13 +1857,13 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
       } catch (ghErr) {
         logger.warn({ err: ghErr.message }, 'GitHub repo creation failed — project created locally only');
       }
-      // Add to PROJECT_PATHS
-      PROJECT_PATHS[actualName.toLowerCase()] = projectPath;
-      // Add to requesting user's projects array
+      // Add to PROJECT_PATHS and user's projects (in-memory + disk)
       const userPhone = request.requestedByPhone;
-      if (USER_PROFILES[userPhone]) {
+      PROJECT_PATHS[actualName.toLowerCase()] = projectPath;
+      if (USER_PROFILES[userPhone] && !USER_PROFILES[userPhone].projects.includes(actualName)) {
         USER_PROFILES[userPhone].projects.push(actualName);
       }
+      await saveApprovedProject(actualName, projectPath, userPhone);
       // Remove from pending
       pending.splice(idx, 1);
       await savePendingProjects(pending);
@@ -2032,6 +2064,9 @@ async function startBot() {
   ensureDir(CONFIG.dataDir);
   ensureDir(CONFIG.logsDir);
   ensureDir(CONFIG.mediaDir);
+
+  // Restore approved projects from disk
+  await loadApprovedProjects();
 
   const { state, saveCreds } = await useMultiFileAuthState(CONFIG.authDir);
   const { version } = await fetchLatestBaileysVersion();
