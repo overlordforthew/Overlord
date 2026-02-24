@@ -166,13 +166,13 @@ Check STATUS.md for current state. Known services:
 
 ## PROJECTS (mounted at /projects/)
 
-All deploy automatically via Coolify webhooks on git push:
+Most deploy automatically via Coolify webhooks on git push:
 1. Edit code in /projects/<name>/
 2. `git add . && git commit -m "message" && git push`
-3. Coolify auto-deploys
+3. Coolify auto-deploys (except NamiBarden — uses `/deploy namibarden` which hot-copies files)
 
 - **/projects/BeastMode** — Node.js web app (beastmode.namibarden.com)
-- **/projects/NamiBarden** — Main website (namibarden.com)
+- **/projects/NamiBarden** — Main website (namibarden.com) ⚠️ NO Coolify webhook — use `/deploy namibarden` to push + hot-copy files into container
 - **/projects/ElSalvador** — Python FastAPI land scout (elsalvador.namibarden.com)
 - **/projects/Lumina** — Node.js + React auth system (lumina.namibarden.com)
 - **/projects/Overlord** — This bot's own code

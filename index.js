@@ -493,7 +493,22 @@ async function triggerDeploy(projectName) {
       `cd "${projectPath}" && git pull origin main 2>&1 && git push 2>&1`,
       { timeout: 30000 }
     );
-    return { success: true, output: (stdout + '\n' + stderr).trim().substring(0, 500) };
+    let output = (stdout + '\n' + stderr).trim();
+
+    // NamiBarden has no Coolify webhook — hot-copy static files into the running container
+    if (key === 'namibarden') {
+      try {
+        await execAsync(
+          `docker cp ${projectPath}/public/. ock0wowgsgwwww8w00400k00-142219419516:/usr/share/nginx/html/`,
+          { timeout: 30000 }
+        );
+        output += '\n[NamiBarden] Static files copied to container — live now';
+      } catch (cpErr) {
+        output += `\n[NamiBarden] Warning: git pushed but file copy failed: ${cpErr.message.substring(0, 200)}`;
+      }
+    }
+
+    return { success: true, output: output.substring(0, 700) };
   } catch (err) {
     return { success: false, error: err.message.substring(0, 300) };
   }
@@ -1478,11 +1493,11 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
 
       proc.on('close', async (code) => {
         if (code !== 0 && !stdout) {
-          logger.error({ code, stderr: stderr.substring(0, 300), attempt }, 'Claude error');
           if (RETRYABLE_CODES.has(code) && attempt < MAX_RETRIES) {
-            logger.info({ code, attempt }, 'Retrying after transient error');
+            logger.warn({ code, stderr: stderr.substring(0, 300), attempt }, 'Claude transient error, retrying');
             resolve({ retry: true });
           } else {
+            logger.error({ code, stderr: stderr.substring(0, 300), attempt }, 'Claude error (all retries exhausted)');
             resolve({ retry: false, text: `⚠️ Had a hiccup (code ${code}). Retried ${attempt}x.` });
           }
           return;
@@ -1506,11 +1521,12 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
         ];
         const isAPIError = API_ERROR_PATTERNS.some(p => p.test(response));
         if (isAPIError) {
-          logger.error({ response: response.substring(0, 200) }, 'Claude API error in stdout');
           if (attempt < MAX_RETRIES) {
+            logger.warn({ response: response.substring(0, 200), attempt }, 'Claude API error, retrying');
             resolve({ retry: true });
             return;
           }
+          logger.error({ response: response.substring(0, 200), attempt }, 'Claude API error (all retries exhausted)');
           resolve({ retry: false, text: '⚠️ I\'m temporarily unavailable. Try again in a few minutes.' });
           return;
         }
@@ -1520,10 +1536,11 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       });
 
       proc.on('error', (err) => {
-        logger.error({ err, attempt }, 'Spawn failed');
         if (attempt < MAX_RETRIES) {
+          logger.warn({ err, attempt }, 'Spawn failed, retrying');
           resolve({ retry: true });
         } else {
+          logger.error({ err, attempt }, 'Spawn failed (all retries exhausted)');
           resolve({ retry: false, text: '⚠️ Claude CLI unavailable.' });
         }
       });
