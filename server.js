@@ -7,7 +7,6 @@ import express from 'express';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { spawn } from 'child_process';
 import { addReminder, removeReminder, listReminders } from './scheduler.js';
 
 const WEBHOOK_TOKEN = process.env.WEBHOOK_TOKEN || '';
@@ -375,37 +374,43 @@ BEHAVIOR:
       // Keep last 10 exchanges
       if (session.history.length > 20) session.history = session.history.slice(-20);
 
-      const historyText = session.history
-        .map(m => `${m.role === 'user' ? 'Visitor' : 'Assistant'}: ${m.text}`)
-        .join('\n');
+      // Build messages for OpenRouter API
+      const apiMessages = [
+        { role: 'system', content: MC_SYSTEM_PROMPT },
+        ...session.history.map(m => ({
+          role: m.role === 'user' ? 'user' : 'assistant',
+          content: m.text
+        }))
+      ];
 
-      const fullPrompt = `${MC_SYSTEM_PROMPT}\n\n[CONVERSATION]\n${historyText}\n\nRespond to the visitor's latest message.`;
+      const controller = new AbortController();
+      const tm = setTimeout(() => controller.abort(), 30_000);
 
-      // Use llm CLI with free model for fast, cost-free responses
-      const proc = spawn('llm', ['-m', 'openrouter/openrouter/free', fullPrompt], {
-        timeout: 30_000,
-        env: { ...process.env, TERM: 'dumb' },
+      const apiRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.OPENROUTER_KEY}`,
+        },
+        body: JSON.stringify({
+          model: 'openai/gpt-4.1-nano',
+          messages: apiMessages,
+          max_tokens: 400,
+        }),
+        signal: controller.signal,
       });
+      clearTimeout(tm);
 
-      let stdout = '';
-      let stderr = '';
-      proc.stdout.on('data', d => { stdout += d.toString(); });
-      proc.stderr.on('data', d => { stderr += d.toString(); });
+      const data = await apiRes.json();
+      const response = data.choices?.[0]?.message?.content?.trim();
 
-      proc.on('close', (code) => {
-        const response = stdout.trim();
-        if (!response) {
-          console.error('[web-chat] Empty response, stderr:', stderr);
-          return res.status(500).json({ error: 'No response generated. Please try again.' });
-        }
-        session.history.push({ role: 'assistant', text: response });
-        res.json({ response, sessionId: sid });
-      });
+      if (!response) {
+        console.error('[web-chat] Empty API response:', JSON.stringify(data).slice(0, 300));
+        return res.status(500).json({ error: 'No response generated. Please try again.' });
+      }
 
-      proc.on('error', (err) => {
-        console.error('[web-chat] Process error:', err.message);
-        res.status(500).json({ error: 'Chat service temporarily unavailable.' });
-      });
+      session.history.push({ role: 'assistant', text: response });
+      res.json({ response, sessionId: sid });
     } catch (err) {
       console.error('[web-chat] Error:', err.message);
       res.status(500).json({ error: 'Something went wrong. Please try again.' });
