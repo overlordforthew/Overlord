@@ -2311,8 +2311,8 @@ async function startBot() {
         }
 
         // ---- PROMPT GUARD: Input Scan (skip for admin & power users — they're authenticated with scoped permissions) ----
-        const senderProfile = getUserProfile(senderJid);
-        const senderRole = senderProfile.role;
+        const guardProfile = getUserProfile(senderJid);
+        const senderRole = guardProfile.role;
         if (senderRole !== 'admin' && senderRole !== 'power' && parsed.text) {
           const guardResult = await analyzeWithGuard(parsed.text, senderNumber(senderJid), isGroup(chatJid));
           if (guardResult.shouldBlock) {
@@ -2324,7 +2324,7 @@ async function startBot() {
             logger.warn({ reasons: guardResult.reasons, severity: guardResult.severity, sender: senderName }, "🛡️ Prompt Guard WARNING on inbound message");
           }
         } else if ((senderRole === 'admin' || senderRole === 'power') && parsed.text) {
-          logger.debug({ sender: senderName, role: senderRole, jid: senderNumber(senderJid), resolvedAs: senderProfile.name }, "🛡️ Prompt Guard SKIPPED (trusted user)");
+          logger.debug({ sender: senderName, role: senderRole, jid: senderNumber(senderJid), resolvedAs: guardProfile.name }, "🛡️ Prompt Guard SKIPPED (trusted user)");
         }
 
         // Read receipts
