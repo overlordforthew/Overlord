@@ -7,6 +7,10 @@ import express from 'express';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import pg from 'pg';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import nodemailer from 'nodemailer';
 import { addReminder, removeReminder, listReminders } from './scheduler.js';
 
 const WEBHOOK_TOKEN = process.env.WEBHOOK_TOKEN || '';
@@ -279,6 +283,214 @@ export function startServer(sockRef, sendResponse) {
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ---- MasterCommander Auth ----
+
+  // PostgreSQL pool for MasterCommander
+  const mcPool = new pg.Pool({
+    host: process.env.MC_DB_HOST,
+    port: parseInt(process.env.MC_DB_PORT || '5432'),
+    database: process.env.MC_DB_NAME,
+    user: process.env.MC_DB_USER,
+    password: process.env.MC_DB_PASS,
+  });
+
+  // Auto-init users table
+  mcPool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      email VARCHAR(255) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      password_hash VARCHAR(255) NOT NULL,
+      reset_token VARCHAR(64),
+      reset_expires TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `).catch(err => console.error('[mc-auth] DB init error:', err.message));
+
+  const MC_JWT_SECRET = process.env.MC_JWT_SECRET || 'fallback-dev-secret';
+
+  // SMTP transport (falls back to console logging if not configured)
+  let mcMailer = null;
+  if (process.env.MC_SMTP_USER && process.env.MC_SMTP_PASS) {
+    mcMailer = nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: process.env.MC_SMTP_USER, pass: process.env.MC_SMTP_PASS },
+    });
+  }
+
+  // CORS for /api/auth
+  app.use('/api/auth', (req, res, next) => {
+    const origin = req.headers.origin || '';
+    if (origin.includes('mastercommander.namibarden.com') || origin.includes('localhost')) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    next();
+  });
+
+  // Rate limiters for auth endpoints
+  const authRateMap = new Map();
+  function authRateLimit(max, windowMs) {
+    return (req, res, next) => {
+      const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+      const key = `${req.path}:${ip}`;
+      const now = Date.now();
+      let hits = authRateMap.get(key) || [];
+      hits = hits.filter(t => now - t < windowMs);
+      if (hits.length >= max) {
+        return res.status(429).json({ error: 'Too many attempts. Please try again later.' });
+      }
+      hits.push(now);
+      authRateMap.set(key, hits);
+      next();
+    };
+  }
+  // Cleanup auth rate map every 5 minutes
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, hits] of authRateMap) {
+      const valid = hits.filter(t => now - t < 300_000);
+      if (valid.length === 0) authRateMap.delete(key);
+      else authRateMap.set(key, valid);
+    }
+  }, 300_000);
+
+  // JWT helper
+  function signToken(user) {
+    return jwt.sign({ id: user.id, email: user.email, name: user.name }, MC_JWT_SECRET, { expiresIn: '180d' });
+  }
+
+  // POST /api/auth/signup
+  app.post('/api/auth/signup', authRateLimit(10, 60_000), async (req, res) => {
+    try {
+      const { email, name, password } = req.body;
+      if (!email || !name || !password) {
+        return res.status(400).json({ error: 'Email, name, and password are required.' });
+      }
+      if (password.length < 8) {
+        return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+      }
+      const emailLower = email.toLowerCase().trim();
+      // Check existing
+      const existing = await mcPool.query('SELECT id FROM users WHERE email = $1', [emailLower]);
+      if (existing.rows.length > 0) {
+        return res.status(409).json({ error: 'An account with this email already exists.' });
+      }
+      const hash = await bcrypt.hash(password, 10);
+      const result = await mcPool.query(
+        'INSERT INTO users (email, name, password_hash) VALUES ($1, $2, $3) RETURNING id, email, name, created_at',
+        [emailLower, name.trim(), hash]
+      );
+      const user = result.rows[0];
+      const token = signToken(user);
+      res.status(201).json({ token, user: { id: user.id, email: user.email, name: user.name } });
+    } catch (err) {
+      console.error('[mc-auth] Signup error:', err.message);
+      res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    }
+  });
+
+  // POST /api/auth/login
+  app.post('/api/auth/login', authRateLimit(5, 60_000), async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required.' });
+      }
+      const result = await mcPool.query('SELECT * FROM users WHERE email = $1', [email.toLowerCase().trim()]);
+      const user = result.rows[0];
+      if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+        return res.status(401).json({ error: 'Invalid email or password.' });
+      }
+      const token = signToken(user);
+      res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+    } catch (err) {
+      console.error('[mc-auth] Login error:', err.message);
+      res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    }
+  });
+
+  // GET /api/auth/session
+  app.get('/api/auth/session', async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'No token provided.' });
+      }
+      const decoded = jwt.verify(authHeader.slice(7), MC_JWT_SECRET);
+      const result = await mcPool.query('SELECT id, email, name FROM users WHERE id = $1', [decoded.id]);
+      if (result.rows.length === 0) {
+        return res.status(401).json({ error: 'User not found.' });
+      }
+      res.json({ user: result.rows[0] });
+    } catch (err) {
+      return res.status(401).json({ error: 'Invalid or expired token.' });
+    }
+  });
+
+  // POST /api/auth/forgot-password
+  app.post('/api/auth/forgot-password', authRateLimit(3, 300_000), async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ error: 'Email is required.' });
+      // Always return success to prevent email enumeration
+      const result = await mcPool.query('SELECT id, email, name FROM users WHERE email = $1', [email.toLowerCase().trim()]);
+      if (result.rows.length > 0) {
+        const user = result.rows[0];
+        const token = crypto.randomBytes(32).toString('hex');
+        const expires = new Date(Date.now() + 15 * 60_000); // 15 min TTL
+        await mcPool.query('UPDATE users SET reset_token = $1, reset_expires = $2 WHERE id = $3', [token, expires, user.id]);
+        const resetUrl = `https://mastercommander.namibarden.com?reset=${token}`;
+        if (mcMailer) {
+          await mcMailer.sendMail({
+            from: `"Master&Commander" <${process.env.MC_SMTP_USER}>`,
+            to: user.email,
+            subject: 'Reset your Master&Commander password',
+            html: `<p>Hi ${user.name},</p><p>Click the link below to reset your password. This link expires in 15 minutes.</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you didn't request this, you can safely ignore this email.</p>`,
+          });
+        } else {
+          console.log(`[mc-auth] Password reset link (no SMTP configured): ${resetUrl}`);
+        }
+      }
+      res.json({ message: 'If an account exists with that email, a reset link has been sent.' });
+    } catch (err) {
+      console.error('[mc-auth] Forgot password error:', err.message);
+      res.json({ message: 'If an account exists with that email, a reset link has been sent.' });
+    }
+  });
+
+  // POST /api/auth/reset-password
+  app.post('/api/auth/reset-password', authRateLimit(5, 60_000), async (req, res) => {
+    try {
+      const { token, password } = req.body;
+      if (!token || !password) {
+        return res.status(400).json({ error: 'Token and new password are required.' });
+      }
+      if (password.length < 8) {
+        return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+      }
+      const result = await mcPool.query(
+        'SELECT id FROM users WHERE reset_token = $1 AND reset_expires > NOW()',
+        [token]
+      );
+      if (result.rows.length === 0) {
+        return res.status(400).json({ error: 'Invalid or expired reset link.' });
+      }
+      const hash = await bcrypt.hash(password, 10);
+      await mcPool.query(
+        'UPDATE users SET password_hash = $1, reset_token = NULL, reset_expires = NULL WHERE id = $2',
+        [hash, result.rows[0].id]
+      );
+      res.json({ message: 'Password reset successfully. You can now log in.' });
+    } catch (err) {
+      console.error('[mc-auth] Reset password error:', err.message);
+      res.status(500).json({ error: 'Something went wrong. Please try again.' });
     }
   });
 
