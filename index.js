@@ -498,13 +498,20 @@ async function triggerDeploy(projectName) {
     // NamiBarden has no Coolify webhook — hot-copy static files into the running container
     if (key === 'namibarden') {
       try {
+        // Resolve container name dynamically in case Coolify recreates it
+        const { stdout: cid } = await execAsync(
+          `docker ps --filter "label=coolify.name=ock0wowgsgwwww8w00400k00" --format "{{.Names}}" | head -1`,
+          { timeout: 10000 }
+        );
+        const container = cid.trim();
+        if (!container) throw new Error('NamiBarden container not found');
         await execAsync(
-          `docker cp ${projectPath}/public/. ock0wowgsgwwww8w00400k00-142219419516:/usr/share/nginx/html/`,
+          `docker cp ${projectPath}/public/. ${container}:/usr/share/nginx/html/`,
           { timeout: 30000 }
         );
-        output += '\n[NamiBarden] Static files copied to container — live now';
+        output += `\n[NamiBarden] Static files copied to ${container} — live now`;
       } catch (cpErr) {
-        output += `\n[NamiBarden] Warning: git pushed but file copy failed: ${cpErr.message.substring(0, 200)}`;
+        return { success: false, error: `Git pushed but deploy failed: ${cpErr.message.substring(0, 200)}` };
       }
     }
 
