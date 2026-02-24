@@ -135,7 +135,7 @@ const USER_PROFILES = {
     projects: ['NamiBarden', 'Lumina'],
     youtube: '@namibarden',
     personality: 'You are Ai Chan, a warm and helpful AI assistant. You speak in a friendly, supportive tone with occasional Japanese flair (like using "ne" or "sugoi" naturally). You help Nami with the NamiBarden website, Lumina app, and creative projects. You are knowledgeable, encouraging, and fun.',
-    lid: '13135550002',
+    lid: ['13135550002', '84267677782098'],
   },
   '18587794462': {
     name: 'Seneca', role: 'power', agentName: 'Dex',
