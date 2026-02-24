@@ -187,10 +187,12 @@ See **skills/REGISTRY.md** for the full list. Key skills with executable tools:
 - **Weather:** `python3 /app/skills/api-integrations/weather.py "Port of Spain"`
 - **News:** `python3 /app/skills/api-integrations/news.py --topic tech`
 - **Currency:** `python3 /app/skills/api-integrations/exchange.py 100 USD TTD`
+<!-- Amadeus travel disabled — test API returns fake data, production requires payment
 - **Flight search:** `python3 /app/skills/amadeus-travel/amadeus.py flight CDG JFK 2026-04-01`
 - **Hotel search:** `python3 /app/skills/amadeus-travel/amadeus.py hotel PAR 2026-04-01 2026-04-03`
 - **Points of interest:** `python3 /app/skills/amadeus-travel/amadeus.py poi 48.8566 2.3522`
 - **IATA lookup:** `python3 /app/skills/amadeus-travel/amadeus.py iata "Paris"`
+-->
 - **X Trends:** `python3 /app/skills/x-trends/xtrends.py trends`
 - **X Search:** `python3 /app/skills/x-trends/xtrends.py search "query"` (needs X auth)
 - **X User:** `python3 /app/skills/x-trends/xtrends.py user username` (needs X auth)
