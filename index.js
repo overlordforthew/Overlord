@@ -522,6 +522,56 @@ async function triggerDeploy(projectName) {
 }
 
 // ============================================================
+// AUTO-DEPLOY: Commit + deploy after power user edits
+// ============================================================
+async function autoDeployIfChanged(profile, chatJid, sock) {
+  if (!profile || profile.role !== 'power' || !profile.projects?.length) return;
+
+  for (const projName of profile.projects) {
+    const projPath = PROJECT_PATHS[projName.toLowerCase()];
+    if (!projPath) continue;
+
+    try {
+      // Check for uncommitted changes
+      const { stdout: status } = await execAsync(
+        `cd "${projPath}" && git status --porcelain`,
+        { timeout: 10000 }
+      );
+      if (!status.trim()) continue; // no changes
+
+      // Get a summary of what changed for the commit message
+      const { stdout: diffStat } = await execAsync(
+        `cd "${projPath}" && git diff --stat HEAD 2>/dev/null || echo "new files"`,
+        { timeout: 10000 }
+      );
+      const changedFiles = status.trim().split('\n').map(l => l.trim().split(/\s+/).pop()).join(', ');
+      const commitMsg = `${profile.agentName || profile.name}: update ${changedFiles}`.substring(0, 200);
+
+      // Stage, commit, and deploy
+      await execAsync(
+        `cd "${projPath}" && git add -A && git commit -m "${commitMsg.replace(/"/g, '\\"')}"`,
+        { timeout: 15000 }
+      );
+
+      const result = await triggerDeploy(projName);
+
+      if (result.success) {
+        logger.info(`🚀 Auto-deployed ${projName} for ${profile.name}: ${commitMsg}`);
+        await sock.sendMessage(chatJid, { text: `✅ Changes saved and deployed to ${projName.toLowerCase()}.namibarden.com — live now!` });
+      } else {
+        logger.error(`❌ Auto-deploy failed for ${projName}: ${result.error}`);
+        await sock.sendMessage(chatJid, { text: `⚠️ Changes saved to git but deploy had an issue: ${result.error}` });
+      }
+    } catch (err) {
+      // If git commit fails (e.g., no changes after all), that's fine
+      if (!err.message?.includes('nothing to commit')) {
+        logger.error({ err }, `Auto-deploy error for ${projName}`);
+      }
+    }
+  }
+}
+
+// ============================================================
 // DATABASE QUERY HELPERS
 // ============================================================
 
@@ -1459,6 +1509,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       `- Query databases, open network ports, or access infrastructure`,
       `- Use Bash for rm -rf, chmod, chown, kill, or any destructive system operations`,
       `If asked to do something outside your allowed projects, politely decline and explain your scope is limited to: ${projectList}.`,
+      `DEPLOYMENT: When you edit project files, changes are AUTOMATICALLY committed to git and deployed live after you finish. You do NOT need to run git commands, docker commands, or /deploy. Just edit the files and the system handles the rest. Tell ${profile.name} their changes will go live automatically.`,
       profile.projects.length === 0 ? `You currently have no projects. ${profile.name} can request a new project with /newproject <name> — Gil will approve it.` : '',
       'Keep responses WhatsApp-length. Use @ to read media files when referenced.',
       `Update ${cDir}/memory.md when you learn key facts about ${profile.name}.`,
@@ -2259,8 +2310,9 @@ async function startBot() {
           continue;
         }
 
-        // ---- PROMPT GUARD: Input Scan ----
-        if (!isAdmin(senderJid) && parsed.text) {
+        // ---- PROMPT GUARD: Input Scan (skip for admin & power users — they're authenticated with scoped permissions) ----
+        const senderRole = getUserProfile(senderJid).role;
+        if (senderRole !== 'admin' && senderRole !== 'power' && parsed.text) {
           const guardResult = await analyzeWithGuard(parsed.text, senderNumber(senderJid), isGroup(chatJid));
           if (guardResult.shouldBlock) {
             logger.warn({ reasons: guardResult.reasons, severity: guardResult.severity, sender: senderName }, "🛡️ Prompt Guard BLOCKED inbound message");
@@ -2335,6 +2387,14 @@ async function startBot() {
 
         // Send (with media detection + auto-split)
         await sendResponse(sock, chatJid, finalResponse);
+
+        // Auto-deploy: if power user edited project files, commit + deploy automatically
+        const senderProfile = getUserProfile(last.senderJid);
+        if (senderProfile.role === 'power' && senderProfile.projects?.length) {
+          await autoDeployIfChanged(senderProfile, chatJid, sock).catch(err =>
+            logger.error({ err }, 'Auto-deploy hook error')
+          );
+        }
 
         // Track in context
         conversationContext.add(chatJid, {
