@@ -113,6 +113,13 @@ const CONFIG = {
 CONFIG.adminIds.add(CONFIG.adminNumber);
 if (process.env.ADMIN_LID) CONFIG.adminIds.add(process.env.ADMIN_LID);
 
+// Groups the bot should NEVER respond in (add JIDs here)
+// Use /groupinfo in a group to find its JID, or check logs
+const BLOCKED_GROUPS = new Set([
+  '18687420730-1586538888@g.us',  // Peake Yard Community (Trinidad) — do not respond
+  ...(process.env.BLOCKED_GROUPS || '').split(',').map(s => s.trim()).filter(Boolean),
+]);
+
 // ============================================================
 // MULTI-USER AGENT PROFILES
 // ============================================================
@@ -1714,6 +1721,11 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
     return `✅ Removed ${name} from log monitor.`;
   }
 
+  // ---- GROUP ID ----
+  if (cmd === '/groupid' && isAdmin(senderJid)) {
+    return `Group JID: ${chatJid}`;
+  }
+
   // ---- QR CODE ----
   if (cmd.startsWith('/qr ')) {
     const content = fullText.substring(4).trim();
@@ -2130,6 +2142,10 @@ async function startBot() {
         if (msg.key.remoteJid === 'status@broadcast') continue;
 
         const chatJid = msg.key.remoteJid;
+
+        // Skip blocked groups
+        if (isGroup(chatJid) && BLOCKED_GROUPS.has(chatJid)) continue;
+
         const senderJid = isGroup(chatJid) ? msg.key.participant : chatJid;
 
         // Track names
