@@ -1,0 +1,5 @@
+0 */6 * * * /root/overlord/scripts/health-check.sh > /dev/null 2>&1 && /root/overlord/scripts/update-status.sh > /dev/null 2>&1
+0 0 * * * /root/overlord/scripts/backup.sh >> /root/overlord/logs/backup.log 2>&1
+0 6 * * * /root/overlord/scripts/morning-brief.sh > /root/overlord/logs/morning-brief.log 2>&1
+0 */6 * * * /usr/bin/claude auth status > /dev/null 2>&1
+55 23 * * * /root/overlord/scripts/auto-journal.sh >> /root/overlord/logs/journal.log 2>&1

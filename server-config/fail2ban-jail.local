@@ -1,0 +1,48 @@
+[DEFAULT]
+# Ban for 3 hours after failures
+bantime = 10800
+# Detection window: 10 minutes
+findtime = 600
+# Allow 5 attempts before banning
+maxretry = 3
+# Use the system firewall
+banaction = nftables-multiport
+# Never ban Tailscale, Docker internal, or localhost
+ignoreip = 127.0.0.1/8 10.0.0.0/8 172.16.0.0/12 100.64.0.0/10
+
+[sshd]
+enabled = true
+port = ssh
+logpath = %(sshd_log)s
+backend = systemd
+maxretry = 3
+
+# Traefik — 401 auth failures (brute force login attempts)
+[traefik-auth]
+enabled = true
+port = http,https
+filter = traefik-auth
+logpath = /data/coolify/proxy/access.log
+maxretry = 5
+findtime = 300
+bantime = 21600
+
+# Traefik — bot scanners probing for exploitable paths
+[traefik-botsearch]
+enabled = true
+port = http,https
+filter = traefik-botsearch
+logpath = /data/coolify/proxy/access.log
+maxretry = 3
+findtime = 60
+bantime = 86400
+
+# Traefik — excessive 4xx errors (aggressive scanning / fuzzing)
+[traefik-ratelimit]
+enabled = true
+port = http,https
+filter = traefik-ratelimit
+logpath = /data/coolify/proxy/access.log
+maxretry = 20
+findtime = 60
+bantime = 3600

@@ -1,6 +1,5 @@
 node_modules/
 auth/
-data/
 logs/
 media/
 .env
@@ -10,8 +9,9 @@ media/
 STATUS.md
 archive/
 
-# Traefik watcher sidecar (separate deployment)
-namibarden-traefik-watcher/
+# Per-chat runtime data (backed up nightly, not in git)
+data/*.json
+data/*/context.json
 
-# Claude internal
-.claude/
+# Keep per-chat memories in git (they're the learned knowledge)
+!data/*/memory.md

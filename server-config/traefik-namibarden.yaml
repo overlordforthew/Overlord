@@ -1,0 +1,176 @@
+http:
+  routers:
+    # === namibarden.com — handled by Coolify Docker labels (auto-discovers new containers) ===
+    # Removed file-based routes to prevent 502s after deploys.
+    # See docker-compose.yaml labels in /data/coolify/applications/ock0wowgsgwwww8w00400k00/
+
+    # === OpenClaw (Tailscale only) ===
+    http-openclaw:
+      entryPoints:
+        - http
+      rule: "Host(`openclaw.namibarden.com`)"
+      middlewares:
+        - redirect-to-https-file
+      service: openclaw
+
+    https-openclaw:
+      entryPoints:
+        - https
+      rule: "Host(`openclaw.namibarden.com`)"
+      middlewares:
+        - tailscale-only
+      service: openclaw
+      tls:
+        certResolver: letsencrypt
+
+    # === Coolify Sentinel API (token-authenticated, no Tailscale needed) ===
+    https-coolify-sentinel-api:
+      entryPoints:
+        - https
+      rule: "Host(`coolify.namibarden.com`) && PathPrefix(`/api/v1/sentinel`)"
+      service: coolify-app
+      tls:
+        certResolver: letsencrypt
+      priority: 100
+
+    # === Coolify dashboard (Tailscale only) ===
+    http-coolify:
+      entryPoints:
+        - http
+      rule: "Host(`coolify.namibarden.com`)"
+      middlewares:
+        - redirect-to-https-file
+      service: coolify-app
+
+    https-coolify:
+      entryPoints:
+        - https
+      rule: "Host(`coolify.namibarden.com`)"
+      middlewares:
+        - tailscale-only
+      service: coolify-app
+      tls:
+        certResolver: letsencrypt
+
+    # === Coolify WebSocket (Tailscale only) ===
+    https-coolify-realtime:
+      entryPoints:
+        - https
+      rule: "Host(`coolify.namibarden.com`) && PathPrefix(`/app`)"
+      middlewares:
+        - tailscale-only
+      service: coolify-realtime
+      tls:
+        certResolver: letsencrypt
+
+    # === Coolify Terminal (Tailscale only) ===
+    https-coolify-terminal:
+      entryPoints:
+        - https
+      rule: "Host(`coolify.namibarden.com`) && PathPrefix(`/terminal/ws`)"
+      middlewares:
+        - tailscale-only
+      service: coolify-terminal
+      tls:
+        certResolver: letsencrypt
+
+    # === SurfaBabe (SurfAgent WhatsApp bot) ===
+    http-surfababe:
+      entryPoints:
+        - http
+      rule: "Host(`surfababe.namibarden.com`)"
+      middlewares:
+        - redirect-to-https-file
+      service: surfagent
+
+    https-surfababe:
+      entryPoints:
+        - https
+      rule: "Host(`surfababe.namibarden.com`)"
+      service: surfagent
+      tls:
+        certResolver: letsencrypt
+
+    # === MasterCommander ===
+    http-mastercommander:
+      entryPoints:
+        - http
+      rule: "Host(`mastercommander.namibarden.com`)"
+      middlewares:
+        - redirect-to-https-file
+      service: mastercommander
+
+    https-mastercommander:
+      entryPoints:
+        - https
+      rule: "Host(`mastercommander.namibarden.com`)"
+      service: mastercommander
+      tls:
+        certResolver: letsencrypt
+
+    # SurfAgent deploy webhook (path on surfababe subdomain)
+    https-surfababe-deploy:
+      entryPoints:
+        - https
+      rule: "Host(`surfababe.namibarden.com`) && Path(`/webhook/deploy`)"
+      service: surfagent-deploy
+      tls:
+        certResolver: letsencrypt
+
+  middlewares:
+    redirect-to-https-file:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+    redirect-to-non-www:
+      redirectRegex:
+        regex: "^https?://www\\.(.+)"
+        replacement: "https://${1}"
+        permanent: true
+
+    strip-server:
+      headers:
+        customResponseHeaders:
+          Server: ""
+
+    tailscale-only:
+      ipAllowList:
+        sourceRange:
+          - "100.64.0.0/10"
+
+  services:
+    openclaw:
+      loadBalancer:
+        servers:
+          - url: "http://openclaw-s8ck4g0k80wwwg0coswg4occ:18789"
+
+    coolify-app:
+      loadBalancer:
+        servers:
+          - url: "http://coolify:8080"
+
+    coolify-realtime:
+      loadBalancer:
+        servers:
+          - url: "http://coolify-realtime:6001"
+
+    coolify-terminal:
+      loadBalancer:
+        servers:
+          - url: "http://coolify-realtime:6002"
+
+    surfagent:
+      loadBalancer:
+        servers:
+          - url: "http://surfagent:3002"
+
+    surfagent-deploy:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:9002"
+
+    mastercommander:
+      loadBalancer:
+        servers:
+          - url: "http://mastercommander:80"

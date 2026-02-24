@@ -1,0 +1,11 @@
+/data/coolify/proxy/access.log {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    postrotate
+        docker kill --signal=USR1 coolify-proxy 2>/dev/null || true
+    endscript
+}
