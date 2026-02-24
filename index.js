@@ -1469,8 +1469,8 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       workDir = cDir;
     }
     args.push('--add-dir', cDir);
-    // Limit turns to prevent runaway sessions
-    args[args.indexOf('100')] = '20';
+    // Limit turns to prevent runaway sessions (40 for content creation work)
+    args[args.indexOf('100')] = '40';
   } else {
     // Regular user: read-only tools, run from chat data dir
     args.push('--allowedTools', 'Read,WebSearch,WebFetch');
@@ -2311,7 +2311,8 @@ async function startBot() {
         }
 
         // ---- PROMPT GUARD: Input Scan (skip for admin & power users — they're authenticated with scoped permissions) ----
-        const senderRole = getUserProfile(senderJid).role;
+        const senderProfile = getUserProfile(senderJid);
+        const senderRole = senderProfile.role;
         if (senderRole !== 'admin' && senderRole !== 'power' && parsed.text) {
           const guardResult = await analyzeWithGuard(parsed.text, senderNumber(senderJid), isGroup(chatJid));
           if (guardResult.shouldBlock) {
@@ -2322,6 +2323,8 @@ async function startBot() {
           if (guardResult.action === "warn") {
             logger.warn({ reasons: guardResult.reasons, severity: guardResult.severity, sender: senderName }, "🛡️ Prompt Guard WARNING on inbound message");
           }
+        } else if ((senderRole === 'admin' || senderRole === 'power') && parsed.text) {
+          logger.debug({ sender: senderName, role: senderRole, jid: senderNumber(senderJid), resolvedAs: senderProfile.name }, "🛡️ Prompt Guard SKIPPED (trusted user)");
         }
 
         // Read receipts

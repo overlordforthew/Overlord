@@ -108,6 +108,16 @@ http:
       tls:
         certResolver: letsencrypt
 
+    # MasterCommander chat API → Overlord container
+    https-mastercommander-chat:
+      entryPoints:
+        - https
+      rule: "Host(`mastercommander.namibarden.com`) && PathPrefix(`/api/web-chat`)"
+      service: overlord-api
+      tls:
+        certResolver: letsencrypt
+      priority: 100
+
     # SurfAgent deploy webhook (path on surfababe subdomain)
     https-surfababe-deploy:
       entryPoints:
@@ -174,3 +184,8 @@ http:
       loadBalancer:
         servers:
           - url: "http://mastercommander:80"
+
+    overlord-api:
+      loadBalancer:
+        servers:
+          - url: "http://overlord:3001"
