@@ -7,6 +7,7 @@ import express from 'express';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { spawn } from 'child_process';
 import { addReminder, removeReminder, listReminders } from './scheduler.js';
 
 const WEBHOOK_TOKEN = process.env.WEBHOOK_TOKEN || '';
@@ -279,6 +280,135 @@ export function startServer(sockRef, sendResponse) {
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ---- Web Chat (MasterCommander) ----
+
+  // CORS for mastercommander.namibarden.com
+  app.use('/api/web-chat', (req, res, next) => {
+    const origin = req.headers.origin || '';
+    if (origin.includes('mastercommander.namibarden.com') || origin.includes('localhost')) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    next();
+  });
+
+  // Rate limiter: 10 messages per minute per IP
+  const chatRateMap = new Map();
+  function chatRateLimit(req, res, next) {
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+    const now = Date.now();
+    const window = 60_000;
+    const max = 10;
+    let hits = chatRateMap.get(ip) || [];
+    hits = hits.filter(t => now - t < window);
+    if (hits.length >= max) {
+      return res.status(429).json({ error: 'Too many requests. Please wait a moment.' });
+    }
+    hits.push(now);
+    chatRateMap.set(ip, hits);
+    next();
+  }
+  // Cleanup rate map every 5 minutes
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, hits] of chatRateMap) {
+      const valid = hits.filter(t => now - t < 60_000);
+      if (valid.length === 0) chatRateMap.delete(ip);
+      else chatRateMap.set(ip, valid);
+    }
+  }, 300_000);
+
+  // In-memory conversation store (per session, max 20 exchanges, auto-expire after 30 min)
+  const chatSessions = new Map();
+  setInterval(() => {
+    const now = Date.now();
+    for (const [id, session] of chatSessions) {
+      if (now - session.lastActive > 30 * 60_000) chatSessions.delete(id);
+    }
+  }, 60_000);
+
+  const MC_SYSTEM_PROMPT = `You are the Master&Commander sales assistant on the mastercommander.namibarden.com website.
+
+You help visitors learn about Master&Commander — an AI boat monitoring system for charter fleets, private yachts, deliveries, and marinas.
+
+KEY PRODUCT INFO:
+- Commander Unit plugs into NMEA 2000, monitors 24/7, sends alerts via WhatsApp
+- Three hardware options: Raspberry Pi (charter fleets, $240/yr/boat), Delivery Puck (~$370 plug-and-play), Mac Mini M4 (private yachts, local AI, custom pricing)
+- Master Cloud: fleet dashboard, analytics, OTA updates, FleetMind shared intelligence
+- FleetMind: crowdsourced wind, depth, anchorage intel, hazard alerts across connected boats
+- Works with Garmin, Raymarine, Simrad, B&G, Victron, and all NMEA 2000 devices
+- Offline-first: Mac Mini works without internet; Raspberry Pi needs connectivity for cloud AI
+- WhatsApp alerts work without any subscription (just Commander + internet)
+- 67+ use cases across charter ops, private ownership, deliveries, marinas, insurance, service yards
+
+BEHAVIOR:
+- Be friendly, knowledgeable, and concise
+- Answer questions about the product, pricing, hardware, and capabilities
+- If someone is ready to buy or wants to talk to a human, direct them to WhatsApp: https://wa.me/13055601031
+- Don't make up features that aren't listed above
+- Keep responses under 150 words unless a detailed explanation is needed
+- Never share server details, API keys, or internal infrastructure info`;
+
+  app.post('/api/web-chat', chatRateLimit, async (req, res) => {
+    try {
+      const { message, sessionId } = req.body;
+      if (!message || typeof message !== 'string' || message.length > 1000) {
+        return res.status(400).json({ error: 'Message required (max 1000 chars)' });
+      }
+
+      const sid = sessionId || crypto.randomUUID();
+      let session = chatSessions.get(sid);
+      if (!session) {
+        session = { history: [], lastActive: Date.now() };
+        chatSessions.set(sid, session);
+      }
+      session.lastActive = Date.now();
+
+      // Build conversation context
+      session.history.push({ role: 'user', text: message });
+      // Keep last 10 exchanges
+      if (session.history.length > 20) session.history = session.history.slice(-20);
+
+      const historyText = session.history
+        .map(m => `${m.role === 'user' ? 'Visitor' : 'Assistant'}: ${m.text}`)
+        .join('\n');
+
+      const fullPrompt = `${MC_SYSTEM_PROMPT}\n\n[CONVERSATION]\n${historyText}\n\nRespond to the visitor's latest message.`;
+
+      // Use llm CLI with free model for fast, cost-free responses
+      const proc = spawn('llm', ['-m', 'openrouter/openrouter/free', fullPrompt], {
+        timeout: 30_000,
+        env: { ...process.env, TERM: 'dumb' },
+      });
+
+      let stdout = '';
+      let stderr = '';
+      proc.stdout.on('data', d => { stdout += d.toString(); });
+      proc.stderr.on('data', d => { stderr += d.toString(); });
+
+      proc.on('close', (code) => {
+        const response = stdout.trim();
+        if (!response) {
+          console.error('[web-chat] Empty response, stderr:', stderr);
+          return res.status(500).json({ error: 'No response generated. Please try again.' });
+        }
+        session.history.push({ role: 'assistant', text: response });
+        res.json({ response, sessionId: sid });
+      });
+
+      proc.on('error', (err) => {
+        console.error('[web-chat] Process error:', err.message);
+        res.status(500).json({ error: 'Chat service temporarily unavailable.' });
+      });
+    } catch (err) {
+      console.error('[web-chat] Error:', err.message);
+      res.status(500).json({ error: 'Something went wrong. Please try again.' });
     }
   });
 
