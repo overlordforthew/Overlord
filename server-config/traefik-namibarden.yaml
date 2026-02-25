@@ -118,6 +118,16 @@ http:
         certResolver: letsencrypt
       priority: 100
 
+    # MasterCommander auth API → Overlord container
+    https-mastercommander-auth:
+      entryPoints:
+        - https
+      rule: "Host(`mastercommander.namibarden.com`) && PathPrefix(`/api/auth`)"
+      service: overlord-api
+      tls:
+        certResolver: letsencrypt
+      priority: 100
+
     # SurfAgent deploy webhook (path on surfababe subdomain)
     https-surfababe-deploy:
       entryPoints:
