@@ -295,20 +295,54 @@ export function startServer(sockRef, sendResponse) {
     database: process.env.MC_DB_NAME,
     user: process.env.MC_DB_USER,
     password: process.env.MC_DB_PASS,
+    connectionTimeoutMillis: 10000,
+    idleTimeoutMillis: 30000,
+    max: 20,
+    statement_timeout: 30000,
   });
 
-  // Auto-init users table
-  mcPool.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id SERIAL PRIMARY KEY,
-      email VARCHAR(255) UNIQUE NOT NULL,
-      name VARCHAR(255) NOT NULL,
-      password_hash VARCHAR(255) NOT NULL,
-      reset_token VARCHAR(64),
-      reset_expires TIMESTAMP,
-      created_at TIMESTAMP DEFAULT NOW()
-    )
-  `).catch(err => console.error('[mc-auth] DB init error:', err.message));
+  mcPool.on('error', (err) => {
+    console.error('[mc-auth] Unexpected error on idle client:', err.message);
+  });
+
+  // Auto-init users table + migrations
+  (async () => {
+    try {
+      await mcPool.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          id SERIAL PRIMARY KEY,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          name VARCHAR(255) NOT NULL,
+          password_hash VARCHAR(255) NOT NULL,
+          reset_token VARCHAR(64),
+          reset_expires TIMESTAMP,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      // Phase 2 migrations
+      await mcPool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE`);
+      await mcPool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_token VARCHAR(64)`);
+      await mcPool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_expires TIMESTAMP`);
+      await mcPool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50)`);
+      await mcPool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS company VARCHAR(255)`);
+      await mcPool.query(`
+        CREATE TABLE IF NOT EXISTS boats (
+          id SERIAL PRIMARY KEY,
+          user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          name VARCHAR(255) NOT NULL,
+          model VARCHAR(255),
+          year INT,
+          mmsi VARCHAR(20),
+          home_port VARCHAR(255),
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await mcPool.query(`CREATE INDEX IF NOT EXISTS idx_boats_user_id ON boats(user_id)`);
+      console.log('[mc-auth] DB init + migrations complete');
+    } catch (err) {
+      console.error('[mc-auth] DB init error:', err.message);
+    }
+  })();
 
   const MC_JWT_SECRET = process.env.MC_JWT_SECRET || 'fallback-dev-secret';
 
@@ -368,6 +402,21 @@ export function startServer(sockRef, sendResponse) {
     return jwt.sign({ id: user.id, email: user.email, name: user.name }, MC_JWT_SECRET, { expiresIn: '180d' });
   }
 
+  // Reusable JWT auth middleware for MasterCommander
+  function requireMcAuth(req, res, next) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required.' });
+    }
+    try {
+      const decoded = jwt.verify(authHeader.slice(7), MC_JWT_SECRET);
+      req.mcUser = decoded;
+      next();
+    } catch {
+      return res.status(401).json({ error: 'Invalid or expired token.' });
+    }
+  }
+
   // POST /api/auth/signup
   app.post('/api/auth/signup', authRateLimit(10, 60_000), async (req, res) => {
     try {
@@ -385,13 +434,27 @@ export function startServer(sockRef, sendResponse) {
         return res.status(409).json({ error: 'An account with this email already exists.' });
       }
       const hash = await bcrypt.hash(password, 10);
+      const verifyToken = crypto.randomBytes(32).toString('hex');
+      const verifyExpires = new Date(Date.now() + 24 * 60 * 60_000); // 24h TTL
       const result = await mcPool.query(
-        'INSERT INTO users (email, name, password_hash) VALUES ($1, $2, $3) RETURNING id, email, name, created_at',
-        [emailLower, name.trim(), hash]
+        'INSERT INTO users (email, name, password_hash, verify_token, verify_expires) VALUES ($1, $2, $3, $4, $5) RETURNING id, email, name, created_at',
+        [emailLower, name.trim(), hash, verifyToken, verifyExpires]
       );
       const user = result.rows[0];
+      // Send verification email
+      const verifyUrl = `https://mastercommander.namibarden.com?verify=${verifyToken}`;
+      if (mcMailer) {
+        mcMailer.sendMail({
+          from: `"Master&Commander" <${process.env.MC_SMTP_USER}>`,
+          to: user.email,
+          subject: 'Verify your Master&Commander email',
+          html: `<p>Hi ${name.trim()},</p><p>Welcome to Master&Commander! Please verify your email by clicking the link below:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>This link expires in 24 hours.</p>`,
+        }).catch(err => console.error('[mc-auth] Verify email send error:', err.message));
+      } else {
+        console.log(`[mc-auth] Verification link (no SMTP): ${verifyUrl}`);
+      }
       const token = signToken(user);
-      res.status(201).json({ token, user: { id: user.id, email: user.email, name: user.name } });
+      res.status(201).json({ token, user: { id: user.id, email: user.email, name: user.name, email_verified: false } });
     } catch (err) {
       console.error('[mc-auth] Signup error:', err.message);
       res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -411,7 +474,7 @@ export function startServer(sockRef, sendResponse) {
         return res.status(401).json({ error: 'Invalid email or password.' });
       }
       const token = signToken(user);
-      res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+      res.json({ token, user: { id: user.id, email: user.email, name: user.name, email_verified: !!user.email_verified } });
     } catch (err) {
       console.error('[mc-auth] Login error:', err.message);
       res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -426,11 +489,12 @@ export function startServer(sockRef, sendResponse) {
         return res.status(401).json({ error: 'No token provided.' });
       }
       const decoded = jwt.verify(authHeader.slice(7), MC_JWT_SECRET);
-      const result = await mcPool.query('SELECT id, email, name FROM users WHERE id = $1', [decoded.id]);
+      const result = await mcPool.query('SELECT id, email, name, email_verified, phone, company FROM users WHERE id = $1', [decoded.id]);
       if (result.rows.length === 0) {
         return res.status(401).json({ error: 'User not found.' });
       }
-      res.json({ user: result.rows[0] });
+      const u = result.rows[0];
+      res.json({ user: { id: u.id, email: u.email, name: u.name, email_verified: !!u.email_verified, phone: u.phone || '', company: u.company || '' } });
     } catch (err) {
       return res.status(401).json({ error: 'Invalid or expired token.' });
     }
@@ -493,6 +557,200 @@ export function startServer(sockRef, sendResponse) {
     } catch (err) {
       console.error('[mc-auth] Reset password error:', err.message);
       res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    }
+  });
+
+  // POST /api/auth/verify-email
+  app.post('/api/auth/verify-email', authRateLimit(5, 60_000), async (req, res) => {
+    try {
+      const { token } = req.body;
+      if (!token) return res.status(400).json({ error: 'Verification token is required.' });
+      const result = await mcPool.query(
+        'SELECT id FROM users WHERE verify_token = $1 AND verify_expires > NOW()',
+        [token]
+      );
+      if (result.rows.length === 0) {
+        return res.status(400).json({ error: 'Invalid or expired verification link.' });
+      }
+      await mcPool.query(
+        'UPDATE users SET email_verified = TRUE, verify_token = NULL, verify_expires = NULL WHERE id = $1',
+        [result.rows[0].id]
+      );
+      res.json({ message: 'Email verified successfully!' });
+    } catch (err) {
+      console.error('[mc-auth] Verify email error:', err.message);
+      res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    }
+  });
+
+  // POST /api/auth/resend-verify
+  app.post('/api/auth/resend-verify', requireMcAuth, authRateLimit(3, 300_000), async (req, res) => {
+    try {
+      const result = await mcPool.query('SELECT id, email, name, email_verified FROM users WHERE id = $1', [req.mcUser.id]);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
+      const user = result.rows[0];
+      if (user.email_verified) return res.json({ message: 'Email is already verified.' });
+      const verifyToken = crypto.randomBytes(32).toString('hex');
+      const verifyExpires = new Date(Date.now() + 24 * 60 * 60_000);
+      await mcPool.query('UPDATE users SET verify_token = $1, verify_expires = $2 WHERE id = $3', [verifyToken, verifyExpires, user.id]);
+      const verifyUrl = `https://mastercommander.namibarden.com?verify=${verifyToken}`;
+      if (mcMailer) {
+        await mcMailer.sendMail({
+          from: `"Master&Commander" <${process.env.MC_SMTP_USER}>`,
+          to: user.email,
+          subject: 'Verify your Master&Commander email',
+          html: `<p>Hi ${user.name},</p><p>Please verify your email by clicking the link below:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>This link expires in 24 hours.</p>`,
+        });
+      }
+      res.json({ message: 'Verification email sent.' });
+    } catch (err) {
+      console.error('[mc-auth] Resend verify error:', err.message);
+      res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    }
+  });
+
+  // ---- MasterCommander User Profile ----
+
+  // CORS for /api/user
+  app.use('/api/user', (req, res, next) => {
+    const origin = req.headers.origin || '';
+    if (origin.includes('mastercommander.namibarden.com') || origin.includes('localhost')) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+    res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    next();
+  });
+
+  // GET /api/user/profile
+  app.get('/api/user/profile', requireMcAuth, authRateLimit(20, 60_000), async (req, res) => {
+    try {
+      const result = await mcPool.query(
+        'SELECT id, email, name, email_verified, phone, company, created_at FROM users WHERE id = $1',
+        [req.mcUser.id]
+      );
+      if (result.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
+      const u = result.rows[0];
+      res.json({ id: u.id, email: u.email, name: u.name, email_verified: !!u.email_verified, phone: u.phone || '', company: u.company || '', created_at: u.created_at });
+    } catch (err) {
+      console.error('[mc-auth] Get profile error:', err.message);
+      res.status(500).json({ error: 'Something went wrong.' });
+    }
+  });
+
+  // PUT /api/user/profile
+  app.put('/api/user/profile', requireMcAuth, authRateLimit(10, 60_000), async (req, res) => {
+    try {
+      const { name, phone, company } = req.body;
+      if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
+      if (name.trim().length > 255) return res.status(400).json({ error: 'Name is too long.' });
+      if (phone && phone.length > 50) return res.status(400).json({ error: 'Phone is too long.' });
+      if (company && company.length > 255) return res.status(400).json({ error: 'Company name is too long.' });
+      await mcPool.query(
+        'UPDATE users SET name = $1, phone = $2, company = $3 WHERE id = $4',
+        [name.trim(), (phone || '').trim(), (company || '').trim(), req.mcUser.id]
+      );
+      res.json({ message: 'Profile updated.' });
+    } catch (err) {
+      console.error('[mc-auth] Update profile error:', err.message);
+      res.status(500).json({ error: 'Something went wrong.' });
+    }
+  });
+
+  // PUT /api/user/password
+  app.put('/api/user/password', requireMcAuth, authRateLimit(3, 300_000), async (req, res) => {
+    try {
+      const { current_password, new_password } = req.body;
+      if (!current_password || !new_password) return res.status(400).json({ error: 'Current and new passwords are required.' });
+      if (new_password.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters.' });
+      const result = await mcPool.query('SELECT password_hash FROM users WHERE id = $1', [req.mcUser.id]);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
+      const valid = await bcrypt.compare(current_password, result.rows[0].password_hash);
+      if (!valid) return res.status(401).json({ error: 'Current password is incorrect.' });
+      const hash = await bcrypt.hash(new_password, 10);
+      await mcPool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, req.mcUser.id]);
+      res.json({ message: 'Password changed successfully.' });
+    } catch (err) {
+      console.error('[mc-auth] Change password error:', err.message);
+      res.status(500).json({ error: 'Something went wrong.' });
+    }
+  });
+
+  // ---- MasterCommander Boats ----
+
+  // CORS for /api/boats
+  app.use('/api/boats', (req, res, next) => {
+    const origin = req.headers.origin || '';
+    if (origin.includes('mastercommander.namibarden.com') || origin.includes('localhost')) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    next();
+  });
+
+  // GET /api/boats
+  app.get('/api/boats', requireMcAuth, authRateLimit(20, 60_000), async (req, res) => {
+    try {
+      const result = await mcPool.query('SELECT * FROM boats WHERE user_id = $1 ORDER BY created_at', [req.mcUser.id]);
+      res.json({ boats: result.rows });
+    } catch (err) {
+      console.error('[mc-boats] List error:', err.message);
+      res.status(500).json({ error: 'Something went wrong.' });
+    }
+  });
+
+  // POST /api/boats
+  app.post('/api/boats', requireMcAuth, authRateLimit(10, 60_000), async (req, res) => {
+    try {
+      const { name, model, year, mmsi, home_port } = req.body;
+      if (!name || !name.trim()) return res.status(400).json({ error: 'Boat name is required.' });
+      // Max 20 boats per user
+      const countResult = await mcPool.query('SELECT COUNT(*) FROM boats WHERE user_id = $1', [req.mcUser.id]);
+      if (parseInt(countResult.rows[0].count) >= 20) {
+        return res.status(400).json({ error: 'Maximum 20 boats per account.' });
+      }
+      const result = await mcPool.query(
+        'INSERT INTO boats (user_id, name, model, year, mmsi, home_port) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+        [req.mcUser.id, name.trim(), (model || '').trim() || null, year ? parseInt(year) : null, (mmsi || '').trim() || null, (home_port || '').trim() || null]
+      );
+      res.status(201).json({ boat: result.rows[0] });
+    } catch (err) {
+      console.error('[mc-boats] Create error:', err.message);
+      res.status(500).json({ error: 'Something went wrong.' });
+    }
+  });
+
+  // PUT /api/boats/:id
+  app.put('/api/boats/:id', requireMcAuth, authRateLimit(10, 60_000), async (req, res) => {
+    try {
+      const { name, model, year, mmsi, home_port } = req.body;
+      if (!name || !name.trim()) return res.status(400).json({ error: 'Boat name is required.' });
+      const result = await mcPool.query(
+        'UPDATE boats SET name = $1, model = $2, year = $3, mmsi = $4, home_port = $5 WHERE id = $6 AND user_id = $7 RETURNING *',
+        [name.trim(), (model || '').trim() || null, year ? parseInt(year) : null, (mmsi || '').trim() || null, (home_port || '').trim() || null, req.params.id, req.mcUser.id]
+      );
+      if (result.rows.length === 0) return res.status(404).json({ error: 'Boat not found.' });
+      res.json({ boat: result.rows[0] });
+    } catch (err) {
+      console.error('[mc-boats] Update error:', err.message);
+      res.status(500).json({ error: 'Something went wrong.' });
+    }
+  });
+
+  // DELETE /api/boats/:id
+  app.delete('/api/boats/:id', requireMcAuth, authRateLimit(10, 60_000), async (req, res) => {
+    try {
+      const result = await mcPool.query('DELETE FROM boats WHERE id = $1 AND user_id = $2 RETURNING id', [req.params.id, req.mcUser.id]);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'Boat not found.' });
+      res.json({ message: 'Boat deleted.' });
+    } catch (err) {
+      console.error('[mc-boats] Delete error:', err.message);
+      res.status(500).json({ error: 'Something went wrong.' });
     }
   });
 
