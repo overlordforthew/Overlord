@@ -25,7 +25,6 @@ import makeWASocket, {
   downloadMediaMessage,
   getContentType,
 } from '@whiskeysockets/baileys';
-import { Boom } from '@hapi/boom';
 import pino from 'pino';
 import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
@@ -33,6 +32,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import crypto from 'crypto';
+import os from 'os';
 import qrcode from 'qrcode-terminal';
 
 import { startServer } from './server.js';
@@ -403,7 +403,7 @@ async function generateTTS(text, voice = 'en-US-GuyNeural') {
     });
     return outFile;
   } catch (err) {
-    console.error('TTS generation failed:', err.message);
+    logger.error({ err: err.message }, 'TTS generation failed');
     return null;
   }
 }
@@ -540,10 +540,6 @@ async function autoDeployIfChanged(profile, chatJid, sock) {
       if (!status.trim()) continue; // no changes
 
       // Get a summary of what changed for the commit message
-      const { stdout: diffStat } = await execAsync(
-        `cd "${projPath}" && git diff --stat HEAD 2>/dev/null || echo "new files"`,
-        { timeout: 10000 }
-      );
       const changedFiles = status.trim().split('\n').map(l => l.trim().split(/\s+/).pop()).join(', ');
       const commitMsg = `${profile.agentName || profile.name}: update ${changedFiles}`.substring(0, 200);
 
@@ -1533,6 +1529,14 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
   }
   args.push('--append-system-prompt', sysPrompt);
 
+  // Pre-flight memory check — skip spawning if system is critically low
+  const freeMem = os.freemem();
+  const MIN_FREE = 300 * 1024 * 1024; // 300 MB
+  if (freeMem < MIN_FREE) {
+    logger.warn({ freeMemMB: Math.round(freeMem / 1024 / 1024) }, 'Low memory, deferring Claude call');
+    return '⚠️ Server memory is low right now. Try again in a moment.';
+  }
+
   // Auto-retry on transient signal errors (SIGTERM=143, SIGKILL=137, SIGABRT=134)
   const RETRYABLE_CODES = new Set([143, 137, 134]);
   const MAX_RETRIES = 2;
@@ -1545,7 +1549,8 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       const proc = spawn(CONFIG.claudePath, args, {
         cwd: workDir,
         timeout: CONFIG.maxResponseTime,
-        env: { ...process.env, TERM: 'dumb' },
+        env: { ...process.env, TERM: 'dumb', NODE_OPTIONS: '--max-old-space-size=1024' },
+        maxBuffer: 10 * 1024 * 1024,
       });
 
       proc.stdin.write(fullPrompt);
@@ -1611,9 +1616,10 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
 
     if (!result.retry) return result.text;
 
-    // Brief pause before retry
-    await new Promise(r => setTimeout(r, 2000));
-    logger.info({ attempt: attempt + 1 }, 'Retrying Claude subprocess...');
+    // Brief pause before retry (exponential backoff: 5s, 15s)
+    const backoff = attempt * 5000;
+    await new Promise(r => setTimeout(r, backoff));
+    logger.info({ attempt: attempt + 1, backoffMs: backoff }, 'Retrying Claude subprocess...');
   }
 }
 
@@ -1651,6 +1657,29 @@ class MessageBatcher {
 }
 
 const messageBatcher = new MessageBatcher();
+
+// ============================================================
+// PER-CHAT CONCURRENCY LOCK
+// ============================================================
+// Prevents multiple Claude subprocesses from running simultaneously for the same chat.
+// When a new message arrives while Claude is already processing for that chat,
+// the new message waits for the current call to finish before processing.
+const chatLocks = new Map();
+
+async function withChatLock(chatJid, fn) {
+  // Wait for any existing lock to release
+  while (chatLocks.has(chatJid)) {
+    await chatLocks.get(chatJid).catch(() => {});
+  }
+  // Set lock
+  const promise = fn();
+  chatLocks.set(chatJid, promise);
+  try {
+    return await promise;
+  } finally {
+    chatLocks.delete(chatJid);
+  }
+}
 
 // ============================================================
 // RATE LIMITER
@@ -1812,8 +1841,6 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
     if (!content) return '❌ Usage: /qr <text or URL>';
     try {
       const buffer = await generateQR(content);
-      const filePath = `/tmp/qr_${Date.now()}.png`;
-      await fs.writeFile(filePath, buffer);
       await sockRef.sock.sendMessage(chatJid, { image: buffer, caption: `QR: ${content}` });
       return null; // Already sent the image
     } catch (err) {
@@ -1823,7 +1850,7 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
 
   // ---- TTS ----
   if (cmd.startsWith('/tts ') || cmd.startsWith('/say ')) {
-    const prefix = cmd.startsWith('/tts') ? 5 : 5;
+    const prefix = 5;
     const ttsText = fullText.substring(prefix).trim();
     if (!ttsText) return '❌ Usage: /tts <text to speak>';
     try {
@@ -2223,6 +2250,13 @@ async function startBot() {
 
         const chatJid = msg.key.remoteJid;
 
+        // Skip stale messages (older than 60 seconds) — prevents processing old messages after reconnect/restart
+        const messageAge = Math.floor(Date.now() / 1000) - (msg.messageTimestamp || 0);
+        if (messageAge > 60) {
+          logger.info({ age: messageAge, chat: chatJid }, '⏭️ Skipping stale message (>60s old)');
+          continue;
+        }
+
         // Skip blocked groups
         if (isGroup(chatJid) && BLOCKED_GROUPS.has(chatJid)) continue;
 
@@ -2311,7 +2345,7 @@ async function startBot() {
 
         // Rate limit
         if (!checkRateLimit(senderJid)) {
-          await sock.sendMessage(chatJid, { text: CONFIG.cooldownMessage });
+          await (sockRef.sock || sock).sendMessage(chatJid, { text: CONFIG.cooldownMessage });
           continue;
         }
 
@@ -2322,7 +2356,7 @@ async function startBot() {
           const guardResult = await analyzeWithGuard(parsed.text, senderNumber(senderJid), isGroup(chatJid));
           if (guardResult.shouldBlock) {
             logger.warn({ reasons: guardResult.reasons, severity: guardResult.severity, sender: senderName }, "🛡️ Prompt Guard BLOCKED inbound message");
-            await sock.sendMessage(chatJid, { text: "⚠️ Message blocked for security reasons." });
+            await (sockRef.sock || sock).sendMessage(chatJid, { text: "⚠️ Message blocked for security reasons." });
             continue;
           }
           if (guardResult.action === "warn") {
@@ -2333,7 +2367,7 @@ async function startBot() {
         }
 
         // Read receipts
-        if (CONFIG.readReceipts) await sock.readMessages([msg.key]).catch(() => {});
+        if (CONFIG.readReceipts) await (sockRef.sock || sock).readMessages([msg.key]).catch(() => {});
 
         // Sticker command: user sends image + "sticker" or /sticker on quoted image
         if (parsed.hasMedia && parsed.type === 'image' && mediaResult && !mediaResult.skipped) {
@@ -2341,7 +2375,7 @@ async function startBot() {
           if (textLower.includes('sticker') || textLower === '/sticker') {
             try {
               const stickerBuffer = await createSticker(mediaResult.filePath);
-              await sock.sendMessage(chatJid, { sticker: stickerBuffer });
+              await (sockRef.sock || sock).sendMessage(chatJid, { sticker: stickerBuffer });
               logger.info('🎨 Sent sticker');
               conversationContext.add(chatJid, { sender: 'bot', senderName: CONFIG.botName, role: 'bot', type: 'text', text: '[Created sticker]' });
               continue;
@@ -2355,7 +2389,7 @@ async function startBot() {
         if (parsed.type === 'text' && parsed.text?.startsWith('/')) {
           const cmdResp = await handleSpecialCommand(parsed.text, chatJid, senderJid, sockRef);
           if (cmdResp) {
-            await sendResponse(sock, chatJid, cmdResp);
+            await sendResponse(sockRef.sock || sock, chatJid, cmdResp);
             conversationContext.add(chatJid, { sender: 'bot', senderName: CONFIG.botName, role: 'bot', type: 'text', text: cmdResp });
             await logMessage(chatJid, senderJid, 'bot', cmdResp);
             continue;
@@ -2373,43 +2407,49 @@ async function startBot() {
 
         if (batched.length > 1) logger.info(`📦 Batched ${batched.length} messages`);
 
-        // Typing indicator
-        if (CONFIG.typingIndicator) await sock.sendPresenceUpdate('composing', chatJid).catch(() => {});
+        // Per-chat lock: prevent multiple simultaneous Claude calls for the same chat
+        await withChatLock(chatJid, async () => {
+          // Use sockRef for current socket (survives reconnects)
+          const currentSock = sockRef.sock || sock;
 
-        // Ask Claude
-        const response = await askClaude(chatJid, last.senderJid, last.parsed, last.mediaResult, triage.reason);
+          // Typing indicator
+          if (CONFIG.typingIndicator) await currentSock.sendPresenceUpdate('composing', chatJid).catch(() => {});
 
-        // Stop typing
-        if (CONFIG.typingIndicator) await sock.sendPresenceUpdate('paused', chatJid).catch(() => {});
+          // Ask Claude
+          const response = await askClaude(chatJid, last.senderJid, last.parsed, last.mediaResult, triage.reason);
 
-        // ---- PROMPT GUARD: Output Scan (DLP) ----
-        const guardOut = await sanitizeOutputWithGuard(response);
-        let finalResponse = response;
-        if (guardOut.blocked) {
-          logger.warn({ redactedTypes: guardOut.redactedTypes }, "🛡️ Prompt Guard BLOCKED outbound response (credential leak)");
-          finalResponse = "I generated a response but it contained sensitive data that was blocked for security. Please rephrase your request.";
-        } else if (guardOut.wasModified) {
-          logger.info({ redactedTypes: guardOut.redactedTypes, count: guardOut.redactionCount }, "🛡️ Prompt Guard redacted credentials from response");
-          finalResponse = guardOut.sanitizedText;
-        }
+          // Stop typing
+          if (CONFIG.typingIndicator) await currentSock.sendPresenceUpdate('paused', chatJid).catch(() => {});
 
-        // Send (with media detection + auto-split)
-        await sendResponse(sock, chatJid, finalResponse);
+          // ---- PROMPT GUARD: Output Scan (DLP) ----
+          const guardOut = await sanitizeOutputWithGuard(response);
+          let finalResponse = response;
+          if (guardOut.blocked) {
+            logger.warn({ redactedTypes: guardOut.redactedTypes }, "🛡️ Prompt Guard BLOCKED outbound response (credential leak)");
+            finalResponse = "I generated a response but it contained sensitive data that was blocked for security. Please rephrase your request.";
+          } else if (guardOut.wasModified) {
+            logger.info({ redactedTypes: guardOut.redactedTypes, count: guardOut.redactionCount }, "🛡️ Prompt Guard redacted credentials from response");
+            finalResponse = guardOut.sanitizedText;
+          }
 
-        // Auto-deploy: if power user edited project files, commit + deploy automatically
-        const senderProfile = getUserProfile(last.senderJid);
-        if (senderProfile.role === 'power' && senderProfile.projects?.length) {
-          await autoDeployIfChanged(senderProfile, chatJid, sock).catch(err =>
-            logger.error({ err }, 'Auto-deploy hook error')
-          );
-        }
+          // Send (with media detection + auto-split) — use current socket reference
+          await sendResponse(currentSock, chatJid, finalResponse);
 
-        // Track in context
-        conversationContext.add(chatJid, {
-          sender: "bot", senderName: CONFIG.botName, role: "bot", type: "text", text: finalResponse,
+          // Auto-deploy: if power user edited project files, commit + deploy automatically
+          const senderProfile = getUserProfile(last.senderJid);
+          if (senderProfile.role === 'power' && senderProfile.projects?.length) {
+            await autoDeployIfChanged(senderProfile, chatJid, currentSock).catch(err =>
+              logger.error({ err }, 'Auto-deploy hook error')
+            );
+          }
+
+          // Track in context
+          conversationContext.add(chatJid, {
+            sender: "bot", senderName: CONFIG.botName, role: "bot", type: "text", text: finalResponse,
+          });
+          await logMessage(chatJid, senderJid, "bot", finalResponse);
+          logger.info(`📤 → ${senderName}: ${finalResponse.substring(0, 100)}...`);
         });
-        await logMessage(chatJid, senderJid, "bot", finalResponse);
-        logger.info(`📤 → ${senderName}: ${finalResponse.substring(0, 100)}...`);
 
       } catch (err) {
         logger.error({ err, key: msg.key }, 'Message handler error');
