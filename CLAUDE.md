@@ -67,19 +67,21 @@ Check STATUS.md for current state. Known services:
 - Scoped project access (Read, Write, Edit, Bash, Glob, Grep, WebSearch, WebFetch)
 - Each gets their own agent personality and name
 - **Hard-locked** to their assigned project directories only — cannot access other projects, server, or infrastructure
-- Bash is restricted: no docker, systemctl, apt, pip install -g, curl, wget, rm -rf, or system commands
+- Bash is restricted: no docker build/rm/kill/run, systemctl, apt, pip install -g, curl, wget, rm -rf, or system commands
 - Max 20 Claude CLI turns per message (prevents runaway sessions)
 - Can use: /help, /memory, /clear, /context, /briefing, /remind, /reminders, /cancel, /qr, /tts, /say
 - Can /deploy their own projects only
 - Can request new projects with `/newproject <name>` (requires Gil's approval)
 - Can use ❌ and 🔖 reactions
 - CANNOT access: /status, /mode, /threshold, /watch, /unwatch, /watches, /monitor, /restart, /db
-- CANNOT access: Overlord code, server infrastructure, Docker, other projects, databases, .env files
+- CANNOT access: Overlord code, server infrastructure, other projects, databases, .env files
 
 #### Ai Chan (Nami — +84393251371)
 - Warm, supportive, with Japanese flair
 - Projects: NamiBarden, Lumina
 - YouTube: @namibarden
+- **Extended capability:** `dockerInspect: true` — can use `docker ps` and `docker exec <container> cat/ls/nginx` to inspect her own project containers (read-only). Can diagnose and fix nginx routing/config issues autonomously.
+- NamiBarden auto-deploy = full sync: public/ files + nginx.conf + nginx-main.conf all deployed + nginx reloaded on every save
 - Gil has full oversight of all her project work
 
 #### Britt (Ailie — +817084189804)
