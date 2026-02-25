@@ -13,8 +13,8 @@ ignoreip = 127.0.0.1/8 10.0.0.0/8 172.16.0.0/12 100.64.0.0/10
 [sshd]
 enabled = true
 port = ssh
-logpath = %(sshd_log)s
-backend = systemd
+logpath = /var/log/auth.log
+backend = auto
 maxretry = 3
 
 # Traefik — 401 auth failures (brute force login attempts)
