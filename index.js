@@ -554,12 +554,17 @@ async function autoDeployIfChanged(profile, chatJid, sock) {
       );
 
       const result = await triggerDeploy(projName);
+      const deployUrl = projName.toLowerCase() === 'namibarden' ? 'namibarden.com' : `${projName.toLowerCase()}.namibarden.com`;
 
       if (result.success) {
         logger.info(`🚀 Auto-deployed ${projName} for ${profile.name}: ${commitMsg}`);
-        await sock.sendMessage(chatJid, { text: `✅ Changes saved and deployed to ${projName.toLowerCase()}.namibarden.com — live now!` });
+        // Only notify admin — power users already get deploy confirmation from their agent's response
+        if (profile.role === 'admin') {
+          await sock.sendMessage(chatJid, { text: `✅ Changes saved and deployed to ${deployUrl} — live now!` });
+        }
       } else {
         logger.error(`❌ Auto-deploy failed for ${projName}: ${result.error}`);
+        // Always notify on failures so the user knows something went wrong
         await sock.sendMessage(chatJid, { text: `⚠️ Changes saved to git but deploy had an issue: ${result.error}` });
       }
     } catch (err) {
@@ -1508,7 +1513,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       `- Access other users' data, Gil's personal files, or the Overlord bot code`,
       `- Query databases, open network ports, or access infrastructure`,
       `- Use Bash for rm -rf, chmod, chown, kill, or any destructive system operations`,
-      `If asked to do something outside your allowed projects, politely decline and explain your scope is limited to: ${projectList}.`,
+      `If asked to do something outside your allowed projects, politely decline and explain your scope is limited to: ${projectList}. IMPORTANT: If you encounter infrastructure issues (wrong domains, deployment failures, DNS problems, server errors), DO NOT guess or give incorrect advice. Instead say: This looks like a server issue — let me flag Gil to take a look. Then move on. Never blame Coolify, DNS, or server config unless you have actually verified it. Never tell users to fix things you cannot check yourself.`,
       `DEPLOYMENT: When you edit project files, changes are AUTOMATICALLY committed to git and deployed live after you finish. You do NOT need to run git commands, docker commands, or /deploy. Just edit the files and the system handles the rest. Tell ${profile.name} their changes will go live automatically.`,
       profile.projects.length === 0 ? `You currently have no projects. ${profile.name} can request a new project with /newproject <name> — Gil will approve it.` : '',
       'Keep responses WhatsApp-length. Use @ to read media files when referenced.',
