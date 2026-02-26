@@ -537,8 +537,9 @@ export async function startScheduler(sockRef) {
   });
   console.log('📋 Log monitor scheduled (every 5 min)');
 
-  // 5. Nightly synthesis at 11pm — consolidate daily learnings (Loop 5)
-  cron.schedule('0 23 * * *', async () => {
+  // 5. Nightly synthesis at 8pm — consolidate daily learnings (Loop 5)
+  // Gil turns off Starlink by 9pm, so all nightly jobs run before 8:30pm
+  cron.schedule('0 20 * * *', async () => {
     try {
       const synthesis = await generateDailySynthesis();
       // Only notify if there are meaningful events
@@ -553,10 +554,10 @@ export async function startScheduler(sockRef) {
       console.error('Nightly synthesis error:', err.message);
     }
   });
-  console.log('🧠 Nightly synthesis scheduled (11:00 PM)');
+  console.log('🧠 Nightly synthesis scheduled (8:00 PM)');
 
-  // 6. Daily performance metrics at 11:30pm — record for trending (Loop 9)
-  cron.schedule('30 23 * * *', async () => {
+  // 6. Daily performance metrics at 8:15pm — record for trending (Loop 9)
+  cron.schedule('15 20 * * *', async () => {
     try {
       const { stdout: diskRaw } = await execAsync("df -h / | tail -1 | awk '{print $5}'", { timeout: 5000 });
       const { stdout: memRaw } = await execAsync("free | awk '/Mem/{printf \"%.1f\", $3/$2*100}'", { timeout: 5000 });
@@ -576,7 +577,7 @@ export async function startScheduler(sockRef) {
       console.error('Performance metrics error:', err.message);
     }
   });
-  console.log('📊 Performance trending scheduled (11:30 PM)');
+  console.log('📊 Performance trending scheduled (8:15 PM)');
 
   console.log('⏰ Scheduler ready');
 }
