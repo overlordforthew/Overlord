@@ -48,14 +48,79 @@ export const MODEL_REGISTRY = {
     via: 'claude-cli',
   },
 
-  // ---- OpenRouter Free (direct API — no tool access) ----
+  // ---- OpenRouter Free: RELIABLE tier (tested working, lower rate-limit pressure) ----
+  'step-flash': {
+    id: 'stepfun/step-3.5-flash:free',
+    provider: 'openrouter',
+    tier: 'mid',
+    speed: 'fast',
+    cost: 'free',
+    strengths: 'Fast reasoning, 256K context, reliable availability',
+    via: 'openrouter-api',
+  },
+  'glm-air': {
+    id: 'z-ai/glm-4.5-air:free',
+    provider: 'openrouter',
+    tier: 'mid',
+    speed: 'fast',
+    cost: 'free',
+    strengths: 'Strong multilingual, 131K context, steady availability',
+    via: 'openrouter-api',
+  },
+  'solar-pro': {
+    id: 'upstage/solar-pro-3:free',
+    provider: 'openrouter',
+    tier: 'mid',
+    speed: 'fast',
+    cost: 'free',
+    strengths: 'Good general-purpose, reliable uptime',
+    via: 'openrouter-api',
+  },
+  'nemotron-30b': {
+    id: 'nvidia/nemotron-3-nano-30b-a3b:free',
+    provider: 'openrouter',
+    tier: 'mid',
+    speed: 'fast',
+    cost: 'free',
+    strengths: '30B param, 256K context, solid reasoning',
+    via: 'openrouter-api',
+  },
+  'trinity': {
+    id: 'arcee-ai/trinity-large-preview:free',
+    provider: 'openrouter',
+    tier: 'mid',
+    speed: 'medium',
+    cost: 'free',
+    strengths: 'Good quality, 131K context',
+    via: 'openrouter-api',
+  },
+  'nemotron-9b': {
+    id: 'nvidia/nemotron-nano-9b-v2:free',
+    provider: 'openrouter',
+    tier: 'light',
+    speed: 'very_fast',
+    cost: 'free',
+    strengths: 'Fast and light, good for simple tasks',
+    via: 'openrouter-api',
+  },
+
+  // ---- OpenRouter Free: POPULAR tier (good but hit rate limits more often) ----
   'llama-70b': {
     id: 'meta-llama/llama-3.3-70b-instruct:free',
     provider: 'openrouter',
     tier: 'mid',
     speed: 'medium',
     cost: 'free',
-    strengths: 'Strong general chat, well-tested, reliable',
+    strengths: 'Strong general chat, well-tested',
+    via: 'openrouter-api',
+  },
+  'mistral-small': {
+    id: 'mistralai/mistral-small-3.1-24b-instruct:free',
+    provider: 'openrouter',
+    tier: 'light',
+    speed: 'fast',
+    cost: 'free',
+    strengths: 'Great speed/quality ratio, multimodal',
     via: 'openrouter-api',
   },
   'qwen-coder': {
@@ -73,7 +138,7 @@ export const MODEL_REGISTRY = {
     tier: 'light',
     speed: 'very_fast',
     cost: 'free',
-    strengths: 'Tiny and instant — perfect for classification/triage',
+    strengths: 'Tiny and instant — triage/classification',
     via: 'openrouter-api',
   },
   'hermes-405b': {
@@ -82,34 +147,7 @@ export const MODEL_REGISTRY = {
     tier: 'premium',
     speed: 'slow',
     cost: 'free',
-    strengths: 'Largest free model, complex reasoning, uncensored',
-    via: 'openrouter-api',
-  },
-  'nemotron-vision': {
-    id: 'nvidia/nemotron-nano-12b-v2-vl:free',
-    provider: 'openrouter',
-    tier: 'light',
-    speed: 'fast',
-    cost: 'free',
-    strengths: 'Multimodal — handles images, video, text',
-    via: 'openrouter-api',
-  },
-  'gpt-oss-120b': {
-    id: 'openai/gpt-oss-120b:free',
-    provider: 'openrouter',
-    tier: 'mid',
-    speed: 'medium',
-    cost: 'free',
-    strengths: 'OpenAI open-weight, good general-purpose',
-    via: 'openrouter-api',
-  },
-  'mistral-small': {
-    id: 'mistralai/mistral-small-3.1-24b-instruct:free',
-    provider: 'openrouter',
-    tier: 'light',
-    speed: 'fast',
-    cost: 'free',
-    strengths: 'Great speed/quality ratio, multimodal',
+    strengths: 'Largest free model, complex reasoning',
     via: 'openrouter-api',
   },
 
@@ -359,10 +397,10 @@ export async function routeMessage(parsed, opts = {}) {
       };
     }
 
-    // Medium → Llama 70B (free, solid quality, no tools)
+    // Medium → Step Flash (free, fast, reliable, 256K context)
     if (taskType === 'medium') {
       return {
-        model: MODEL_REGISTRY['llama-70b'],
+        model: MODEL_REGISTRY['step-flash'],
         tools: null,
         maxTurns: 1,
         taskType,
@@ -372,9 +410,9 @@ export async function routeMessage(parsed, opts = {}) {
       };
     }
 
-    // Simple → Mistral Small (free, fast, reliable via OpenRouter)
+    // Simple → Nemotron 9B (free, very fast, reliable)
     return {
-      model: MODEL_REGISTRY['mistral-small'],
+      model: MODEL_REGISTRY['nemotron-9b'],
       tools: null,
       maxTurns: 1,
       taskType,
@@ -409,8 +447,8 @@ export function routeTriage(mode) {
   if (currentMode === 'beta') {
     return { model: MODEL_REGISTRY.haiku, via: 'claude-cli' };
   }
-  // Charlie: free model for triage
-  return { model: MODEL_REGISTRY['qwen-4b'], via: 'openrouter-api' };
+  // Charlie: fast reliable free model for triage
+  return { model: MODEL_REGISTRY['nemotron-9b'], via: 'openrouter-api' };
 }
 
 // ============================================================
@@ -422,8 +460,8 @@ export function routeTriage(mode) {
  * When one model 429s, try the next in the chain before escalating to Opus.
  */
 export const FREE_FALLBACK_CHAINS = {
-  simple: ['mistral-small', 'qwen-4b', 'gemini-flash-lite'],
-  medium: ['llama-70b', 'gpt-oss-120b', 'gemini-flash'],
+  simple: ['nemotron-9b', 'solar-pro', 'mistral-small', 'gemini-flash-lite', 'qwen-4b'],
+  medium: ['step-flash', 'glm-air', 'nemotron-30b', 'trinity', 'llama-70b', 'gemini-flash'],
 };
 
 /**

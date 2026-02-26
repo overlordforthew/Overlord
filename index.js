@@ -1927,8 +1927,8 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
       `Classifier: ${classifier}\n` +
       `Triage model: ${triageModel.model.id}\n` +
       `Complex tasks → Opus (Claude CLI)\n` +
-      `Medium tasks → ${CONFIG.routerMode === 'alpha' ? 'Opus' : CONFIG.routerMode === 'beta' ? 'Sonnet' : 'Llama 70B (free)'}\n` +
-      `Simple tasks → ${CONFIG.routerMode === 'alpha' ? 'Opus' : CONFIG.routerMode === 'beta' ? 'Haiku' : 'Mistral Small (free)'}\n\n` +
+      `Medium tasks → ${CONFIG.routerMode === 'alpha' ? 'Opus' : CONFIG.routerMode === 'beta' ? 'Sonnet' : 'Step Flash (free)'}\n` +
+      `Simple tasks → ${CONFIG.routerMode === 'alpha' ? 'Opus' : CONFIG.routerMode === 'beta' ? 'Haiku' : 'Nemotron 9B (free)'}\n\n` +
       `Switch: /router alpha|beta|charlie`;
   }
 
