@@ -13,6 +13,10 @@ Created: 2026-02-21T16:21:47.501Z
 ## Preferences
 - Wants Overlord to auto-detect and fix errors from log alerts without being asked — proactive error resolution
 - Log alerts: pre-analyze before sending. Suppress one-off errors if service is currently working. Only send alerts for real, ongoing problems.
+- Starlink goes off by 9pm — all nightly scheduled tasks must run before 8:30pm
+- Contact: Emiel (+19195008873) — Dutch friend, potential CTO for MasterCommander
+- PERMANENT: After EVERY DM response to Gil, ALWAYS append which model was used at the end of the message (e.g., "Used: claude-opus-4-6"). This applies in ALL router modes (Alpha, Beta, Charlie). ONLY show this to Gil in DMs, never in group chats or to other users. This is a permanent standing order — never remove.
+- Multi-model router active (Alpha/Beta/Charlie modes)
 
 ## NamiBarden.com (namibarden.com)
 - Nami Barden's personal/spiritual coaching website — Gil manages it

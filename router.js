@@ -273,13 +273,13 @@ export function routeMessage(parsed, opts = {}) {
       };
     }
 
-    // Simple → Gemini Flash Lite (free, fastest, highest rate limits)
+    // Simple → Mistral Small (free, fast, reliable via OpenRouter)
     return {
-      model: MODEL_REGISTRY['gemini-flash-lite'],
+      model: MODEL_REGISTRY['mistral-small'],
       tools: null,
       maxTurns: 1,
       taskType,
-      via: 'gemini-api',
+      via: 'openrouter-api',
       escalatable: true,
     };
   }
