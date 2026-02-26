@@ -460,8 +460,8 @@ export function routeTriage(mode) {
  * When one model 429s, try the next in the chain before escalating to Opus.
  */
 export const FREE_FALLBACK_CHAINS = {
-  simple: ['nemotron-9b', 'solar-pro', 'mistral-small', 'gemini-flash-lite', 'qwen-4b'],
-  medium: ['step-flash', 'glm-air', 'nemotron-30b', 'trinity', 'llama-70b', 'gemini-flash'],
+  simple: ['nemotron-9b', 'glm-air', 'solar-pro', 'mistral-small', 'gemini-flash-lite', 'qwen-4b'],
+  medium: ['step-flash', 'glm-air', 'trinity', 'solar-pro', 'nemotron-30b', 'llama-70b', 'gemini-flash'],
 };
 
 /**

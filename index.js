@@ -1643,7 +1643,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
     const chain = FREE_FALLBACK_CHAINS[route.taskType] || [route.model.id];
     let apiSuccess = false;
     try {
-      const { response, modelUsed } = await callWithFallback(chain, freeSystemPrompt, fullPrompt, 2000);
+      const { response, modelUsed } = await callWithFallback(chain, freeSystemPrompt, fullPrompt, 4000);
       route.model = modelUsed; // update to whichever model actually responded
 
       // Check if the model is struggling → escalate to Opus
