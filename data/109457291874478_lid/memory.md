@@ -26,5 +26,24 @@ Created: 2026-02-21T16:21:47.501Z
   - No API key needed — uses public YouTube RSS feed
 - CSP: connect-src 'self' (works because RSS is proxied through same domain)
 
+## Lumina (lumina.namibarden.com)
+- 90-day bilingual self-improvement app — Gil's project
+- Repo: github.com/bluemele/Lumina (private)
+- Stack: Node.js/Express + React 18, esbuild, PostgreSQL 16, JWT auth
+- Deployed via Docker Compose (app + db in one stack) — NOT Coolify anymore
+- Hosted on Hetzner CX33 with nginx reverse proxy
+- Port 3456, DB uses named volume lumina_pgdata
+- No separate DB project — DB is integrated in docker-compose.yml as a service
+- Previously had an orphan Coolify standalone DB resource — deleted Feb 2025
+
+## GitHub Repos (bluemele)
+- Lumina (private) — self-improvement app
+- MasterCommander (public) — Nami Barden site container
+- NamiBarden (private) — namibarden.com source
+- Overlord (private) — WhatsApp AI bridge
+- SurfaBabe (public) — WhatsApp AI customer service
+- BeastMode (private) — BeastModeApp
+- ElSalvador (private)
+
 ## Notes
 _Nothing yet._

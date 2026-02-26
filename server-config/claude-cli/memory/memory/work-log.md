@@ -1,5 +1,46 @@
 # Work Logs
 
+## 2026-02-25
+
+### MasterCommander — Auth System (Phase 1)
+- Built complete auth system from scratch: signup, login, password reset via email
+- Backend in Overlord's `server.js`: JWT auth, bcrypt passwords, Nodemailer SMTP
+- Fixed SMTP config: explicit host/port instead of `service: 'gmail'` shorthand (`daf614d`)
+- Frontend in MC `index.html`: login dropdown on far-right of nav, replacing placeholder "Login" link
+- Signup → login → session persistence via localStorage JWT
+
+### MasterCommander — Auth System (Phase 2)
+- **Backend** (`388a9dd` — 276 lines added to server.js):
+  - DB migrations: `email_verified`, `verify_token`/`verify_token_expires`, `phone`, `company` columns + `boats` table
+  - Extracted `requireMcAuth` JWT middleware for reuse across endpoints
+  - Email verification: `POST verify-email`, `POST resend-verify` with token + expiry
+  - Signup sends verification email; login/session return `email_verified` status
+  - Profile API: `GET/PUT /api/user/profile`, `PUT /api/user/password`
+  - Boats CRUD: `GET/POST/PUT/DELETE /api/boats` (max 20/user, ownership enforced)
+  - CORS blocks + rate limits on all new endpoints
+- **Frontend** (`be8eff5` — 590 lines added):
+  - Email verification banner (fixed orange bar, dismiss, resend link)
+  - Dashboard overlay (800px modal) with profile, boats, password sections
+  - Boat cards grid with inline add/edit form, delete confirmation
+  - `mcDashboard` JS object: open/close, CRUD operations, profile management
+  - `?verify=<token>` URL handler for email verification
+  - Responsive mobile styles
+
+### MasterCommander — Site Structure Refinements
+- Merged "System Architecture" + "How It Works" into single "The How" section
+- Hero headline: "Your yacht, always talking."
+- Moved System Architecture section to after Solutions
+- Nav restructure: renamed "Delivery Captain" back to "How It Connects"
+
+### Overlord — Deploy Notification Fix (`396dbd7`)
+- Fixed wrong domain: `namibarden.namibarden.com` → `namibarden.com` (special case for root domain)
+- Suppressed deploy success notifications for power users (Nami's request)
+- Still notifies on deploy failures; admin (Gil) gets all notifications
+
+### NamiBarden — Ai Chan Site Edits
+- 8 consecutive commits by Ai Chan updating `public/index.html`
+- Nami autonomously iterating on namibarden.com content/design
+
 ## 2026-02-24 (Session 2)
 
 ### MasterCommander — Interactive WhatsApp Demo

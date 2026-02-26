@@ -70,8 +70,9 @@
 - **Path:** `/root/projects/MasterCommander/`
 - **Repo:** bluemele/MasterCommander
 - **URL:** mastercommander.namibarden.com (port 3010)
-- **Stack:** Static HTML/CSS/JS, nginx:alpine container
+- **Stack:** Static HTML/CSS/JS + auth system (JWT, PostgreSQL, Nodemailer), nginx:alpine container
 - **Deploy:** No Coolify webhook — use `docker cp` to hot-copy into `mastercommander` container
+- **Auth:** Signup/login/password-reset + email verification + dashboard (profile, boats, password). Backend endpoints in Overlord `server.js`, JWT auth, PostgreSQL `mc_users`/`boats` tables
 - **Product:** AI boat monitor — pure software business. No hardware shipping.
 - **Business model:** Downloadable OS images + cloud subscription. Customer sources own hardware.
   - **Raspberry Pi**: Customer buys Pi 5 + Actisense NGX-1 (~$280), downloads Commander OS image, flashes to SD card
@@ -123,9 +124,12 @@
 - **Mode:** `silent` (listen/log only) until told to go live. Ailie can `/mode all` to activate.
 - **Products:** 7 items (skincare + cleaning), VND pricing, bilingual EN/VI
 - **Features:** Product catalog, order state machine, voice transcription, FAQ/policies knowledge base
+- **Database:** PostgreSQL 16 (surfagent-db container), `pg` driver, 7 tables: customers, products, orders, order_items, payments, invoices, crm_interactions. Schema in `schema.sql`, pool in `db.js`. Products seeded from `products.json` on first run. Customer upsert + language detection on every DM. Orders persist to DB + JSON fallback. Transactional order writes.
+- **CRM admin commands:** /stats, /customers, /customer <phone>, /orders, /order <SB-xxx>, /paid <SB-xxx> [ref], /note <phone> <text>, /tag <phone> <tag>, /untag <phone> <tag>
+- **CRM logging:** Every customer inquiry logged to crm_interactions (fire-and-forget). Language auto-detected (en/vi). Payment confirmations, order completions, and notes all tracked.
+- **Knowledge base:** Fully scraped from surfababe.com (Wix site) via Playwright on 2026-02-25. products.json has bilingual descriptions, correct ingredients/sizes. faq.md has 40 Q&As across 4 categories. policies.md includes Vietnam delivery guide.
 - **Auto-deploy:** GitHub webhook → `surfababe.namibarden.com/webhook/deploy` → deploy-listener.js (port 9002, systemd `surfagent-deploy.service`) → git pull + docker compose rebuild
 - **Webhook secret:** stored in `scripts/deploy-listener.js` + GitHub repo settings
-- **Phase 2 ideas:** PostgreSQL database, HubSpot CRM sync, SOHO Books-style invoicing
 
 ### OpenClaw — Multi-Channel AI Gateway (STOPPED)
 - **Path:** `/opt/openclaw/`
@@ -134,18 +138,20 @@
 ## Network & Security
 - **Firewall:** UFW active
 - **Tailscale IP:** 100.83.80.116
-- **SSH:** restricted to private ranges (10.0.0.0/8, 172.16.0.0/12)
+- **SSH:** restricted to private ranges (10.0.0.0/8, 172.16.0.0/12) + Tailscale interface; key-only (`PasswordAuthentication no`, `PermitRootLogin prohibit-password`)
 - **Traefik config:** `/data/coolify/proxy/dynamic/namibarden.yaml` (source of truth)
 - **Traefik access log:** `/data/coolify/proxy/access.log` (4xx only, logrotated 14d)
 - **Tailscale-restricted:** coolify.namibarden.com (except `/api/v1/sentinel` which has token auth), openclaw.namibarden.com
 - **Public:** namibarden.com, beastmode.namibarden.com, lumina.namibarden.com, elsalvador.namibarden.com, surfababe.namibarden.com, mastercommander.namibarden.com
+- **All app containers** bound to `127.0.0.1` only — nothing exposed directly to public; all traffic via Traefik
 - **Fail2ban jails (4 active):**
-  - `sshd` — 3 retries / 10min → 3h ban
+  - `sshd` — 3 retries / 10min → 3h ban; monitors `/var/log/auth.log`, `backend = auto` (NOT systemd — Ubuntu uses `ssh.service` not `sshd.service`, journal match was broken)
   - `traefik-auth` — 5 retries / 5min → 6h ban (401 brute force)
   - `traefik-botsearch` — 3 retries / 1min → 24h ban (wp-admin, .env, .git, phpMyAdmin scanners)
   - `traefik-ratelimit` — 20 retries / 1min → 1h ban (excessive 4xx)
-  - Safe IPs: localhost, Docker internal, Tailscale (never banned)
+  - Safe IPs: localhost, Docker internal, Tailscale `100.64.0.0/10` (never banned)
   - Config: `/etc/fail2ban/jail.local`, filters: `/etc/fail2ban/filter.d/traefik-*.conf`
+- **Security audit (2026-02-25):** Fixed `backend = systemd` in sshd jail (was broken — no file monitored). Fixed `.env` perms `644 → 600`. Packages updated: libdjvulibre (security), docker-compose-plugin 5.1.0, linux-libc-dev 6.8.0-101, cloud-init 25.3.
 
 ## Skills & Integrations
 - **`/veo`** — Google Veo video generation at `/root/.claude/skills/veo/`
@@ -169,6 +175,7 @@
 - **ANTHROPIC_API_KEY** — DELETED (was depleted, Claude CLI uses OAuth instead)
 
 ## Preferences
+- **Break up heavy tasks** — Large operations (full site scrapes, multi-DB creation, bulk file ops) should be done in smaller steps to avoid hitting Overlord's 2GB container memory limit. Claude CLI + heavy I/O in a single turn caused SIGTERM (code 143) crash on 2026-02-25. Do one major operation per turn, not all at once.
 - Save to memory every ~10 tool calls or after significant work
 - **New projects:** Always init git, create GitHub repo under `bluemele/`, push, and set up Coolify webhook
 - **YOLO mode:** All tools pre-approved in settings.local.json — no permission prompts
