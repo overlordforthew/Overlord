@@ -189,9 +189,9 @@ export const MODEL_REGISTRY = {
 
 const COMPLEX_PATTERNS = /\b(fix|debug|deploy|implement|build|create|refactor|migrate|install|configure|setup|merge|commit|push|delete|remove|update.*(?:server|config|docker|nginx|traefik)|docker\s+(?:run|build|stop|start|restart|exec|compose|rm|kill|logs|pull|push|inspect|cp)|coolify|git\s|write.*(?:function|script|file)|edit.*(?:file|code|config)|run.*(?:test|build|deploy)|check.*(?:log|error|status|disk|memory|cpu|server|container|service)|disk\s*(?:usage|space)|memory\s*(?:usage|left)|cpu\s*(?:usage|load)|server\s+(?:status|health|info)|restart|uptime)\b/i;
 
-const MEDIUM_PATTERNS = /\b(research|compare|analyze|explain|summarize|digest|review|describe|translate|help.*(?:me|us)\s+(?:understand|figure|plan)|what.*(?:do you think|should I)|how.*(?:does|do|can|would|should)|tell me about|look up|search for|what(?:'s| is) the (?:disk|memory|cpu|status|uptime))\b/i;
+const MEDIUM_PATTERNS = /\b(research|compare|analyze|explain|summarize|digest|review|describe|translate|help.*(?:me|us)\s+(?:understand|figure|plan)|what.*(?:do you think|should I)|how.*(?:does|do|can|would|should)|tell me about|look up|search for|what(?:'s| is) the (?:disk|memory|cpu|status|uptime)|what time|what's the time|what date|what day|current time|time in \w|weather)\b/i;
 
-const SIMPLE_PATTERNS = /^(hey|hi|hello|yo|sup|thanks|thx|ok|cool|nice|yes|no|sure|nah|yep|nope|good|great|awesome|lol|haha|😂|👍|🙏|what time|what's the time|how are you|good morning|good night|gm|gn|test|ping)\b/i;
+const SIMPLE_PATTERNS = /^(hey|hi|hello|yo|sup|thanks|thx|ok|cool|nice|yes|no|sure|nah|yep|nope|good|great|awesome|lol|haha|😂|👍|🙏|how are you|good morning|good night|gm|gn|test|ping)\b/i;
 
 /**
  * Fast regex classifier (used as fallback and fast-path for obvious cases).
@@ -256,7 +256,9 @@ COMPLEX — Requires server access, code changes, Docker commands, debugging, de
 
 MEDIUM — Requires research, analysis, explanation, comparison, or thoughtful response. Examples: "explain how kubernetes works", "what do you think about this approach", "summarize this article", "translate this to Spanish"
 
-SIMPLE — Casual conversation, greetings, acknowledgments, quick factual lookups, or brief responses. Examples: "hey", "thanks", "what time is it", "how are you", "cool"
+SIMPLE — Casual conversation, greetings, acknowledgments, or brief responses. Examples: "hey", "thanks", "how are you", "cool", "yes", "no"
+
+IMPORTANT: Questions about time, date, weather, or anything requiring real-time data are MEDIUM (they need tool access to answer correctly). Do NOT classify them as SIMPLE.
 
 ${hasMedia ? '[Message includes media attachment (image/video/audio/document)]' : ''}
 ${isAdmin ? '[Sender is admin with full server access]' : '[Sender is a regular user]'}
