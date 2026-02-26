@@ -6,6 +6,8 @@
  * 2. Daily briefing — 6am server health summary
  * 3. URL monitoring — periodic change detection
  * 4. Log monitoring — periodic error scanning
+ * 5. Heartbeat — service health monitoring with auto-restart
+ * 6. Session guard — zombie Claude process cleanup
  */
 
 import cron from 'node-cron';
@@ -19,6 +21,8 @@ import {
   generateDailySynthesis, formatSynthesisMessage,
   recordDailyMetrics, logFriction, getFrictionReport,
 } from './meta-learning.js';
+import { runHeartbeat } from './heartbeat.js';
+import { sweepZombies } from './session-guard.js';
 
 const execAsync = promisify(exec);
 
@@ -578,6 +582,31 @@ export async function startScheduler(sockRef) {
     }
   });
   console.log('📊 Performance trending scheduled (8:15 PM)');
+
+  // 7. Heartbeat — service health monitoring every 2 hours
+  cron.schedule('0 */2 * * *', async () => {
+    try {
+      await runHeartbeat(sockRef);
+    } catch (err) {
+      console.error('Heartbeat error:', err.message);
+    }
+  });
+  console.log('💓 Heartbeat scheduled (every 2 hours)');
+
+  // 8. Session guard — kill zombie Claude processes every minute
+  cron.schedule('* * * * *', async () => {
+    try {
+      const killed = await sweepZombies();
+      if (killed.length > 0) {
+        const msg = `🔪 Session Guard: killed ${killed.length} hung session(s)\n` +
+          killed.map(k => `PID ${k.pid} (${k.ageMin}min old)`).join('\n');
+        await sockRef.sock.sendMessage(ADMIN_JID, { text: msg });
+      }
+    } catch (err) {
+      console.error('Session guard error:', err.message);
+    }
+  });
+  console.log('🛡️ Session guard scheduled (every 1 min)');
 
   console.log('⏰ Scheduler ready');
 }

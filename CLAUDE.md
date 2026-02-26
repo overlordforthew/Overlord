@@ -112,6 +112,8 @@ Check STATUS.md for current state. Known services:
 - **URL Monitoring:** Checks watched URLs every 15 minutes for changes
 - **Log Monitoring:** Scans container logs every 5 minutes for errors/fatals
 - **Reminders:** Scheduled one-time or recurring messages via cron
+- **Heartbeat:** Service health checks every 2 minutes with auto-restart (heartbeat.js)
+- **Session Guard:** Zombie Claude process cleanup every minute (session-guard.js)
 
 ## WHATSAPP COMMANDS
 
@@ -137,6 +139,8 @@ Check STATUS.md for current state. Known services:
 - `/monitor` — Show log monitor status
 - `/monitor add <container>` — Add container to log watch
 - `/monitor remove <container>` — Remove container from log watch
+- `/heartbeat` — Service health status (auto-restart + self-healing)
+- `/sessions` — Active Claude CLI sessions (zombie detection)
 
 ### Media
 - `/qr <text or URL>` — Generate QR code image
@@ -241,6 +245,25 @@ Switch via `/router alpha|beta|charlie` in WhatsApp or `ROUTER_MODE=` in .env.
 Key design: smaller models get **restricted tools** (can't access Bash/Edit/Docker), not just lighter prompts. If a smaller model struggles (hedging language, empty response, ESCALATE keyword), it auto-escalates to Opus.
 
 Model registry is in `MODEL_REGISTRY` in router.js. API callers: `callOpenRouter()`, `callGemini()`.
+
+## SELF-HEALING (heartbeat.js + session-guard.js)
+
+Overlord monitors its own infrastructure and auto-heals when possible:
+
+- **Heartbeat** (every 2 hours): HTTP health checks + Docker container status for all services
+  - Overlord, NamiBarden, MasterCommander, Lumina, BeastMode, SurfaBabe, Traefik
+  - Requires 3 consecutive failures before attempting auto-restart
+  - Requires 5 consecutive failures before alerting Gil
+  - Auto-restarts containers with `autoRestart: true` (currently: MasterCommander)
+  - 5-minute cooldown between restart attempts (prevents restart loops)
+  - Sends recovery notifications when services come back up
+  - State persisted to `data/heartbeat.json`
+
+- **Session Guard** (every 1 min): Tracks all active LLM CLI processes
+  - Registers PIDs when spawning, unregisters on completion
+  - Kills processes exceeding 10-minute timeout
+  - Scans for orphaned processes not tracked by Overlord
+  - Reports forced kills via WhatsApp
 
 ## META-LEARNING
 
