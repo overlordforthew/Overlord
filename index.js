@@ -46,8 +46,8 @@ import {
   getFrictionReport, getTrendAnalysis,
 } from './meta-learning.js';
 import {
-  routeMessage, routeTriage, callOpenRouter, callGemini,
-  shouldEscalate, classifyTask, getRouterStatus, MODEL_REGISTRY,
+  routeMessage, routeTriage, callOpenRouter, callGemini, callWithFallback,
+  shouldEscalate, classifyTask, classifyWithOpus, getRouterStatus, MODEL_REGISTRY, FREE_FALLBACK_CHAINS,
 } from './router.js';
 import QRCode from 'qrcode';
 import sharp from 'sharp';
@@ -1563,6 +1563,15 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
     workDir = cDir;
   }
 
+  // ---- MODEL ROUTING (must happen before system prompt so we can reference route info) ----
+  const route = await routeMessage(parsed, {
+    isAdmin: isAdminUser,
+    isPower,
+    triageReason,
+    mode: CONFIG.routerMode,
+  });
+  logger.info(`🔀 Route: ${route.model.id} (${route.taskType}) via ${route.via} [${CONFIG.routerMode} mode, classified by ${route.classifiedBy}]`);
+
   // Build system prompt based on role
   let sysPrompt;
   if (isAdminUser) {
@@ -1621,30 +1630,25 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
   }
   args.push('--append-system-prompt', sysPrompt);
 
-  // ---- MODEL ROUTING ----
-  const route = routeMessage(parsed, {
-    isAdmin: isAdminUser,
-    isPower,
-    triageReason,
-    mode: CONFIG.routerMode,
-  });
-  logger.info(`🔀 Route: ${route.model.id} (${route.taskType}) via ${route.via} [${CONFIG.routerMode} mode]`);
-
-  // ---- NON-CLAUDE PATH: Direct API call (no tools, text in → text out) ----
+  // ---- NON-CLAUDE PATH: Direct API call with fallback chain ----
   if (route.via === 'openrouter-api' || route.via === 'gemini-api') {
+    // Try the primary model first, then fallback chain if it fails
+    const chain = FREE_FALLBACK_CHAINS[route.taskType] || [route.model.id];
+    let apiSuccess = false;
     try {
-      const apiCaller = route.via === 'openrouter-api' ? callOpenRouter : callGemini;
-      let response = await apiCaller(route.model.id, sysPrompt, fullPrompt, 2000);
+      const { response, modelUsed } = await callWithFallback(chain, sysPrompt, fullPrompt, 2000);
+      route.model = modelUsed; // update to whichever model actually responded
 
       // Check if the model is struggling → escalate to Opus
       if (route.escalatable && shouldEscalate(response, route.taskType)) {
         logger.info(`⬆️ Escalating from ${route.model.id} to Opus (${route.taskType} task, response quality low)`);
         // Fall through to Claude CLI path below with Opus
       } else {
+        logger.info(`✅ Free model responded: ${modelUsed.id}`);
         return response || "🤔 Nothing came to mind. Try rephrasing?";
       }
     } catch (err) {
-      logger.warn({ err: err.message, model: route.model.id }, 'Non-Claude API call failed, falling back to Opus');
+      logger.warn({ err: err.message }, 'All free models failed, falling back to Opus');
       // Fall through to Claude CLI path
     }
     // Reset route to Opus for fallback — full capability, not the restricted original route
@@ -1653,6 +1657,13 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
     route.maxTurns = null;   // inherit default (100) — don't keep the 1-turn limit
     route.tools = null;      // inherit from user role — full tools for admin
     route.escalatable = false;
+    // Clear stale --resume to avoid resuming a dead session from a different model/run
+    const resumeIdx = args.indexOf('--resume');
+    if (resumeIdx !== -1) {
+      args.splice(resumeIdx, 2); // remove --resume and its value
+      sessionId = null;
+      logger.info('🔄 Cleared stale session for Opus fallback (fresh session)');
+    }
   }
 
   // ---- CLAUDE CLI PATH ----
@@ -1911,7 +1922,9 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
   if (cmd === '/router' && isAdmin(senderJid)) {
     const status = getRouterStatus();
     const triageModel = routeTriage(CONFIG.routerMode);
+    const classifier = CONFIG.routerMode === 'alpha' ? 'Regex (fast path)' : 'Opus-directed (reads every message)';
     return `🔀 *Router: ${status.modeName}*\n\n` +
+      `Classifier: ${classifier}\n` +
       `Triage model: ${triageModel.model.id}\n` +
       `Complex tasks → Opus (Claude CLI)\n` +
       `Medium tasks → ${CONFIG.routerMode === 'alpha' ? 'Opus' : CONFIG.routerMode === 'beta' ? 'Sonnet' : 'Llama 70B (free)'}\n` +

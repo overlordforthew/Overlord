@@ -3,11 +3,16 @@
  *
  * Three modes:
  *   ALPHA  — Opus only (current behavior, safest)
- *   BETA   — Anthropic family: Opus directs, Sonnet/Haiku handle lighter tasks
- *   CHARLIE — All models: Opus for complex, free/cheap models for everything else
+ *   BETA   — Opus directs traffic: reads every message, routes to Sonnet/Haiku
+ *   CHARLIE — Opus directs traffic: reads every message, routes to free/cheap models
+ *
+ * In Beta/Charlie, Opus acts as the traffic director — it reads each message
+ * and decides which model should handle it (complex/medium/simple).
  *
  * Switch with ROUTER_MODE=alpha|beta|charlie in .env
  */
+
+import { spawn } from 'child_process';
 
 // ============================================================
 // MODEL REGISTRY
@@ -144,14 +149,14 @@ export const MODEL_REGISTRY = {
 // TASK CLASSIFIER
 // ============================================================
 
-const COMPLEX_PATTERNS = /\b(fix|debug|deploy|implement|build|create|refactor|migrate|install|configure|setup|merge|commit|push|delete|remove|update.*(?:server|config|docker|nginx|traefik)|docker|coolify|git\s|code|write.*(?:function|script|file)|edit.*(?:file|code|config)|run.*(?:test|build|deploy)|check.*(?:log|error|status))\b/i;
+const COMPLEX_PATTERNS = /\b(fix|debug|deploy|implement|build|create|refactor|migrate|install|configure|setup|merge|commit|push|delete|remove|update.*(?:server|config|docker|nginx|traefik)|docker\s+(?:run|build|stop|start|restart|exec|compose|rm|kill|logs|pull|push|inspect|cp)|coolify|git\s|write.*(?:function|script|file)|edit.*(?:file|code|config)|run.*(?:test|build|deploy)|check.*(?:log|error|status|disk|memory|cpu|server|container|service)|disk\s*(?:usage|space)|memory\s*(?:usage|left)|cpu\s*(?:usage|load)|server\s+(?:status|health|info)|restart|uptime)\b/i;
 
-const MEDIUM_PATTERNS = /\b(research|compare|analyze|explain|summarize|digest|review|describe|translate|help.*(?:me|us)\s+(?:understand|figure|plan)|what.*(?:do you think|should I)|how.*(?:does|do|can|would|should)|tell me about|look up|search for)\b/i;
+const MEDIUM_PATTERNS = /\b(research|compare|analyze|explain|summarize|digest|review|describe|translate|help.*(?:me|us)\s+(?:understand|figure|plan)|what.*(?:do you think|should I)|how.*(?:does|do|can|would|should)|tell me about|look up|search for|what(?:'s| is) the (?:disk|memory|cpu|status|uptime))\b/i;
 
 const SIMPLE_PATTERNS = /^(hey|hi|hello|yo|sup|thanks|thx|ok|cool|nice|yes|no|sure|nah|yep|nope|good|great|awesome|lol|haha|😂|👍|🙏|what time|what's the time|how are you|good morning|good night|gm|gn|test|ping)\b/i;
 
 /**
- * Classify a task into complexity tiers.
+ * Fast regex classifier (used as fallback and fast-path for obvious cases).
  * Returns: 'complex' | 'medium' | 'simple'
  */
 export function classifyTask(parsed, isAdmin) {
@@ -183,20 +188,108 @@ export function classifyTask(parsed, isAdmin) {
 }
 
 // ============================================================
+// OPUS-DIRECTED CLASSIFICATION (Beta/Charlie)
+// ============================================================
+
+/**
+ * Have Opus read the message and classify its complexity.
+ * Opus acts as the traffic director — smarter than regex, understands nuance.
+ *
+ * Fast-path: obvious cases (empty, greetings, clear commands) skip the Opus call.
+ * Fallback: if Opus call fails, falls back to regex classifier.
+ *
+ * @param {object} parsed - Parsed message
+ * @param {boolean} isAdmin - Whether the sender is admin
+ * @returns {Promise<'complex'|'medium'|'simple'>}
+ */
+export async function classifyWithOpus(parsed, isAdmin) {
+  const text = (parsed.text || '').trim();
+  const hasMedia = parsed.hasMedia;
+
+  // Fast-path: don't burn an Opus call for obvious cases
+  if (!text && !hasMedia) return 'simple';
+  if (!text && hasMedia) return 'medium';
+  if (SIMPLE_PATTERNS.test(text) && !hasMedia) return 'simple';
+
+  // Everything else: ask Opus to classify
+  const classifyPrompt = `You are a message classifier for a WhatsApp AI assistant. Classify the following message into exactly one category:
+
+COMPLEX — Requires server access, code changes, Docker commands, debugging, deployments, multi-step tasks, or deep reasoning. Examples: "fix the nginx config", "deploy beastmode", "check why the API is down", "write a script to backup the database"
+
+MEDIUM — Requires research, analysis, explanation, comparison, or thoughtful response. Examples: "explain how kubernetes works", "what do you think about this approach", "summarize this article", "translate this to Spanish"
+
+SIMPLE — Casual conversation, greetings, acknowledgments, quick factual lookups, or brief responses. Examples: "hey", "thanks", "what time is it", "how are you", "cool"
+
+${hasMedia ? '[Message includes media attachment (image/video/audio/document)]' : ''}
+${isAdmin ? '[Sender is admin with full server access]' : '[Sender is a regular user]'}
+
+Message: "${text.substring(0, 500)}"
+
+Reply with ONLY one word: COMPLEX, MEDIUM, or SIMPLE`;
+
+  try {
+    const classification = await new Promise((resolve, reject) => {
+      let out = '';
+      const proc = spawn(process.env.CLAUDE_PATH || 'claude', [
+        '-p', '--output-format', 'text', '--max-turns', '1',
+        '--model', 'claude-opus-4-6',
+      ], { timeout: 15_000, env: { ...process.env, TERM: 'dumb' } });
+      proc.stdin.write(classifyPrompt);
+      proc.stdin.end();
+      proc.stdout.on('data', (d) => { out += d; });
+      proc.on('close', (code) => {
+        if (code === 0) resolve(out.trim());
+        else reject(new Error(`Opus classify exited ${code}`));
+      });
+      proc.on('error', reject);
+    });
+
+    // Parse Opus response — extract the classification word
+    const cleaned = classification.toUpperCase().trim();
+    if (cleaned.includes('COMPLEX')) return 'complex';
+    if (cleaned.includes('MEDIUM')) return 'medium';
+    if (cleaned.includes('SIMPLE')) return 'simple';
+
+    // Opus gave an unexpected response — fall back to regex
+    console.warn(`[Router] Opus classification unclear: "${classification.substring(0, 100)}" — falling back to regex`);
+    return classifyTask(parsed, isAdmin);
+  } catch (err) {
+    // Opus call failed — fall back to regex classifier
+    console.warn(`[Router] Opus classification failed: ${err.message} — falling back to regex`);
+    return classifyTask(parsed, isAdmin);
+  }
+}
+
+// ============================================================
 // ROUTE DECISION
 // ============================================================
 
 /**
  * Determine which model handles a message.
  *
+ * In Beta/Charlie modes, Opus reads the message first and decides the complexity
+ * tier (complex/medium/simple), then routes to the appropriate model.
+ * In Alpha mode, everything goes to Opus anyway, so regex classifier is fine.
+ *
  * @param {object} parsed - Parsed message
  * @param {object} opts - { isAdmin, isPower, triageReason, mode }
- * @returns {{ model: object, tools: string|null, maxTurns: number|null, taskType: string, via: string, escalatable: boolean }}
+ * @returns {Promise<{ model: object, tools: string|null, maxTurns: number|null, taskType: string, via: string, escalatable: boolean, classifiedBy: string }>}
  */
-export function routeMessage(parsed, opts = {}) {
+export async function routeMessage(parsed, opts = {}) {
   const mode = opts.mode || process.env.ROUTER_MODE || 'alpha';
   const { isAdmin, isPower } = opts;
-  const taskType = classifyTask(parsed, isAdmin);
+
+  // Alpha uses regex (Opus handles everything anyway — no routing decision needed)
+  // Beta/Charlie use Opus-directed classification
+  let taskType;
+  let classifiedBy;
+  if (mode === 'alpha') {
+    taskType = classifyTask(parsed, isAdmin);
+    classifiedBy = 'regex';
+  } else {
+    taskType = await classifyWithOpus(parsed, isAdmin);
+    classifiedBy = 'opus';
+  }
 
   // ========== ALPHA: Everything → Opus ==========
   if (mode === 'alpha') {
@@ -207,12 +300,13 @@ export function routeMessage(parsed, opts = {}) {
       taskType,
       via: 'claude-cli',
       escalatable: false,
+      classifiedBy,
     };
   }
 
-  // ========== BETA: Anthropic Family ==========
+  // ========== BETA: Opus directs → Anthropic Family ==========
   if (mode === 'beta') {
-    // Complex or admin complex → Opus (full tools)
+    // Complex → Opus (full tools)
     if (taskType === 'complex') {
       return {
         model: MODEL_REGISTRY.opus,
@@ -221,6 +315,7 @@ export function routeMessage(parsed, opts = {}) {
         taskType,
         via: 'claude-cli',
         escalatable: false,
+        classifiedBy,
       };
     }
 
@@ -233,6 +328,7 @@ export function routeMessage(parsed, opts = {}) {
         taskType,
         via: 'claude-cli',
         escalatable: true,
+        classifiedBy,
       };
     }
 
@@ -244,10 +340,11 @@ export function routeMessage(parsed, opts = {}) {
       taskType,
       via: 'claude-cli',
       escalatable: true,
+      classifiedBy,
     };
   }
 
-  // ========== CHARLIE: All Models ==========
+  // ========== CHARLIE: Opus directs → All Models ==========
   if (mode === 'charlie') {
     // Complex → Opus via Claude CLI (needs tools)
     if (taskType === 'complex') {
@@ -258,6 +355,7 @@ export function routeMessage(parsed, opts = {}) {
         taskType,
         via: 'claude-cli',
         escalatable: false,
+        classifiedBy,
       };
     }
 
@@ -270,6 +368,7 @@ export function routeMessage(parsed, opts = {}) {
         taskType,
         via: 'openrouter-api',
         escalatable: true,
+        classifiedBy,
       };
     }
 
@@ -281,6 +380,7 @@ export function routeMessage(parsed, opts = {}) {
       taskType,
       via: 'openrouter-api',
       escalatable: true,
+      classifiedBy,
     };
   }
 
@@ -292,6 +392,7 @@ export function routeMessage(parsed, opts = {}) {
     taskType,
     via: 'claude-cli',
     escalatable: false,
+    classifiedBy: 'regex',
   };
 }
 
@@ -310,6 +411,39 @@ export function routeTriage(mode) {
   }
   // Charlie: free model for triage
   return { model: MODEL_REGISTRY['qwen-4b'], via: 'openrouter-api' };
+}
+
+// ============================================================
+// FREE MODEL FALLBACK CHAINS (try multiple before Opus)
+// ============================================================
+
+/**
+ * Ordered fallback chains for free models.
+ * When one model 429s, try the next in the chain before escalating to Opus.
+ */
+export const FREE_FALLBACK_CHAINS = {
+  simple: ['mistral-small', 'qwen-4b', 'gemini-flash-lite'],
+  medium: ['llama-70b', 'gpt-oss-120b', 'gemini-flash'],
+};
+
+/**
+ * Try calling free models in order. Returns { response, modelUsed } or throws if all fail.
+ */
+export async function callWithFallback(chain, systemPrompt, userPrompt, maxTokens = 2000) {
+  const errors = [];
+  for (const modelKey of chain) {
+    const model = MODEL_REGISTRY[modelKey];
+    if (!model) continue;
+    try {
+      const caller = model.via === 'gemini-api' ? callGemini : callOpenRouter;
+      const response = await caller(model.id, systemPrompt, userPrompt, maxTokens);
+      return { response, modelUsed: model };
+    } catch (err) {
+      errors.push(`${modelKey}: ${err.message}`);
+      // Continue to next model in chain
+    }
+  }
+  throw new Error(`All free models failed: ${errors.join(' | ')}`);
 }
 
 // ============================================================
@@ -429,8 +563,8 @@ export function getRouterStatus() {
   const mode = process.env.ROUTER_MODE || 'alpha';
   const modeNames = {
     alpha: 'Alpha (Opus only)',
-    beta: 'Beta (Anthropic family — Opus/Sonnet/Haiku)',
-    charlie: 'Charlie (All models — Opus + free/cheap)',
+    beta: 'Beta (Opus directs → Sonnet/Haiku)',
+    charlie: 'Charlie (Opus directs → free/cheap models)',
   };
 
   return {
