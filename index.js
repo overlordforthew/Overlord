@@ -165,7 +165,31 @@ DEBUGGING APPROACH:
     name: 'Seneca', role: 'power', agentName: 'Dex',
     projects: [],  // will grow as projects are created
     youtube: '@senecatheyoungest',
-    personality: 'You are Dex, a sharp, energetic AI assistant for a young YouTuber. Keep it real, be direct, match Gen-Z energy. You help Seneca with his YouTube channel @senecatheyoungest — content ideas, analytics, editing tips, thumbnails. Hype him up but keep it genuine.',
+    personality: `You are Dex, Seneca's personal AI mentor for growing his YouTube influencer career (@senecatheyoungest). You're sharp, energetic, and real — match Gen-Z energy but never be corny. Seneca is 15 years old.
+
+YOUR ROLE: YouTube growth strategist, content coach, brand advisor, and hype man. You help with:
+- Content strategy: video ideas, trends, hooks, titles, thumbnails, formats
+- Audience growth: algorithm tips, engagement tactics, posting schedules, shorts vs long-form
+- Brand building: personal brand identity, niche positioning, consistency
+- Monetization: sponsorships, brand deals, merch, when/how to monetize
+- Creator mindset: motivation, dealing with slow growth, handling haters, staying consistent
+- Production: editing tips, camera presence, audio/lighting basics, pacing
+- Analytics: understanding views, CTR, retention, subscribers, what the numbers mean
+
+PERSONALITY:
+- Talk like a real mentor, not a corporate advisor. Be direct and honest.
+- Hype him up when he's doing well — genuine encouragement, not fake praise
+- Call it out when something won't work — but always offer a better alternative
+- Use casual language naturally. No forced slang.
+- Keep advice actionable — "do this" not "consider doing this"
+- Reference real YouTuber strategies and trends when relevant
+- Remember he's 15 — keep everything age-appropriate, no shortcuts or sketchy tactics
+
+HARD RULES:
+- NEVER suggest buying followers/views/subs or any fake engagement
+- NEVER recommend content that's dangerous, inappropriate, or could get him in trouble
+- NEVER share server details, API keys, or technical infrastructure info
+- If he asks about something outside YouTube/creator stuff, you can chat but always bring it back to the grind`,
     lid: '243898425299000',
   },
   '817084189804': {
@@ -1475,7 +1499,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
   const fullPrompt = prompt.join('\n');
 
   // Build CLI args
-  const args = ['-p', '--output-format', 'text', '--max-turns', '100'];
+  const args = ['-p', '--output-format', 'json', '--max-turns', '100'];
   const selectedModel = CONFIG.claudeModel || 'claude-opus-4-6';
   args.push('--model', selectedModel);
   if (sessionId) args.push('--resume', sessionId);
@@ -1604,11 +1628,20 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
           return;
         }
 
-        // Save session
-        const match = stderr.match(/session[:\s]+([a-f0-9-]+)/i);
-        if (match) await saveSessionId(chatJid, match[1]);
-
-        let response = stdout.trim();
+        // Parse JSON response for session_id and result text
+        let response = '';
+        const rawOutput = stdout.trim();
+        try {
+          const parsed = JSON.parse(rawOutput);
+          if (parsed.session_id) await saveSessionId(chatJid, parsed.session_id);
+          response = (parsed.result || '').trim();
+        } catch {
+          // Fallback: if JSON parse fails, use raw output
+          response = rawOutput;
+          // Try legacy stderr session capture as fallback
+          const match = stderr.match(/session[:\s]+([a-f0-9-]+)/i);
+          if (match) await saveSessionId(chatJid, match[1]);
+        }
 
         // Detect Claude API errors forwarded as stdout
         const API_ERROR_PATTERNS = [

@@ -27,6 +27,14 @@ export function startServer(sockRef, sendResponse) {
     verify: (req, _res, buf) => { req.rawBody = buf; },
   }));
 
+  // Catch malformed JSON bodies (bad escapes, trailing commas, etc.)
+  app.use((err, req, res, next) => {
+    if (err.type === 'entity.parse.failed') {
+      return res.status(400).json({ error: 'Invalid JSON in request body' });
+    }
+    next(err);
+  });
+
   // Bearer token auth middleware
   function requireToken(req, res, next) {
     const token = req.headers.authorization?.replace('Bearer ', '');
@@ -495,7 +503,7 @@ export function startServer(sockRef, sendResponse) {
       }
       const u = result.rows[0];
       res.json({ user: { id: u.id, email: u.email, name: u.name, email_verified: !!u.email_verified, phone: u.phone || '', company: u.company || '' } });
-    } catch (err) {
+    } catch {
       return res.status(401).json({ error: 'Invalid or expired token.' });
     }
   });
