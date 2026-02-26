@@ -52,27 +52,7 @@ http:
       tls:
         certResolver: letsencrypt
 
-    # === Coolify WebSocket (Tailscale only) ===
-    https-coolify-realtime:
-      entryPoints:
-        - https
-      rule: "Host(`coolify.namibarden.com`) && PathPrefix(`/app`)"
-      middlewares:
-        - tailscale-only
-      service: coolify-realtime
-      tls:
-        certResolver: letsencrypt
-
-    # === Coolify Terminal (Tailscale only) ===
-    https-coolify-terminal:
-      entryPoints:
-        - https
-      rule: "Host(`coolify.namibarden.com`) && PathPrefix(`/terminal/ws`)"
-      middlewares:
-        - tailscale-only
-      service: coolify-terminal
-      tls:
-        certResolver: letsencrypt
+    # Coolify WebSocket & Terminal routers removed — handled by coolify.yaml
 
     # === SurfaBabe (SurfAgent WhatsApp bot) ===
     http-surfababe:
@@ -190,15 +170,9 @@ http:
         servers:
           - url: "http://coolify:8080"
 
-    coolify-realtime:
-      loadBalancer:
-        servers:
-          - url: "http://coolify-realtime:6001"
-
-    coolify-terminal:
-      loadBalancer:
-        servers:
-          - url: "http://coolify-realtime:6002"
+    # coolify-realtime and coolify-terminal services removed —
+    # already defined in Coolify's auto-generated coolify.yaml.
+    # Duplicates caused Traefik v3 to reject ALL file-provider services.
 
     surfababe:
       loadBalancer:
