@@ -1334,7 +1334,7 @@ Reply ONLY: YES or NO`;
     const triageResponse = await new Promise((resolve) => {
       let out = '';
       const proc = spawn(CONFIG.claudePath, [
-        '-p', '--output-format', 'text', '--max-turns', '1',
+        '-p', '--output-format', 'text', '--max-turns', '1', '--model', CONFIG.claudeModel || 'claude-opus-4-6',
       ], { timeout: 15_000, env: { ...process.env, TERM: 'dumb' } });
       proc.stdin.write(triagePrompt);
       proc.stdin.end();
@@ -1476,7 +1476,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
 
   // Build CLI args
   const args = ['-p', '--output-format', 'text', '--max-turns', '100'];
-  const selectedModel = isAdminUser ? 'claude-opus-4-6' : (CONFIG.claudeModel || 'claude-sonnet-4-6');
+  const selectedModel = CONFIG.claudeModel || 'claude-opus-4-6';
   args.push('--model', selectedModel);
   if (sessionId) args.push('--resume', sessionId);
 
