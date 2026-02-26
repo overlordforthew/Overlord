@@ -1647,9 +1647,12 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       logger.warn({ err: err.message, model: route.model.id }, 'Non-Claude API call failed, falling back to Opus');
       // Fall through to Claude CLI path
     }
-    // Reset route to Opus for fallback
+    // Reset route to Opus for fallback — full capability, not the restricted original route
     route.model = MODEL_REGISTRY.opus;
     route.via = 'claude-cli';
+    route.maxTurns = null;   // inherit default (100) — don't keep the 1-turn limit
+    route.tools = null;      // inherit from user role — full tools for admin
+    route.escalatable = false;
   }
 
   // ---- CLAUDE CLI PATH ----
@@ -1912,7 +1915,7 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
       `Triage model: ${triageModel.model.id}\n` +
       `Complex tasks → Opus (Claude CLI)\n` +
       `Medium tasks → ${CONFIG.routerMode === 'alpha' ? 'Opus' : CONFIG.routerMode === 'beta' ? 'Sonnet' : 'Llama 70B (free)'}\n` +
-      `Simple tasks → ${CONFIG.routerMode === 'alpha' ? 'Opus' : CONFIG.routerMode === 'beta' ? 'Haiku' : 'Gemini Flash Lite (free)'}\n\n` +
+      `Simple tasks → ${CONFIG.routerMode === 'alpha' ? 'Opus' : CONFIG.routerMode === 'beta' ? 'Haiku' : 'Mistral Small (free)'}\n\n` +
       `Switch: /router alpha|beta|charlie`;
   }
 
