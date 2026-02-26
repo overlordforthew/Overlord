@@ -346,6 +346,19 @@ export function startServer(sockRef, sendResponse) {
         )
       `);
       await mcPool.query(`CREATE INDEX IF NOT EXISTS idx_boats_user_id ON boats(user_id)`);
+      await mcPool.query(`
+        CREATE TABLE IF NOT EXISTS contact_submissions (
+          id SERIAL PRIMARY KEY,
+          source VARCHAR(100),
+          name VARCHAR(255) NOT NULL,
+          email VARCHAR(255) NOT NULL,
+          subject VARCHAR(255),
+          message TEXT NOT NULL,
+          plan VARCHAR(100),
+          ip VARCHAR(45),
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
       console.log('[mc-auth] DB init + migrations complete');
     } catch (err) {
       console.error('[mc-auth] DB init error:', err.message);
@@ -893,6 +906,124 @@ BEHAVIOR:
       res.json({ response, sessionId: sid });
     } catch (err) {
       console.error('[web-chat] Error:', err.message);
+      res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    }
+  });
+
+  // ---- Shared Contact Form ----
+
+  const CONTACT_ORIGINS = [
+    'https://namibarden.com',
+    'https://www.namibarden.com',
+    'https://mastercommander.namibarden.com',
+    'https://beastmode.namibarden.com',
+    'http://localhost',
+  ];
+
+  app.use('/api/contact', (req, res, next) => {
+    const origin = req.headers.origin || '';
+    if (CONTACT_ORIGINS.some(o => origin.startsWith(o))) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    next();
+  });
+
+  // Rate limiter: 3 submissions per IP per 10 minutes
+  const contactRateMap = new Map();
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, hits] of contactRateMap) {
+      const valid = hits.filter(t => now - t < 600_000);
+      if (valid.length === 0) contactRateMap.delete(ip);
+      else contactRateMap.set(ip, valid);
+    }
+  }, 300_000);
+
+  function contactRateLimit(req, res, next) {
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+    const now = Date.now();
+    let hits = contactRateMap.get(ip) || [];
+    hits = hits.filter(t => now - t < 600_000);
+    if (hits.length >= 3) {
+      return res.status(429).json({ error: 'Too many submissions. Please try again later.' });
+    }
+    hits.push(now);
+    contactRateMap.set(ip, hits);
+    next();
+  }
+
+  // Email routing by origin
+  function getContactRouting(origin) {
+    if (origin?.includes('namibarden.com') && !origin.includes('mastercommander') && !origin.includes('beastmode')) {
+      return { to: 'namibarden@gmail.com', label: 'NamiBarden.com' };
+    }
+    if (origin?.includes('mastercommander.namibarden.com')) {
+      return { to: 'overlord.gil.ai@gmail.com', label: 'Master&Commander' };
+    }
+    return { to: 'overlord.gil.ai@gmail.com', label: 'Contact Form' };
+  }
+
+  app.post('/api/contact', contactRateLimit, async (req, res) => {
+    try {
+      const { name, email, subject, message, plan } = req.body;
+
+      // Validate required fields
+      if (!name?.trim()) return res.status(400).json({ error: 'Name is required.' });
+      if (!email?.trim()) return res.status(400).json({ error: 'Email is required.' });
+      if (!message?.trim()) return res.status(400).json({ error: 'Message is required.' });
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        return res.status(400).json({ error: 'Invalid email address.' });
+      }
+
+      const origin = req.headers.origin || req.headers.referer || '';
+      const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+      const routing = getContactRouting(origin);
+
+      // Save to DB
+      try {
+        await mcPool.query(
+          'INSERT INTO contact_submissions (source, name, email, subject, message, plan, ip) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+          [routing.label, name.trim(), email.trim(), (subject || '').trim(), message.trim(), (plan || '').trim() || null, ip]
+        );
+      } catch (dbErr) {
+        console.error('[contact] DB save error:', dbErr.message);
+      }
+
+      // Send email
+      if (mcMailer) {
+        const planLine = plan ? `\n<p><strong>Plan:</strong> ${plan}</p>` : '';
+        await mcMailer.sendMail({
+          from: `"${routing.label} Contact" <${process.env.MC_SMTP_USER}>`,
+          to: routing.to,
+          replyTo: email.trim(),
+          subject: subject?.trim() || `New contact from ${name.trim()} — ${routing.label}`,
+          html: `<h3>New Contact Form Submission</h3>
+<p><strong>From:</strong> ${name.trim()} &lt;${email.trim()}&gt;</p>
+<p><strong>Source:</strong> ${routing.label}</p>${planLine}
+<hr>
+<p>${message.trim().replace(/\n/g, '<br>')}</p>`,
+        });
+      } else {
+        console.log(`[contact] No SMTP — ${routing.label}: ${name} <${email}> — ${message.slice(0, 100)}`);
+      }
+
+      // WhatsApp notification to Gil
+      try {
+        const planInfo = plan ? ` | Plan: ${plan}` : '';
+        await sockRef.sock.sendMessage(ADMIN_JID, {
+          text: `📬 New ${routing.label} contact:\n${name.trim()} <${email.trim()}>${planInfo}\n\n${message.trim().slice(0, 300)}`,
+        });
+      } catch (waErr) {
+        console.error('[contact] WhatsApp notify error:', waErr.message);
+      }
+
+      res.json({ success: true, message: 'Message sent successfully!' });
+    } catch (err) {
+      console.error('[contact] Error:', err.message);
       res.status(500).json({ error: 'Something went wrong. Please try again.' });
     }
   });
