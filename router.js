@@ -317,6 +317,20 @@ export async function routeMessage(parsed, opts = {}) {
   const mode = opts.mode || process.env.ROUTER_MODE || 'alpha';
   const { isAdmin, isPower } = opts;
 
+  // Power users always get Opus — they need full tool access for code edits
+  if (isPower) {
+    const taskType = mode === 'alpha' ? classifyTask(parsed, isAdmin) : await classifyWithOpus(parsed, isAdmin);
+    return {
+      model: MODEL_REGISTRY.opus,
+      tools: null,
+      maxTurns: null,
+      taskType,
+      via: 'claude-cli',
+      escalatable: false,
+      classifiedBy: mode === 'alpha' ? 'regex' : 'opus',
+    };
+  }
+
   // Alpha uses regex (Opus handles everything anyway — no routing decision needed)
   // Beta/Charlie use Opus-directed classification
   let taskType;
