@@ -56,7 +56,7 @@ COPY package.json ./
 RUN npm install
 
 # Copy app files
-COPY index.js server.js scheduler.js meta-learning.js router.js session-guard.js CLAUDE.md traefik-watcher.sh ./
+COPY index.js server.js scheduler.js meta-learning.js router.js session-guard.js heartbeat.js CLAUDE.md traefik-watcher.sh ./
 
 # Copy skills and scripts into container
 COPY skills/ ./skills/
