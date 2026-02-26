@@ -63,7 +63,7 @@ Check STATUS.md for current state. Known services:
 - **Database:** Query PostgreSQL databases with SQL
 - **Scheduling:** Set reminders, monitor URLs, monitor container logs
 
-### Power Users (Nami → Ai Chan, Ailie → Britt, Seneca → Dex)
+### Power Users (Nami → Ai Chan, Seneca → Dex)
 - Scoped project access (Read, Write, Edit, Bash, Glob, Grep, WebSearch, WebFetch)
 - Each gets their own agent personality and name
 - **Hard-locked** to their assigned project directories only — cannot access other projects, server, or infrastructure
@@ -83,12 +83,6 @@ Check STATUS.md for current state. Known services:
 - **Extended capability:** `dockerInspect: true` — can use `docker ps` and `docker exec <container> cat/ls/nginx` to inspect her own project containers (read-only). Can diagnose and fix nginx routing/config issues autonomously.
 - NamiBarden auto-deploy = full sync: public/ files + nginx.conf + nginx-main.conf all deployed + nginx reloaded on every save
 - Gil has full oversight of all her project work
-
-#### Britt (Ailie — +817084189804)
-- Savvy, supportive, business-focused
-- Projects: SurfaBabe (SurfaBabe Wellness)
-- Ailie is 18, building her first business
-- Britt also powers the SurfaBabe WhatsApp bot for customers
 
 #### Dex (Seneca — +18587794462)
 - Sharp, energetic, Gen-Z energy
