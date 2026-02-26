@@ -1582,7 +1582,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       const proc = spawn(CONFIG.claudePath, args, {
         cwd: workDir,
         timeout: CONFIG.maxResponseTime,
-        env: { ...process.env, TERM: 'dumb', NODE_OPTIONS: '--max-old-space-size=1024' },
+        env: { ...process.env, TERM: 'dumb', NODE_OPTIONS: '--max-old-space-size=1024', CLAUDE_CODE_MAX_OUTPUT_TOKENS: '8000' },
         maxBuffer: 10 * 1024 * 1024,
       });
 
