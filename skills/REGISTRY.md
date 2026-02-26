@@ -8,6 +8,7 @@ Quick reference of all available skills and their tools. Read the SKILL.md in ea
 |-------|-----------|-------|-------------|
 | **Monitoring** | `skills/monitoring/` | `service-check.sh`, `ssl-check.sh`, `disk-alert.sh` | Server health, container status, SSL certs, resource alerts |
 | **Web Scraper** | `skills/web-scraper/` | `scrape.py`, `rss.py`, `search-scrape.py` | Extract data from any URL, read RSS feeds, search the web |
+| **Scrapling** | `skills/scrapling/` | `scrape-stealth.py` | Stealth scraping with anti-bot bypass (Cloudflare, Turnstile) via TLS fingerprinting |
 | **API Integrations** | `skills/api-integrations/` | `crypto.py`, `weather.py`, `news.py`, `exchange.py` | Live crypto prices, weather, news headlines, currency conversion |
 | **Data Analysis** | `skills/data-analysis/` | `analyze.py`, `chart.py` | Process CSV/JSON, statistics, filtering, chart generation |
 | **X Trends** | `skills/x-trends/` | `xtrends.py` | X/Twitter trending topics, tweet search, user profiles |
@@ -58,6 +59,12 @@ python3 /app/skills/api-integrations/weather.py "Port of Spain"
 
 # Scrape a webpage
 python3 /app/skills/web-scraper/scrape.py "https://example.com"
+
+# Stealth scrape (bypasses anti-bot protections)
+python3 /app/skills/scrapling/scrape-stealth.py "https://protected-site.com"
+
+# Stealth scrape with CSS selector
+python3 /app/skills/scrapling/scrape-stealth.py "https://example.com" --selector "div.price" --json
 
 # Read tech news
 python3 /app/skills/api-integrations/news.py --topic tech

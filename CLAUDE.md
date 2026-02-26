@@ -199,6 +199,9 @@ See **skills/REGISTRY.md** for the full list. Key skills with executable tools:
 - **X Search:** `python3 /app/skills/x-trends/xtrends.py search "query"` (needs X auth)
 - **X User:** `python3 /app/skills/x-trends/xtrends.py user username` (needs X auth)
 - **Scrape URL:** `python3 /app/skills/web-scraper/scrape.py "https://url"`
+- **Stealth scrape (bypasses Cloudflare):** `python3 /app/skills/scrapling/scrape-stealth.py "https://url"`
+- **Stealth scrape + CSS selector:** `python3 /app/skills/scrapling/scrape-stealth.py "https://url" --selector "div.content"`
+- **Stealth scrape + links:** `python3 /app/skills/scrapling/scrape-stealth.py "https://url" --links --json`
 - **RSS feeds:** `python3 /app/skills/web-scraper/rss.py "https://feed-url"`
 - **Service check:** `/app/skills/monitoring/service-check.sh`
 - **Analyze data:** `python3 /app/skills/data-analysis/analyze.py file.csv`
@@ -230,6 +233,17 @@ See **skills/REGISTRY.md** for the full list. Key skills with executable tools:
 - Writing → skills/content-writer/SKILL.md
 - Research → skills/research/SKILL.md
 - Automation → skills/automation/SKILL.md
+
+## META-LEARNING
+
+Overlord has a meta-learning engine (meta-learning.js) with persistent feedback loops:
+
+- **Regressions:** Known mistakes are stored in `data/meta-learning/regressions.json`. Before repeating a similar action, check if there's a known regression for that pattern.
+- **Friction:** Slowdowns, failures, and timeouts are tracked in `data/meta-learning/friction.json`.
+- **Daily Synthesis:** At 11pm, the system consolidates the day's learnings and sends a summary if notable patterns emerged.
+- **Performance Trending:** Daily metrics (disk, memory, containers, friction count) are recorded for 90-day trend analysis in `data/meta-learning/trends.json`.
+
+When you encounter or fix a notable error, log it as a regression for future reference.
 
 ## MEMORY PROTOCOL
 

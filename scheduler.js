@@ -15,6 +15,10 @@ import fs from 'fs/promises';
 import { existsSync, mkdirSync } from 'fs';
 import crypto from 'crypto';
 import path from 'path';
+import {
+  generateDailySynthesis, formatSynthesisMessage,
+  recordDailyMetrics, logFriction, getFrictionReport,
+} from './meta-learning.js';
 
 const execAsync = promisify(exec);
 
@@ -532,6 +536,47 @@ export async function startScheduler(sockRef) {
     }
   });
   console.log('📋 Log monitor scheduled (every 5 min)');
+
+  // 5. Nightly synthesis at 11pm — consolidate daily learnings (Loop 5)
+  cron.schedule('0 23 * * *', async () => {
+    try {
+      const synthesis = await generateDailySynthesis();
+      // Only notify if there are meaningful events
+      if (synthesis.regressions.count > 0 || synthesis.friction.totalEvents > 5) {
+        const msg = formatSynthesisMessage(synthesis);
+        await sockRef.sock.sendMessage(ADMIN_JID, { text: msg });
+        console.log('🧠 Sent nightly synthesis');
+      } else {
+        console.log('🧠 Nightly synthesis: clean day, no alert sent');
+      }
+    } catch (err) {
+      console.error('Nightly synthesis error:', err.message);
+    }
+  });
+  console.log('🧠 Nightly synthesis scheduled (11:00 PM)');
+
+  // 6. Daily performance metrics at 11:30pm — record for trending (Loop 9)
+  cron.schedule('30 23 * * *', async () => {
+    try {
+      const { stdout: diskRaw } = await execAsync("df -h / | tail -1 | awk '{print $5}'", { timeout: 5000 });
+      const { stdout: memRaw } = await execAsync("free | awk '/Mem/{printf \"%.1f\", $3/$2*100}'", { timeout: 5000 });
+      const { stdout: containers } = await execAsync("docker ps -q | wc -l", { timeout: 5000 });
+
+      // Get friction count for today
+      const frictionReport = await getFrictionReport(24);
+
+      await recordDailyMetrics({
+        diskUsagePct: parseFloat(diskRaw.replace('%', '').trim()) || 0,
+        memoryUsagePct: parseFloat(memRaw.trim()) || 0,
+        containersRunning: parseInt(containers.trim()) || 0,
+        frictionEvents: frictionReport.total,
+      });
+      console.log('📊 Recorded daily performance metrics');
+    } catch (err) {
+      console.error('Performance metrics error:', err.message);
+    }
+  });
+  console.log('📊 Performance trending scheduled (11:30 PM)');
 
   console.log('⏰ Scheduler ready');
 }

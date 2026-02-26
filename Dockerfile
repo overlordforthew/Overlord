@@ -40,7 +40,11 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     llm-openrouter \
     pyyaml \
     langdetect \
-    twikit
+    twikit \
+    scrapling \
+    curl_cffi \
+    browserforge \
+    playwright
 
 # Install Claude CLI and Codex CLI globally
 RUN npm install -g @anthropic-ai/claude-code @openai/codex
@@ -52,7 +56,7 @@ COPY package.json ./
 RUN npm install
 
 # Copy app files
-COPY index.js server.js scheduler.js CLAUDE.md traefik-watcher.sh ./
+COPY index.js server.js scheduler.js meta-learning.js CLAUDE.md traefik-watcher.sh ./
 
 # Copy skills and scripts into container
 COPY skills/ ./skills/

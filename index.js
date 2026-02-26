@@ -41,6 +41,10 @@ import {
   generateBriefing, addURLWatch, removeURLWatch, listURLWatches,
   getLogMonitorStatus, addLogMonitorContainer, removeLogMonitorContainer,
 } from './scheduler.js';
+import {
+  logRegression, getRegressionSummary, logFriction,
+  getFrictionReport, getTrendAnalysis,
+} from './meta-learning.js';
 import QRCode from 'qrcode';
 import sharp from 'sharp';
 import pg from 'pg';
@@ -2493,8 +2497,16 @@ async function startBot() {
           // Typing indicator
           if (CONFIG.typingIndicator) await currentSock.sendPresenceUpdate('composing', chatJid).catch(() => {});
 
-          // Ask Claude
+          // Ask Claude (with friction tracking)
+          const _claudeStart = Date.now();
           const response = await askClaude(chatJid, last.senderJid, last.parsed, last.mediaResult, triage.reason);
+          const _claudeDuration = Date.now() - _claudeStart;
+          if (_claudeDuration > 60000) {
+            logFriction('slow_response', `${_claudeDuration}ms for ${chatJid}`, _claudeDuration).catch(() => {});
+          }
+          if (response.startsWith('⚠️')) {
+            logFriction('api_error', response.substring(0, 200), _claudeDuration).catch(() => {});
+          }
 
           // Stop typing
           if (CONFIG.typingIndicator) await currentSock.sendPresenceUpdate('paused', chatJid).catch(() => {});
