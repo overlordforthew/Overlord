@@ -1619,7 +1619,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       proc.on('close', async (code) => {
         if (code !== 0 && !stdout) {
           // If resume failed (stale session), clear session and retry fresh
-          if (sessionId && stderr.includes('session') && attempt < MAX_RETRIES) {
+          if (sessionId && /session/i.test(stderr) && attempt < MAX_RETRIES) {
             logger.warn({ sessionId, stderr: stderr.substring(0, 300) }, 'Stale session, clearing and retrying fresh');
             await saveSessionId(chatJid, '');
             try { await fs.unlink(path.join(contactDir(chatJid), 'session_id')); } catch {}
