@@ -1632,11 +1632,18 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
 
   // ---- NON-CLAUDE PATH: Direct API call with fallback chain ----
   if (route.via === 'openrouter-api' || route.via === 'gemini-api') {
+    // Inject real-time context — free models have no tool access so they need this
+    const now = new Date();
+    const utc = now.toISOString().replace('T', ' ').substring(0, 19);
+    const ttOffset = new Date(now.getTime() - 4 * 60 * 60 * 1000);
+    const tt = ttOffset.toISOString().replace('T', ' ').substring(0, 19);
+    const freeSystemPrompt = sysPrompt + `\n\nReal-time context: Current time is ${utc} UTC (${tt} Trinidad AST/UTC-4). Today is ${now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })}.`;
+
     // Try the primary model first, then fallback chain if it fails
     const chain = FREE_FALLBACK_CHAINS[route.taskType] || [route.model.id];
     let apiSuccess = false;
     try {
-      const { response, modelUsed } = await callWithFallback(chain, sysPrompt, fullPrompt, 2000);
+      const { response, modelUsed } = await callWithFallback(chain, freeSystemPrompt, fullPrompt, 2000);
       route.model = modelUsed; // update to whichever model actually responded
 
       // Check if the model is struggling → escalate to Opus
