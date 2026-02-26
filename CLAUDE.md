@@ -234,13 +234,27 @@ See **skills/REGISTRY.md** for the full list. Key skills with executable tools:
 - Research → skills/research/SKILL.md
 - Automation → skills/automation/SKILL.md
 
+## MODEL ROUTER
+
+Overlord has a multi-model routing system (router.js) with three modes:
+
+- **Alpha:** Opus only — all messages go to claude-opus-4-6 (safest, most expensive)
+- **Beta:** Anthropic family — Opus for complex tasks, Sonnet for medium, Haiku for simple/triage
+- **Charlie:** All models — Opus for complex, free OpenRouter/Gemini models for simpler tasks
+
+Switch via `/router alpha|beta|charlie` in WhatsApp or `ROUTER_MODE=` in .env.
+
+Key design: smaller models get **restricted tools** (can't access Bash/Edit/Docker), not just lighter prompts. If a smaller model struggles (hedging language, empty response, ESCALATE keyword), it auto-escalates to Opus.
+
+Model registry is in `MODEL_REGISTRY` in router.js. API callers: `callOpenRouter()`, `callGemini()`.
+
 ## META-LEARNING
 
 Overlord has a meta-learning engine (meta-learning.js) with persistent feedback loops:
 
 - **Regressions:** Known mistakes are stored in `data/meta-learning/regressions.json`. Before repeating a similar action, check if there's a known regression for that pattern.
 - **Friction:** Slowdowns, failures, and timeouts are tracked in `data/meta-learning/friction.json`.
-- **Daily Synthesis:** At 11pm, the system consolidates the day's learnings and sends a summary if notable patterns emerged.
+- **Daily Synthesis:** At 8pm, the system consolidates the day's learnings and sends a summary if notable patterns emerged.
 - **Performance Trending:** Daily metrics (disk, memory, containers, friction count) are recorded for 90-day trend analysis in `data/meta-learning/trends.json`.
 
 When you encounter or fix a notable error, log it as a regression for future reference.

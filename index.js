@@ -45,6 +45,10 @@ import {
   logRegression, getRegressionSummary, logFriction,
   getFrictionReport, getTrendAnalysis,
 } from './meta-learning.js';
+import {
+  routeMessage, routeTriage, callOpenRouter, callGemini,
+  shouldEscalate, classifyTask, getRouterStatus, MODEL_REGISTRY,
+} from './router.js';
 import QRCode from 'qrcode';
 import sharp from 'sharp';
 import pg from 'pg';
@@ -72,6 +76,7 @@ const CONFIG = {
   // Claude CLI
   claudePath: process.env.CLAUDE_PATH || 'claude',
   claudeModel: process.env.CLAUDE_MODEL || '',
+  routerMode: process.env.ROUTER_MODE || 'alpha',
   maxResponseTime: 600_000,  // 10 min for complex tasks (deployments, multi-file edits)
 
   // ---- RESPONSE BEHAVIOR ----
@@ -1332,7 +1337,7 @@ async function shouldRespondSmart(parsed, chatJid, senderJid) {
     return { shouldRespond: true, reason: 'media_shared_no_context' };
   }
 
-  // For everything else, ask Claude to decide
+  // For everything else, ask an LLM to decide
   const recentContext = conversationContext.format(chatJid, 12);
 
   const triagePrompt = `You are deciding whether to respond in a WhatsApp group chat as "${CONFIG.botName}".
@@ -1359,19 +1364,43 @@ Latest message: ${parsed.text || `[${parsed.type}]`}
 Reply ONLY: YES or NO`;
 
   try {
-    const triageResponse = await new Promise((resolve) => {
-      let out = '';
-      const proc = spawn(CONFIG.claudePath, [
-        '-p', '--output-format', 'text', '--max-turns', '1', '--model', CONFIG.claudeModel || 'claude-opus-4-6',
-      ], { timeout: 15_000, env: { ...process.env, TERM: 'dumb' } });
-      proc.stdin.write(triagePrompt);
-      proc.stdin.end();
-      proc.stdout.on('data', (d) => { out += d.toString(); });
-      proc.on('close', () => resolve(out.trim()));
-      proc.on('error', () => resolve(''));
-    });
+    const triageRoute = routeTriage(CONFIG.routerMode);
+    logger.info(`🔀 Triage via ${triageRoute.model.id} (${CONFIG.routerMode} mode)`);
 
-    const answer = triageResponse.toUpperCase();
+    let triageResponse;
+
+    if (triageRoute.via === 'claude-cli') {
+      // Anthropic model via Claude CLI
+      triageResponse = await new Promise((resolve) => {
+        let out = '';
+        const proc = spawn(CONFIG.claudePath, [
+          '-p', '--output-format', 'text', '--max-turns', '1', '--model', triageRoute.model.id,
+        ], { timeout: 15_000, env: { ...process.env, TERM: 'dumb' } });
+        proc.stdin.write(triagePrompt);
+        proc.stdin.end();
+        proc.stdout.on('data', (d) => { out += d.toString(); });
+        proc.on('close', () => resolve(out.trim()));
+        proc.on('error', () => resolve(''));
+      });
+    } else if (triageRoute.via === 'openrouter-api') {
+      // Free/cheap model via OpenRouter
+      triageResponse = await callOpenRouter(
+        triageRoute.model.id,
+        'You are a message classifier. Reply ONLY with YES or NO. Nothing else.',
+        triagePrompt,
+        10,
+      );
+    } else if (triageRoute.via === 'gemini-api') {
+      // Gemini model
+      triageResponse = await callGemini(
+        triageRoute.model.id,
+        'You are a message classifier. Reply ONLY with YES or NO. Nothing else.',
+        triagePrompt,
+        10,
+      );
+    }
+
+    const answer = (triageResponse || '').toUpperCase();
 
     // If triage got an API error, don't respond (avoid forwarding errors)
     if (/CREDIT BALANCE|RATE LIMIT|OVERLOADED|BILLING|INSUFFICIENT/i.test(answer)) {
@@ -1589,6 +1618,58 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
     ].join(' ');
   }
   args.push('--append-system-prompt', sysPrompt);
+
+  // ---- MODEL ROUTING ----
+  const route = routeMessage(parsed, {
+    isAdmin: isAdminUser,
+    isPower,
+    triageReason,
+    mode: CONFIG.routerMode,
+  });
+  logger.info(`🔀 Route: ${route.model.id} (${route.taskType}) via ${route.via} [${CONFIG.routerMode} mode]`);
+
+  // ---- NON-CLAUDE PATH: Direct API call (no tools, text in → text out) ----
+  if (route.via === 'openrouter-api' || route.via === 'gemini-api') {
+    try {
+      const apiCaller = route.via === 'openrouter-api' ? callOpenRouter : callGemini;
+      let response = await apiCaller(route.model.id, sysPrompt, fullPrompt, 2000);
+
+      // Check if the model is struggling → escalate to Opus
+      if (route.escalatable && shouldEscalate(response, route.taskType)) {
+        logger.info(`⬆️ Escalating from ${route.model.id} to Opus (${route.taskType} task, response quality low)`);
+        // Fall through to Claude CLI path below with Opus
+      } else {
+        return response || "🤔 Nothing came to mind. Try rephrasing?";
+      }
+    } catch (err) {
+      logger.warn({ err: err.message, model: route.model.id }, 'Non-Claude API call failed, falling back to Opus');
+      // Fall through to Claude CLI path
+    }
+    // Reset route to Opus for fallback
+    route.model = MODEL_REGISTRY.opus;
+    route.via = 'claude-cli';
+  }
+
+  // ---- CLAUDE CLI PATH ----
+  // Apply routed model (may differ from CONFIG.claudeModel in beta/charlie mode)
+  const modelIdx = args.indexOf('--model');
+  if (modelIdx !== -1) {
+    args[modelIdx + 1] = route.model.id;
+  }
+
+  // Apply routed tool restrictions (beta mode: Sonnet/Haiku get fewer tools)
+  if (route.tools !== null && isAdminUser) {
+    // In beta/charlie, even admin gets scoped tools for non-Opus models
+    args.push('--allowedTools', route.tools);
+  }
+
+  // Apply routed turn limits
+  if (route.maxTurns !== null) {
+    const turnsIdx = args.indexOf('--max-turns');
+    if (turnsIdx !== -1) {
+      args[turnsIdx + 1] = String(route.maxTurns);
+    }
+  }
 
   // Pre-flight memory check — skip spawning if system is critically low
   const freeMem = os.freemem();
@@ -1819,6 +1900,29 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
       return `✅ Chime-in threshold → ${val}`;
     }
     return '❌ Use a value between 0.0 and 1.0';
+  }
+
+  // ---- ROUTER COMMANDS ----
+  if (cmd === '/router' && isAdmin(senderJid)) {
+    const status = getRouterStatus();
+    const triageModel = routeTriage(CONFIG.routerMode);
+    return `🔀 *Router: ${status.modeName}*\n\n` +
+      `Triage model: ${triageModel.model.id}\n` +
+      `Complex tasks → Opus (Claude CLI)\n` +
+      `Medium tasks → ${CONFIG.routerMode === 'alpha' ? 'Opus' : CONFIG.routerMode === 'beta' ? 'Sonnet' : 'Llama 70B (free)'}\n` +
+      `Simple tasks → ${CONFIG.routerMode === 'alpha' ? 'Opus' : CONFIG.routerMode === 'beta' ? 'Haiku' : 'Gemini Flash Lite (free)'}\n\n` +
+      `Switch: /router alpha|beta|charlie`;
+  }
+
+  if (cmd.startsWith('/router ') && isAdmin(senderJid)) {
+    const newMode = cmd.split(' ')[1].toLowerCase();
+    if (['alpha', 'beta', 'charlie'].includes(newMode)) {
+      CONFIG.routerMode = newMode;
+      process.env.ROUTER_MODE = newMode;
+      const modeNames = { alpha: 'Alpha (Opus only)', beta: 'Beta (Anthropic family)', charlie: 'Charlie (All models)' };
+      return `✅ Router → ${modeNames[newMode]}\n\nNote: change is live immediately but resets on container restart. Update .env to persist.`;
+    }
+    return '❌ Use: alpha, beta, or charlie';
   }
 
   // ---- REMINDER COMMANDS ----
