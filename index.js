@@ -1410,7 +1410,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
   const isPower = profile.role === 'power';
   const memory = await getMemory(chatJid);
   const recentContext = conversationContext.format(chatJid, 30);
-  const sessionId = await getSessionId(chatJid);
+  let sessionId = await getSessionId(chatJid);
 
   // Build comprehensive prompt
   const prompt = [];
@@ -1618,6 +1618,18 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
 
       proc.on('close', async (code) => {
         if (code !== 0 && !stdout) {
+          // If resume failed (stale session), clear session and retry fresh
+          if (sessionId && stderr.includes('session') && attempt < MAX_RETRIES) {
+            logger.warn({ sessionId, stderr: stderr.substring(0, 300) }, 'Stale session, clearing and retrying fresh');
+            await saveSessionId(chatJid, '');
+            try { await fs.unlink(path.join(contactDir(chatJid), 'session_id')); } catch {}
+            sessionId = null;
+            // Remove --resume args for next attempt
+            const resumeIdx = args.indexOf('--resume');
+            if (resumeIdx !== -1) args.splice(resumeIdx, 2);
+            resolve({ retry: true });
+            return;
+          }
           if (RETRYABLE_CODES.has(code) && attempt < MAX_RETRIES) {
             logger.warn({ code, stderr: stderr.substring(0, 300), attempt }, 'Claude transient error, retrying');
             resolve({ retry: true });
