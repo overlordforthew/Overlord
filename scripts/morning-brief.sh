@@ -13,7 +13,7 @@ declare -A NAMES=(
   [coolify-redis]="Coolify Redis"
   [coolify-sentinel]="Coolify Sentinel"
   [overlord]="Overlord (WhatsApp Bot)"
-  [surfagent]="SurfaBabe (WhatsApp Bot)"
+  [surfababe]="SurfaBabe (WhatsApp Bot)"
   [mastercommander]="MasterCommander"
 )
 
