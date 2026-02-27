@@ -1016,10 +1016,13 @@ BEHAVIOR:
         console.log(`[contact] No SMTP — ${routing.label}: ${name} <${email}> — ${message.slice(0, 100)}`);
       }
 
-      // WhatsApp notification to Gil
+      // WhatsApp notification — NamiBarden contacts go to Nami, others to Gil
       try {
         const planInfo = plan ? ` | Plan: ${plan}` : '';
-        await sockRef.sock.sendMessage(ADMIN_JID, {
+        const notifyJid = routing.label === 'NamiBarden.com'
+          ? '84393251371@s.whatsapp.net'  // Nami
+          : ADMIN_JID;                     // Gil
+        await sockRef.sock.sendMessage(notifyJid, {
           text: `📬 New ${routing.label} contact:\n${name.trim()} <${email.trim()}>${planInfo}\n\n${message.trim().slice(0, 300)}`,
         });
       } catch (waErr) {
