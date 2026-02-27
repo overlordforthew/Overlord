@@ -21,6 +21,9 @@ const ADMIN_JID = `${process.env.ADMIN_NUMBER}@s.whatsapp.net`;
 export function startServer(sockRef, sendResponse) {
   const app = express();
 
+  // Trust first proxy (Traefik) so req.ip is the real client IP
+  app.set('trust proxy', 1);
+
   // Capture raw body for webhook signature validation, then parse JSON
   app.use(express.json({
     limit: '1mb',
@@ -912,17 +915,19 @@ BEHAVIOR:
 
   // ---- Shared Contact Form ----
 
-  const CONTACT_ORIGINS = [
+  const CONTACT_ORIGINS = new Set([
     'https://namibarden.com',
     'https://www.namibarden.com',
     'https://mastercommander.namibarden.com',
     'https://beastmode.namibarden.com',
     'http://localhost',
-  ];
+    'http://localhost:3000',
+    'http://localhost:3457',
+  ]);
 
   app.use('/api/contact', (req, res, next) => {
     const origin = req.headers.origin || '';
-    if (CONTACT_ORIGINS.some(o => origin.startsWith(o))) {
+    if (CONTACT_ORIGINS.has(origin)) {
       res.setHeader('Access-Control-Allow-Origin', origin);
     }
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -944,7 +949,7 @@ BEHAVIOR:
   }, 300_000);
 
   function contactRateLimit(req, res, next) {
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+    const ip = req.ip;
     const now = Date.now();
     let hits = contactRateMap.get(ip) || [];
     hits = hits.filter(t => now - t < 600_000);
@@ -980,7 +985,7 @@ BEHAVIOR:
       }
 
       const origin = req.headers.origin || req.headers.referer || '';
-      const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+      const ip = req.ip;
       const routing = getContactRouting(origin);
 
       // Save to DB
