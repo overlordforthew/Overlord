@@ -1030,21 +1030,25 @@ BEHAVIOR:
       }
 
       // Send email
-      if (mcMailer) {
-        const planLine = plan ? `\n<p><strong>Plan:</strong> ${plan}</p>` : '';
-        await mcMailer.sendMail({
-          from: `"${routing.label} Contact" <${process.env.MC_SMTP_USER}>`,
-          to: routing.to,
-          replyTo: email.trim(),
-          subject: subject?.trim() || `New contact from ${name.trim()} — ${routing.label}`,
-          html: `<h3>New Contact Form Submission</h3>
+      try {
+        if (mcMailer) {
+          const planLine = plan ? `\n<p><strong>Plan:</strong> ${plan}</p>` : '';
+          await mcMailer.sendMail({
+            from: `"${routing.label} Contact" <${process.env.MC_SMTP_USER}>`,
+            to: routing.to,
+            replyTo: email.trim(),
+            subject: subject?.trim() || `New contact from ${name.trim()} — ${routing.label}`,
+            html: `<h3>New Contact Form Submission</h3>
 <p><strong>From:</strong> ${name.trim()} &lt;${email.trim()}&gt;</p>
 <p><strong>Source:</strong> ${routing.label}</p>${planLine}
 <hr>
 <p>${message.trim().replace(/\n/g, '<br>')}</p>`,
-        });
-      } else {
-        console.log(`[contact] No SMTP — ${routing.label}: ${name} <${email}> — ${message.slice(0, 100)}`);
+          });
+        } else {
+          console.log(`[contact] No SMTP — ${routing.label}: ${name} <${email}> — ${message.slice(0, 100)}`);
+        }
+      } catch (mailErr) {
+        console.error('[contact] Email send error:', mailErr.message);
       }
 
       // WhatsApp notification — NamiBarden contacts go to Nami, others to Gil
