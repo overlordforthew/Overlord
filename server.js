@@ -1118,8 +1118,9 @@ BEHAVIOR:
       const trimmed = email.trim().toLowerCase();
 
       // Upsert — reactivate if previously unsubscribed, ignore if already active
+      let isNew = false;
       try {
-        await mcPool.query(
+        const result = await mcPool.query(
           `INSERT INTO newsletter_subscribers (email, source, ip)
            VALUES ($1, 'newsletter-form', $2)
            ON CONFLICT (email) DO UPDATE SET
@@ -1128,24 +1129,29 @@ BEHAVIOR:
              subscribed_at = CASE
                WHEN newsletter_subscribers.unsubscribed_at IS NOT NULL THEN NOW()
                ELSE newsletter_subscribers.subscribed_at
-             END`,
+             END
+           RETURNING (xmax = 0) AS inserted`,
           [trimmed, ip]
         );
+        isNew = result.rows[0]?.inserted;
       } catch (dbErr) {
         console.error('[subscribe] DB save error:', dbErr.message);
         return res.status(500).json({ error: 'Something went wrong. Please try again.' });
       }
 
-      // WhatsApp notification to Nami
-      try {
-        await sockRef.sock.sendMessage('84393251371@s.whatsapp.net', {
-          text: `📬 New newsletter subscriber: ${trimmed}`,
-        });
-      } catch (waErr) {
-        console.error('[subscribe] WhatsApp notify error:', waErr.message);
+      // WhatsApp notification to Nami — only for genuinely new subscribers
+      if (isNew) {
+        try {
+          await sockRef.sock.sendMessage('84393251371@s.whatsapp.net', {
+            text: `📬 New newsletter subscriber: ${trimmed}`,
+          });
+        } catch (waErr) {
+          console.error('[subscribe] WhatsApp notify error:', waErr.message);
+        }
+        console.log(`[subscribe] New subscriber: ${trimmed}`);
+      } else {
+        console.log(`[subscribe] Already subscribed: ${trimmed}`);
       }
-
-      console.log(`[subscribe] New subscriber: ${trimmed}`);
       res.json({ success: true });
     } catch (err) {
       console.error('[subscribe] Error:', err.message);
