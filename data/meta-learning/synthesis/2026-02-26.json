@@ -1,0 +1,26 @@
+{
+  "date": "2026-02-26",
+  "generatedAt": "2026-02-26T20:00:00.459Z",
+  "regressions": {
+    "count": 1,
+    "categories": [
+      "config"
+    ],
+    "items": [
+      {
+        "category": "config",
+        "avoidance": "Never define a service name in namibarden.yaml that already exists in Coolify's auto-generated coolify.yaml. Traefik v3 rejects all services when duplicates exist across file-provider files."
+      }
+    ]
+  },
+  "friction": {
+    "totalEvents": 2,
+    "byType": {
+      "slow_response": 2
+    },
+    "topIssue": "slow_response"
+  },
+  "insights": [
+    "1 new regressions logged. Review avoidance rules."
+  ]
+}

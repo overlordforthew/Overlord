@@ -1,0 +1,44 @@
+{
+  "events": [
+    {
+      "type": "api_error",
+      "details": "⚠️ I'm temporarily unavailable. Try again in a few minutes.",
+      "durationMs": 151154,
+      "timestamp": "2026-02-26T20:29:03.822Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "82498ms for 109457291874478@lid",
+      "durationMs": 82498,
+      "timestamp": "2026-02-26T22:00:24.254Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "88633ms for 84267677782098@lid",
+      "durationMs": 88633,
+      "timestamp": "2026-02-26T23:28:45.377Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "421948ms for 109457291874478@lid",
+      "durationMs": 421948,
+      "timestamp": "2026-02-26T23:28:51.414Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "154204ms for 84267677782098@lid",
+      "durationMs": 154204,
+      "timestamp": "2026-02-26T23:37:01.819Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "80360ms for 109457291874478@lid",
+      "durationMs": 80360,
+      "timestamp": "2026-02-27T00:12:18.064Z"
+    }
+  ],
+  "summary": {
+    "api_error": 1,
+    "slow_response": 5
+  }
+}

@@ -49,6 +49,9 @@ import {
   routeMessage, routeTriage, callOpenRouter, callGemini, callWithFallback,
   shouldEscalate, classifyTask, classifyWithOpus, getRouterStatus, MODEL_REGISTRY, FREE_FALLBACK_CHAINS,
 } from './router.js';
+import { registerSession, unregisterSession } from './session-guard.js';
+import { getHeartbeatStatus } from './heartbeat.js';
+import { getSessionGuardStatus } from './session-guard.js';
 import QRCode from 'qrcode';
 import sharp from 'sharp';
 import pg from 'pg';
@@ -1713,6 +1716,9 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
         maxBuffer: 10 * 1024 * 1024,
       });
 
+      // Session guard: track this process
+      registerSession(chatJid, proc.pid);
+
       proc.stdin.write(fullPrompt);
       proc.stdin.end();
 
@@ -1720,6 +1726,8 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       proc.stderr.on('data', (d) => { stderr += d.toString(); });
 
       proc.on('close', async (code) => {
+        // Session guard: untrack this process
+        unregisterSession(chatJid);
         if (code !== 0 && !stdout) {
           // If resume failed (stale session), clear session and retry fresh
           if (sessionId && /session/i.test(stderr) && attempt < MAX_RETRIES) {
@@ -1785,6 +1793,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       });
 
       proc.on('error', (err) => {
+        unregisterSession(chatJid);
         if (attempt < MAX_RETRIES) {
           logger.warn({ err, attempt }, 'Spawn failed, retrying');
           resolve({ retry: true });
@@ -2034,6 +2043,16 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
     const name = cmd.split(' ').slice(2).join(' ');
     await removeLogMonitorContainer(name);
     return `✅ Removed ${name} from log monitor.`;
+  }
+
+  // ---- HEARTBEAT STATUS ----
+  if (cmd === '/heartbeat' && isAdmin(senderJid)) {
+    return await getHeartbeatStatus();
+  }
+
+  // ---- SESSION GUARD STATUS ----
+  if (cmd === '/sessions' && isAdmin(senderJid)) {
+    return getSessionGuardStatus();
   }
 
   // ---- GROUP ID ----
@@ -2292,6 +2311,8 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
         '/unwatch <url> — Stop monitoring',
         '/watches — List watched URLs',
         '/monitor — Log monitor status',
+        '/heartbeat — Service health status',
+        '/sessions — Active Claude sessions',
         '',
         '🎨 Media:',
         '/qr <text> — Generate QR code',

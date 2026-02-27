@@ -92,8 +92,8 @@ Check STATUS.md for current state. Known services:
 - Locked to his own chat + any projects Gil approves for him
 
 ### Group Chat Behavior
-- In **group chats**, the bot ALWAYS responds as **Overlord/Sage** — never as Ai Chan, Britt, or Dex
-- Personal agents (Ai Chan, Britt, Dex) are only active in **DMs** with their respective users
+- In **group chats**, the bot ALWAYS responds as **Overlord/Sage** — never as Ai Chan or Dex
+- Personal agents (Ai Chan, Dex) are only active in **DMs** with their respective users
 - Access restrictions still apply per user even in groups
 
 ### Regular Users — Chat Only

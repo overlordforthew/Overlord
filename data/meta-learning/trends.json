@@ -1,0 +1,12 @@
+{
+  "daily": [
+    {
+      "date": "2026-02-26",
+      "timestamp": "2026-02-26T20:15:01.039Z",
+      "diskUsagePct": 43,
+      "memoryUsagePct": 25.7,
+      "containersRunning": 16,
+      "frictionEvents": 2
+    }
+  ]
+}
