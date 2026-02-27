@@ -128,6 +128,26 @@ http:
         certResolver: letsencrypt
       priority: 100
 
+    # MasterCommander contact API → Overlord container
+    https-mastercommander-contact:
+      entryPoints:
+        - https
+      rule: "Host(`mastercommander.namibarden.com`) && Path(`/api/contact`)"
+      service: overlord-api
+      tls:
+        certResolver: letsencrypt
+      priority: 100
+
+    # NamiBarden contact API → Overlord container
+    https-namibarden-contact:
+      entryPoints:
+        - https
+      rule: "Host(`namibarden.com`) && Path(`/api/contact`)"
+      service: overlord-api
+      tls:
+        certResolver: letsencrypt
+      priority: 100
+
     # SurfaBabe deploy webhook (path on surfababe subdomain)
     https-surfababe-deploy:
       entryPoints:

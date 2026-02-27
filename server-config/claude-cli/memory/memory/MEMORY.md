@@ -14,8 +14,8 @@
 - **Provider:** Hetzner
 - **OS:** Ubuntu 24.04.4 LTS (Noble Numbat)
 - **CPU:** 4-core AMD EPYC-Rome (no hyperthreading)
-- **RAM:** 7.6 GB total (~2 GB used, ~5.6 GB available after cleanup)
-- **Disk:** 75 GB (~20 GB used / ~55 GB free)
+- **RAM:** 7.6 GB total (~2.2 GB used, ~5.4 GB available)
+- **Disk:** 75 GB (~27 GB used / ~46 GB free)
 - **Swap:** 8 GB (barely used)
 - **Orchestration:** Coolify (coolify.namibarden.com)
 - **Proxy:** Traefik v3.6 (HTTPS/Let's Encrypt)
@@ -49,22 +49,29 @@
 - **Web chat API:** `POST /api/web-chat` — serves MasterCommander chat widget via OpenRouter (`openai/gpt-4.1-nano`), CORS for mastercommander.namibarden.com, rate limited 10/min/IP
 
 ### Lumina — Auth/Account System
-- **Path:** `/var/www/lumina/`
-- **Stack:** Node.js + Express + React (esbuild), PostgreSQL, JWT
+- **Path:** `/var/www/lumina/` (local clone, stale), Coolify-managed at `/data/coolify/applications/okw0cwwgskcow8k8o08gsok0/`
+- **Stack:** Node.js + Express + React (esbuild), PostgreSQL 17, JWT
 - **URL:** lumina.namibarden.com (port 3456)
+- **Coolify app ID:** okw0cwwgskcow8k8o08gsok0
+- **Network:** isolated `okw0cwwgskcow8k8o08gsok0` (Traefik bridges HTTP)
+- **Note:** Local `/var/www/lumina/.env` is stale — Coolify `.env` is source of truth
 
 ### BeastMode — Web App + API
 - **Repo:** bluemele/BeastMode (deployed via Coolify)
 - **URL:** beastmode.namibarden.com (port 3000)
-- **API:** Separate container with Express + PostgreSQL
+- **Coolify app ID:** ug80oocw84scswk084kcw0ok (frontend), eoc8084s8gckk4skgsg08k08 (API service)
+- **API:** Separate container (`api-eoc8084s8gckk4skgsg08k08`) with Express + PostgreSQL 17
+- **DB:** Shared `co88ksk4cks8s8o44o8gc8w8` (beastmode-db) — also hosts MasterCommander auth DB
 
-### ElSalvador — Land Scout
+### ElSalvador — Land Scout (OFFLINE)
+- **Status:** OFFLINE since 2026-02-26. Container stopped, restart disabled, auto-deploy off. Data volume preserved.
+- **To restore:** Coolify dashboard → Start, or `docker start` container + re-enable auto-deploy in Coolify DB
 - **Stack:** Python 3.12, FastAPI, Uvicorn, Playwright (Chromium), SQLAlchemy/SQLite
 - **Repo:** bluemele/ElSalvador
-- **URL:** elsalvador.namibarden.com (port 8000)
+- **URL:** elsalvador.namibarden.com (port 8000) — currently returns Traefik 404
 - **Scrapers:** Encuentra24, Nexo Inmobiliario, Sophia Business, Realty El Salvador + FallbackSample
 - **Coolify app ID:** q0wcsgo0wccsgkows08gocks
-- **Data volume:** `elsalvador-data:/app/data` (SQLite DB)
+- **Data volume:** `elsalvador-data:/app/data` (SQLite DB) — preserved
 
 ### MasterCommander — AI Boat Monitor Landing Page
 - **Path:** `/root/projects/MasterCommander/`
@@ -73,33 +80,14 @@
 - **Stack:** Static HTML/CSS/JS + auth system (JWT, PostgreSQL, Nodemailer), nginx:alpine container
 - **Deploy:** No Coolify webhook — use `docker cp` to hot-copy into `mastercommander` container
 - **Auth:** Signup/login/password-reset + email verification + dashboard (profile, boats, password). Backend endpoints in Overlord `server.js`, JWT auth, PostgreSQL `mc_users`/`boats` tables
-- **Product:** AI boat monitor — pure software business. No hardware shipping.
-- **Business model:** Downloadable OS images + cloud subscription. Customer sources own hardware.
-  - **Raspberry Pi**: Customer buys Pi 5 + Actisense NGX-1 (~$280), downloads Commander OS image, flashes to SD card
-  - **Mac Mini M4**: Customer buys Mac Mini + Actisense (~$800), gets pre-configured disk image with Qwen 14B LLM included
-  - **Delivery Puck**: Pre-configured Pi 5 + Actisense NGX-1, plug-and-play ~$325, for deliveries/marinas/seasonal storage
-  - **Diagnostic Scanner**: Same hardware as Puck, portable, per-scan ($75) or subscription ($149/mo)
-- **Architecture:** Three communication tiers:
-  1. ON BOARD: Commander → Boat WiFi/BLE → Commander App (no internet)
-  2. REMOTE: Commander → Starlink/WiFi → WhatsApp (Commander only, no subscription)
-  3. MASTER: Starlink → Master Cloud → Push Alerts + Web Dashboard (included for charter, optional for private)
-- **Site structure (top to bottom):** Nav → Hero (4 CTAs) → Social Proof Bar → "The How" (flow diagram + setup steps, merged) → Solutions (3 tabs) → Delivery Captain (How It Connects) → Diagnostics → Also Built For ribbon → Hardware (4 cards) → Pricing (4 cards) → Features → Alerts → WhatsApp Demo → Master Cloud → CTA → Footer
-- **Nav links:** The How | Solutions | Delivery Captain | Diagnostics | Hardware | Pricing | Alerts | Demo | Download App (placeholder) | Login (placeholder) | Contact
-- **Hero CTAs auto-link:** Charter Fleets → #solutions+charter tab, Private Yachts → #solutions+private tab, Delivery Captains → #delivery-puck+delivery tab, Marine Surveys → #diagnostics
-- **78+ use cases across 4 segments:**
-  - Charter: During Charter (13), Turnaround (6), Fleet Management (9) = 28
-  - Private: Active Boating (11), Away From Boat (9) = 20
-  - Marine Pros: Diagnostics (5), Service Reports (5), Delivery Captains (4) = 14
-  - Secondary (ribbon): Insurance (4), Marine Professionals (2) = 6
-- **Flow diagram:** CSS flexbox (rebuilt from SVG), 4 tabs: Charter/Private/Delivery/Diagnostic. Click-to-inspect nodes with 10 interactive screen mockups (Fleet Dashboard, WhatsApp, BigBlue, On Board gauges, Remote alerts, Captain WhatsApp, Owner tracking, Delivery Report, Service Portal, Tech's phone).
-- **Key decisions:** SignalK "included" not customer-installed; WhatsApp works without Master; Commander App for on-board; cameras/FLIR/security included; charter fleets = primary revenue target; Delivery Puck = gateway product; NO hardware shipping — downloadable images only; installation by owner
-- **BigBlue:** (renamed from FleetMind) Crowdsourced fleet intelligence — 6 capabilities. Included with all Master Cloud plans.
-- **WhatsApp Demo:** Interactive — NLP matching (60+ patterns), 6 data commands + 11 conversational AI responses, auto-play scenario ("Watch Demo" button), contextual follow-up pills. NOT static mockup.
-- **CTA section:** "Ready to sleep easy?" heading. Buttons: "Chat Online Now" (→ #demo) + "WhatsApp" (→ wa.me link).
-- **Card interactivity:** Hardware cards scroll to pricing on click, pricing cards trigger WhatsApp on click, all cards have hover glow + lift
-- **Clipboard workflow:** Gil runs `cb up` on Windows laptop to SCP screenshot to `/tmp/clipboard.png`, then says `cb` here — read `/tmp/clipboard.png`
-- **Chat widget:** Floating bubble → chat window, calls `/api/web-chat` on same domain (Traefik routes to Overlord:3001, priority 100). All "Contact Us" buttons → `wa.me/13055601031` WhatsApp links.
-- **Traefik route:** `mastercommander.namibarden.com/api/web-chat` → `overlord-api` service in namibarden.yaml
+- **Product:** AI boat monitor — downloadable OS images + cloud subscription. NO hardware shipping.
+- **Hardware tiers:** Raspberry Pi (~$280), Mac Mini M4 (~$800), Delivery Puck (~$325), Diagnostic Scanner ($75/scan or $149/mo)
+- **3 communication tiers:** On Board (WiFi/BLE), Remote (Starlink→WhatsApp), Master (Cloud→Dashboard+Alerts)
+- **Site:** test3.html = latest (v3). TODO: `/api/contact` endpoint, Stripe Checkout, codex review
+- **78+ use cases:** Charter (28), Private (20), Marine Pros (14), Secondary (6)
+- **Interactive demo:** NLP matching (60+ patterns), auto-play scenario, contextual follow-up pills
+- **Chat widget:** `/api/web-chat` → Overlord:3001 via Traefik. "Contact Us" → `wa.me/13055601031`
+- **Clipboard workflow:** Gil runs `cb up` → SCP to `/tmp/clipboard.png`, then says `cb` here
 
 ### NamiBarden — Main Site
 - **Repo:** bluemele/NamiBarden
@@ -116,24 +104,22 @@
 - **Repo:** bluemele/SurfaBabe
 - **URL:** surfababe.namibarden.com (port 3002)
 - **Stack:** Node.js, Baileys (WhatsApp Web), Claude CLI (stripped Overlord fork)
-- **Container:** `surfagent` on coolify network
-- **Admin:** Ailie (+81 70-8418-9804) — SurfaBabe Wellness owner, Gil's daughter
+- **Container:** `surfababe` on coolify network
+- **Admin:** Ailie — SurfaBabe Wellness owner, Gil's daughter
+- **Ailie personal:** +81 70-8418-9804 (Japan)
+- **SurfaBabe business:** +84 39 264 8332 (Vietnam) — TODO: re-pair bot to this number when phone is available
 - **Email:** uptoyou.wellness@gmail.com
 - **Website:** surfababe.com
 - **Models:** Opus 4.6 for Ailie (admin), Sonnet 4.6 for customers
 - **Mode:** `silent` (listen/log only) until told to go live. Ailie can `/mode all` to activate.
 - **Products:** 7 items (skincare + cleaning), VND pricing, bilingual EN/VI
 - **Features:** Product catalog, order state machine, voice transcription, FAQ/policies knowledge base
-- **Database:** PostgreSQL 16 (surfagent-db container), `pg` driver, 7 tables: customers, products, orders, order_items, payments, invoices, crm_interactions. Schema in `schema.sql`, pool in `db.js`. Products seeded from `products.json` on first run. Customer upsert + language detection on every DM. Orders persist to DB + JSON fallback. Transactional order writes.
+- **Database:** PostgreSQL 17 (surfababe-db container), `pg` driver, 7 tables: customers, products, orders, order_items, payments, invoices, crm_interactions. Schema in `schema.sql`, pool in `db.js`. Products seeded from `products.json` on first run. Customer upsert + language detection on every DM. Orders persist to DB + JSON fallback. Transactional order writes.
 - **CRM admin commands:** /stats, /customers, /customer <phone>, /orders, /order <SB-xxx>, /paid <SB-xxx> [ref], /note <phone> <text>, /tag <phone> <tag>, /untag <phone> <tag>
 - **CRM logging:** Every customer inquiry logged to crm_interactions (fire-and-forget). Language auto-detected (en/vi). Payment confirmations, order completions, and notes all tracked.
 - **Knowledge base:** Fully scraped from surfababe.com (Wix site) via Playwright on 2026-02-25. products.json has bilingual descriptions, correct ingredients/sizes. faq.md has 40 Q&As across 4 categories. policies.md includes Vietnam delivery guide.
 - **Auto-deploy:** GitHub webhook → `surfababe.namibarden.com/webhook/deploy` → deploy-listener.js (port 9002, systemd `surfagent-deploy.service`) → git pull + docker compose rebuild
 - **Webhook secret:** stored in `scripts/deploy-listener.js` + GitHub repo settings
-
-### OpenClaw — Multi-Channel AI Gateway (STOPPED)
-- **Path:** `/opt/openclaw/`
-- **Status:** Container stopped on 2026-02-21 to save ~550 MB RAM. Replaced by Overlord.
 
 ## Network & Security
 - **Firewall:** UFW active
@@ -142,7 +128,7 @@
 - **Traefik config:** `/data/coolify/proxy/dynamic/namibarden.yaml` (source of truth)
 - **Traefik access log:** `/data/coolify/proxy/access.log` (4xx only, logrotated 14d)
 - **Tailscale-restricted:** coolify.namibarden.com (except `/api/v1/sentinel` which has token auth), openclaw.namibarden.com
-- **Public:** namibarden.com, beastmode.namibarden.com, lumina.namibarden.com, elsalvador.namibarden.com, surfababe.namibarden.com, mastercommander.namibarden.com
+- **Public:** namibarden.com, beastmode.namibarden.com, lumina.namibarden.com, surfababe.namibarden.com, mastercommander.namibarden.com (elsalvador offline)
 - **All app containers** bound to `127.0.0.1` only — nothing exposed directly to public; all traffic via Traefik
 - **Fail2ban jails (4 active):**
   - `sshd` — 3 retries / 10min → 3h ban; monitors `/var/log/auth.log`, `backend = auto` (NOT systemd — Ubuntu uses `ssh.service` not `sshd.service`, journal match was broken)
@@ -152,6 +138,13 @@
   - Safe IPs: localhost, Docker internal, Tailscale `100.64.0.0/10` (never banned)
   - Config: `/etc/fail2ban/jail.local`, filters: `/etc/fail2ban/filter.d/traefik-*.conf`
 - **Security audit (2026-02-25):** Fixed `backend = systemd` in sshd jail (was broken — no file monitored). Fixed `.env` perms `644 → 600`. Packages updated: libdjvulibre (security), docker-compose-plugin 5.1.0, linux-libc-dev 6.8.0-101, cloud-init 25.3.
+- **Security audit (2026-02-26):** Full project sweep — all issues fixed:
+  - **ElSalvador** — added `X-API-Key` auth to all write endpoints (PATCH/DELETE/POST scrape/purge). Key in `API_KEY` env var via Coolify. UI gets key injected via Jinja2 `window.ES_API_KEY`. GET /listings remains public.
+  - **BeastMode** — CORS default changed from `*` to `https://beastmode.namibarden.com`; added `.gitignore`
+  - **Lumina** — JWT_SECRET replaced with 48-byte random secret via Coolify API + `.env` file update; container redeployed
+  - **SurfaBabe `.env`** — `644 → 600`
+  - **Coolify API access** — tokens in `personal_access_tokens` table are SHA-256 hashed. To create usable token: INSERT with `sha256sum` hash, use as `{id}|{raw_token}`. Env vars updated via `PATCH /api/v1/applications/{uuid}/envs`. Coolify app `.env` files live at `/data/coolify/applications/{uuid}/.env` (plaintext, source of truth for docker compose).
+  - **`gh` CLI push** — `gh auth` token lacks push scope; use `GH_TOKEN` from `/root/overlord/.env` instead: `git remote set-url origin "https://bluemele:${GH_TOKEN}@github.com/bluemele/REPO.git"`
 
 ## Skills & Integrations
 - **`/veo`** — Google Veo video generation at `/root/.claude/skills/veo/`
@@ -175,6 +168,7 @@
 - **ANTHROPIC_API_KEY** — DELETED (was depleted, Claude CLI uses OAuth instead)
 
 ## Preferences
+- **Always use Opus** — All Claude CLI spawns in Overlord must use `claude-opus-4-6`. Set via `CLAUDE_MODEL=claude-opus-4-6` in `/root/overlord/.env`. Never default to Sonnet for any user. Both the main response spawn and the triage spawn use `CONFIG.claudeModel || 'claude-opus-4-6'`.
 - **Break up heavy tasks** — Large operations (full site scrapes, multi-DB creation, bulk file ops) should be done in smaller steps to avoid hitting Overlord's 2GB container memory limit. Claude CLI + heavy I/O in a single turn caused SIGTERM (code 143) crash on 2026-02-25. Do one major operation per turn, not all at once.
 - Save to memory every ~10 tool calls or after significant work
 - **New projects:** Always init git, create GitHub repo under `bluemele/`, push, and set up Coolify webhook
@@ -192,29 +186,29 @@
   - Gil only sees the outcome report, never the original error dump
 
 ## Architecture Notes
-- All apps containerized, deployed from GitHub via Coolify
-- **GitHub webhooks** auto-deploy on push: BeastMode, Lumina, ElSalvador (via Coolify), SurfaBabe (via custom deploy-listener.js + systemd)
-- **NamiBarden has NO auto-deploy webhook** — `/deploy namibarden` uses `docker cp` to hot-copy static files after git push. Full rebuild still requires manual `docker compose up -d --force-recreate` in `/data/coolify/applications/ock0wowgsgwwww8w00400k00/`
-- **Local clones** at `/root/projects/` — 7 projects only: BeastMode, ElSalvador, Lumina, MasterCommander, NamiBarden, Overlord, SurfaBabe
-- Stale dirs cleaned: `beastmode-twa/`, `data/`, `namibarden-traefik-sync/`, `traefik-namibarden-watcher/` DELETED (2026-02-24)
-- Overlord mounts `/root/projects/` into container at `/projects/`
-- Overlord mounts `/root/.claude/` credentials + `/root/.codex/` auth into container
-- **Disaster recovery:** `server-config/` in Overlord repo has fail2ban, Traefik, crontab, logrotate, Claude CLI memory/skills/settings — auto-synced nightly by backup.sh
-- `/home/gil/overlord/` DELETED (was stale backup)
-- `/opt/openclaw/` DELETED (was stopped, replaced by Overlord)
-- HTTP API on port 3001 (localhost only, bearer token auth)
-- SurfaBabe deploy webhook: systemd `surfagent-deploy.service`, port 9002, UFW restricted to 10.0.0.0/8
-- Cloudflare has wildcard `*.namibarden.com` — new subdomains just need Traefik routes, no DNS changes
-- If Coolify regenerates `coolify.yaml`, re-check that it doesn't re-add unprotected routes
+- All apps containerized, deployed from GitHub via Coolify. See [infrastructure.md](infrastructure.md) for full container/DB/volume/network map.
+- **Auto-deploy webhooks:** BeastMode, Lumina (Coolify), SurfaBabe (custom deploy-listener.js + systemd). ElSalvador auto-deploy disabled.
+- **NamiBarden has NO auto-deploy** — `/deploy namibarden` uses `docker cp` after git push
+- **Local clones** at `/root/projects/` — 7 projects: BeastMode, ElSalvador, Lumina, MasterCommander, NamiBarden, Overlord, SurfaBabe
+- Overlord mounts `/root/projects/` → `/projects/`, `/root/.claude/` credentials, `/root/.codex/` auth
+- **Disaster recovery:** `server-config/` in Overlord repo, auto-synced nightly by backup.sh
+- Cloudflare wildcard `*.namibarden.com` — new subdomains just need Traefik routes
+- SurfaBabe deploy webhook: systemd `surfagent-deploy.service`, port 9002
 
-## Work Logs
-See [work-log.md](work-log.md) for detailed session logs.
-
-**Key dates:**
-- 2026-02-22: Full workspace build (phases 1-7), bot upgrades, cleanup
-- 2026-02-23: SurfaBabe v1.0, LID fix, agent isolation, family profiles, X Trends skill
-- 2026-02-24: AI Chan incident fix, NamiBarden deploy fix (docker cp), fail2ban Traefik jails, morning briefing overhaul, disaster recovery setup, MasterCommander charter fleet update (61 use cases, hardware tiers, pricing, tabbed solutions)
+## Portable Agents Framework
+- **Path:** `/root/agents/` (repo: bluemele/agents, private)
+- **Purpose:** LLM-agnostic agent definitions — source of truth for all agent identities, memories, configs
+- **Agents:**
+  - **AI Chan** — Nami's creative partner (NamiBarden, Lumina, nami-channel). Full project access.
+  - **Britt** — Ailie's SurfaBabe business partner. Full SurfaBabe access. Future: autonomous customer service.
+  - **Dex** — Seneca's YouTube influencer coach. Can create/build new projects.
+- **Structure:** Each agent has `identity.md` (portable personality), `config.json` (metadata), `memory/` (persistent knowledge)
+- **Build:** `./build.sh claude` generates Claude Code agents from portable source; future: `./build.sh openai` etc.
+- **Generated files:** `/root/.claude/agents/{ai-chan,britt,dex}.md` + `/root/.claude/agent-memory/{ai-chan,britt,dex}/`
+- **Portability:** Identity/memory is plain markdown — works with any LLM. Only the runner (build.sh output) is provider-specific.
+- **Old Dex agent** (`dex-influencer-guide.md`) replaced by portable-built `dex.md`
 
 ## See Also
+- [infrastructure.md](infrastructure.md) - Container, database, volume, network map
 - [work-log.md](work-log.md) - Detailed work logs
 - [projects.md](projects.md) - Detailed project inventory
