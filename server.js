@@ -362,6 +362,16 @@ export function startServer(sockRef, sendResponse) {
           created_at TIMESTAMP DEFAULT NOW()
         )
       `);
+      await mcPool.query(`
+        CREATE TABLE IF NOT EXISTS newsletter_subscribers (
+          id SERIAL PRIMARY KEY,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          source VARCHAR(100) DEFAULT 'newsletter-form',
+          ip VARCHAR(45),
+          subscribed_at TIMESTAMP DEFAULT NOW(),
+          unsubscribed_at TIMESTAMP
+        )
+      `);
       console.log('[mc-auth] DB init + migrations complete');
     } catch (err) {
       console.error('[mc-auth] DB init error:', err.message);
@@ -974,7 +984,7 @@ BEHAVIOR:
 
   app.post('/api/contact', contactRateLimit, async (req, res) => {
     try {
-      const { name, email, subject, message, plan } = req.body;
+      const { name, email, subject, message, plan, subscribe } = req.body;
 
       // Validate required fields
       if (!name?.trim()) return res.status(400).json({ error: 'Name is required.' });
@@ -996,6 +1006,27 @@ BEHAVIOR:
         );
       } catch (dbErr) {
         console.error('[contact] DB save error:', dbErr.message);
+      }
+
+      // If subscribe checkbox was checked, add to newsletter
+      if (subscribe) {
+        try {
+          await mcPool.query(
+            `INSERT INTO newsletter_subscribers (email, source, ip)
+             VALUES ($1, 'contact-form', $2)
+             ON CONFLICT (email) DO UPDATE SET
+               unsubscribed_at = NULL,
+               ip = EXCLUDED.ip,
+               subscribed_at = CASE
+                 WHEN newsletter_subscribers.unsubscribed_at IS NOT NULL THEN NOW()
+                 ELSE newsletter_subscribers.subscribed_at
+               END`,
+            [email.trim().toLowerCase(), ip]
+          );
+          console.log(`[contact] Newsletter subscribe via contact form: ${email.trim()}`);
+        } catch (subErr) {
+          console.error('[contact] Newsletter subscribe error:', subErr.message);
+        }
       }
 
       // Send email
@@ -1032,6 +1063,92 @@ BEHAVIOR:
       res.json({ success: true, message: 'Message sent successfully!' });
     } catch (err) {
       console.error('[contact] Error:', err.message);
+      res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    }
+  });
+
+  // ---- Newsletter Subscribe ----
+
+  app.use('/api/subscribe', (req, res, next) => {
+    const origin = req.headers.origin || '';
+    if (CONTACT_ORIGINS.has(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    next();
+  });
+
+  // Rate limiter: 3 subscribe attempts per IP per hour
+  const subscribeRateMap = new Map();
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, hits] of subscribeRateMap) {
+      const valid = hits.filter(t => now - t < 3_600_000);
+      if (valid.length === 0) subscribeRateMap.delete(ip);
+      else subscribeRateMap.set(ip, valid);
+    }
+  }, 300_000);
+
+  function subscribeRateLimit(req, res, next) {
+    const ip = req.ip;
+    const now = Date.now();
+    let hits = subscribeRateMap.get(ip) || [];
+    hits = hits.filter(t => now - t < 3_600_000);
+    if (hits.length >= 3) {
+      return res.status(429).json({ error: 'Too many attempts. Please try again later.' });
+    }
+    hits.push(now);
+    subscribeRateMap.set(ip, hits);
+    next();
+  }
+
+  app.post('/api/subscribe', subscribeRateLimit, async (req, res) => {
+    try {
+      const { email } = req.body;
+
+      if (!email?.trim()) return res.status(400).json({ error: 'Email is required.' });
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        return res.status(400).json({ error: 'Invalid email address.' });
+      }
+
+      const ip = req.ip;
+      const trimmed = email.trim().toLowerCase();
+
+      // Upsert — reactivate if previously unsubscribed, ignore if already active
+      try {
+        await mcPool.query(
+          `INSERT INTO newsletter_subscribers (email, source, ip)
+           VALUES ($1, 'newsletter-form', $2)
+           ON CONFLICT (email) DO UPDATE SET
+             unsubscribed_at = NULL,
+             ip = EXCLUDED.ip,
+             subscribed_at = CASE
+               WHEN newsletter_subscribers.unsubscribed_at IS NOT NULL THEN NOW()
+               ELSE newsletter_subscribers.subscribed_at
+             END`,
+          [trimmed, ip]
+        );
+      } catch (dbErr) {
+        console.error('[subscribe] DB save error:', dbErr.message);
+        return res.status(500).json({ error: 'Something went wrong. Please try again.' });
+      }
+
+      // WhatsApp notification to Nami
+      try {
+        await sockRef.sock.sendMessage('84393251371@s.whatsapp.net', {
+          text: `📬 New newsletter subscriber: ${trimmed}`,
+        });
+      } catch (waErr) {
+        console.error('[subscribe] WhatsApp notify error:', waErr.message);
+      }
+
+      console.log(`[subscribe] New subscriber: ${trimmed}`);
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[subscribe] Error:', err.message);
       res.status(500).json({ error: 'Something went wrong. Please try again.' });
     }
   });
