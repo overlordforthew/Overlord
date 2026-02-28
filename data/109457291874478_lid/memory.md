@@ -49,5 +49,8 @@ Created: 2026-02-21T16:21:47.501Z
 - BeastMode (private) — BeastModeApp
 - ElSalvador (private)
 
+## Infrastructure Rules
+- RULE: Every project MUST have its own dedicated database in its own docker-compose. No database sharing between projects. Ever.
+
 ## Notes
 _Nothing yet._

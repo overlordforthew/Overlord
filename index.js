@@ -152,14 +152,14 @@ const USER_PROFILES = {
 TECHNICAL SKILLS: Expert-level HTML, CSS, JavaScript, nginx, nginx config, URL routing, web performance, responsive design, SEO, bilingual/i18n web, Node.js, Express, React, esbuild, PostgreSQL, JWT auth. You read and write code with full confidence — no hesitation.
 
 YOUR PROJECTS:
-- NamiBarden (/projects/NamiBarden): Static bilingual (JA/EN) website at namibarden.com. Nginx:alpine container. Auto-deploy = FULL SYNC: every save commits to git AND copies public/ files + nginx.conf + nginx-main.conf into the container + reloads nginx. ALL file types go live instantly — including nginx config changes.
+- NamiBarden (/projects/NamiBarden): Bilingual (JA/EN) website at namibarden.com with Node.js backend + PostgreSQL + nginx. Container: namibarden. Auto-deploy = FULL SYNC: every save commits to git AND copies public/ + admin/ + nginx configs into the container + reloads nginx. Static file changes go live instantly. Server.js changes require a container rebuild.
 - Lumina (/projects/Lumina): Node.js + Express + React (esbuild) auth system at lumina.namibarden.com (port 3456). PostgreSQL + JWT. Auto-deploys via Coolify webhook on git push (takes ~1-2 min to rebuild).
 
 NAMIBARDEN CONTAINER INSPECTION: You can inspect the live container to verify what's actually running vs what's in the repo. Steps:
-1. Find container: docker ps --filter "label=coolify.name=ock0wowgsgwwww8w00400k00" --format "{{.Names}}" | head -1
-2. Check deployed files: docker exec <container> ls /usr/share/nginx/html/
-3. Check running nginx config: docker exec <container> cat /etc/nginx/http.d/default.conf
-4. Test nginx config: docker exec <container> nginx -t
+1. Container name: namibarden
+2. Check deployed files: docker exec namibarden ls /usr/share/nginx/html/
+3. Check running nginx config: docker exec namibarden cat /etc/nginx/http.d/default.conf
+4. Test nginx config: docker exec namibarden nginx -t
 Use these to diagnose mismatches between repo and live container. Do NOT use docker exec for anything else.
 
 CACHING — KNOW THIS COLD: After deploying, the server has the new file immediately. But devices that previously loaded the asset may show the old version for up to 24h (browser cache). This is ALWAYS normal — it is NOT a deploy failure. Signs of a real deploy failure: the file doesn't exist on the server, git says nothing changed, container is down. Signs of browser cache: server is fine, but your phone still shows old content. Fix: add a version query string (e.g. image.jpg?v=20260225) to force all clients to re-fetch. HTML itself is served no-cache so page structure updates are always instant.
@@ -550,23 +550,19 @@ async function triggerDeploy(projectName) {
     );
     let output = (stdout + '\n' + stderr).trim();
 
-    // NamiBarden has no Coolify webhook — hot-copy static files into the running container
+    // NamiBarden — hot-copy static files + nginx configs into running container
     if (key === 'namibarden') {
       try {
-        // Resolve container name dynamically in case Coolify recreates it
-        const { stdout: cid } = await execAsync(
-          `docker ps --filter "label=coolify.name=ock0wowgsgwwww8w00400k00" --format "{{.Names}}" | head -1`,
-          { timeout: 10000 }
-        );
-        const container = cid.trim();
-        if (!container) throw new Error('NamiBarden container not found');
+        const container = 'namibarden';
         await execAsync(
           `docker cp ${projectPath}/public/. ${container}:/usr/share/nginx/html/`,
           { timeout: 30000 }
         );
+        await execAsync(`docker cp ${projectPath}/admin/. ${container}:/usr/share/nginx/html/admin/`, { timeout: 10000 });
         // Sync nginx configs and reload
         await execAsync(`docker cp ${projectPath}/nginx.conf ${container}:/etc/nginx/http.d/default.conf`, { timeout: 10000 });
         await execAsync(`docker cp ${projectPath}/nginx-main.conf ${container}:/etc/nginx/nginx.conf`, { timeout: 10000 });
+        await execAsync(`docker cp ${projectPath}/security-headers.conf ${container}:/etc/nginx/security-headers.conf`, { timeout: 10000 });
         await execAsync(`docker exec ${container} nginx -t && docker exec ${container} nginx -s reload`, { timeout: 15000 });
         output += `\n[NamiBarden] Files + nginx config deployed to ${container} — live now`;
       } catch (cpErr) {

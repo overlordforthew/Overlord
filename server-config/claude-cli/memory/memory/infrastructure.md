@@ -6,30 +6,39 @@ Last audited: 2026-02-26
 
 | Project | App Container | DB Container | PG Version | Network | Port |
 |---------|--------------|--------------|------------|---------|------|
-| **Overlord** | `overlord` | Uses BeastMode PG (`mastercommander` DB) | 17 | coolify | 127.0.0.1:3001 |
+| **Overlord** | `overlord` | Uses MasterCommander DB (`mastercommander-db`) | 16 | coolify | 127.0.0.1:3001 |
 | **SurfaBabe** | `surfagent` | `surfagent-db` | 17 | coolify | 127.0.0.1:3002 |
 | **BeastMode** | `ug80oocw84scswk084kcw0ok-*` (frontend) + `api-eoc8084s8gckk4skgsg08k08` (API) | `co88ksk4cks8s8o44o8gc8w8` (`beastmode-db`) | 17 | coolify | 3000 internal |
 | **Lumina** | `app-okw0cwwgskcow8k8o08gsok0-*` | `db-okw0cwwgskcow8k8o08gsok0-*` | 17 | okw0cwwgskcow8k8o08gsok0 | 3456 internal |
 | **ElSalvador** | `q0wcsgo0wccsgkows08gocks-*` | SQLite (no container) | N/A | coolify | 8000 internal |
-| **MasterCommander** | `mastercommander` (nginx) | Uses BeastMode PG (`mastercommander` DB) | N/A | coolify | 127.0.0.1:3010 |
+| **MasterCommander** | `mastercommander` (nginx) | `mastercommander-db` (PG 16) | 16 | coolify | 127.0.0.1:3010 |
 | **NamiBarden** | `ock0wowgsgwwww8w00400k00-*` | None (static) | N/A | coolify | 80 internal |
 | **Elmo** | `zkk0k8gcgcss4osggs4k0kw4-*` | None (static) | N/A | coolify | 80 internal |
 | **Coolify** | `coolify` + `coolify-realtime` + `coolify-sentinel` | `coolify-db` (PG 15) + `coolify-redis` (Redis 7) | 15 | coolify | 127.0.0.1:8000 |
 
-## Shared Database: `co88ksk4cks8s8o44o8gc8w8` (beastmode-db)
-- **PG 17**, standalone Coolify database on `coolify` network
-- Hosts TWO databases: `postgres` (BeastMode tables) + `mastercommander` (MC auth: mc_users, boats)
+## Database Isolation Rule
+**RULE: Every project MUST have its own dedicated database. No sharing between projects. Ever.**
+
+## MasterCommander Database: `mastercommander-db`
+- PG 16-alpine, dedicated container on `coolify` network
+- Database: `mastercommander`, User: `mastercommander`
+- Volume: `mc_pgdata`
+- Tables: users, boats, contact_submissions, newsletter_subscribers
+- Overlord connects to this for MC auth endpoints
+
+## BeastMode Database: `co88ksk4cks8s8o44o8gc8w8` (STOPPED)
+- PG 17, standalone Coolify database — STOPPED as of 2026-02-28
+- Was previously shared (incorrectly) with MasterCommander — now separated
 - Volume: `postgres-data-co88ksk4cks8s8o44o8gc8w8`
 - Compose: `/data/coolify/databases/co88ksk4cks8s8o44o8gc8w8/docker-compose.yml`
-- Both BeastMode frontend + API connect to `postgres` DB
-- Overlord connects to `mastercommander` DB for MC auth endpoints
 
-## Volumes (6 active, all clean)
+## Volumes (7 active, all clean)
 - `coolify-db` — Coolify internal
 - `coolify-redis` — Coolify internal
 - `elsalvador-data` — ElSalvador SQLite
+- `mc_pgdata` — MasterCommander PG data
 - `okw0cwwgskcow8k8o08gsok0_lumina-pgdata` — Lumina PG data
-- `postgres-data-co88ksk4cks8s8o44o8gc8w8` — BeastMode/MC PG data
+- `postgres-data-co88ksk4cks8s8o44o8gc8w8` — BeastMode PG data (stopped)
 - `surfababe_surfagent-pgdata` — SurfaBabe PG data
 
 ## Networks
