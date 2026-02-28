@@ -13,6 +13,7 @@ Last audited: 2026-02-26
 | **ElSalvador** | `q0wcsgo0wccsgkows08gocks-*` | SQLite (no container) | N/A | coolify | 8000 internal |
 | **MasterCommander** | `mastercommander` (nginx) | Uses BeastMode PG (`mastercommander` DB) | N/A | coolify | 127.0.0.1:3010 |
 | **NamiBarden** | `ock0wowgsgwwww8w00400k00-*` | None (static) | N/A | coolify | 80 internal |
+| **Elmo** | `zkk0k8gcgcss4osggs4k0kw4-*` | None (static) | N/A | coolify | 80 internal |
 | **Coolify** | `coolify` + `coolify-realtime` + `coolify-sentinel` | `coolify-db` (PG 15) + `coolify-redis` (Redis 7) | 15 | coolify | 127.0.0.1:8000 |
 
 ## Shared Database: `co88ksk4cks8s8o44o8gc8w8` (beastmode-db)
