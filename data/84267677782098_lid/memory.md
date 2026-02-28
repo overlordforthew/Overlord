@@ -34,6 +34,10 @@ Created: 2026-02-23T01:26:07.396Z
 - LINE Official Account is the primary lead capture tool (not email) — Japanese audience lives on LINE
 - Email is secondary / global fallback
 - Income model direction: Lumina (passive) → LINE list → live events → premium 1:1
+- Has 400+ email addresses from previous site (unsure of engagement level)
+- Email system decision (Feb 28): Build in-house with Gil's help — NOT using external services
+- Gil will handle email infrastructure (SMTP, deliverability, SPF/DKIM/DMARC)
+- Ai Chan builds: dashboard, list management, newsletter composer, analytics
 
 ## Live Events & Business Model
 - Live seminars are her zone of genius — NOT online group coaching

@@ -170,7 +170,7 @@ DEBUGGING APPROACH:
 3. To verify what's actually live vs what's in the repo: use docker exec inspection commands above.
 4. After deploying, use WebFetch to verify the live site reflects your changes.
 5. If the live site confirms the change is there but a device still shows old content — it's browser cache, not a broken deploy.
-6. FLAG GIL for: 502/503 errors, container down, SSL errors, DNS failures, Coolify issues, or anything outside your project files. Say "This looks like a server issue — flagging Gil 🚩" and stop.`,
+6. For things outside your scope (backend config changes, server issues, DNS, SSL, env vars, new features requiring server changes): message Overlord directly by telling ${profile.name} to forward your request to Overlord, OR simply describe what you need changed and Overlord will see it in the chat and handle it. Example: "Overlord, can you change the notification email to X?" — Overlord monitors all chats and will pick it up. Do NOT tell ${profile.name} to "ask Gil" — go through Overlord instead.`,
     lid: ['13135550002', '84267677782098'],
   },
   '18587794462': {
@@ -1603,8 +1603,8 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       `- Use Bash for rm -rf, chmod, chown, kill, or any destructive system operations`,
       `If asked to do something outside your allowed projects, politely decline and explain your scope is limited to: ${projectList}.`,
       profile.dockerInspect
-        ? `INFRASTRUCTURE RULE: Flag Gil immediately for 502/503 errors, container crashes, SSL errors, DNS failures, or Coolify issues — say "This looks like a server issue — flagging Gil 🚩" and stop. EXCEPTION: You CAN diagnose and fix nginx routing/config issues (wrong page served, URL not found) by editing nginx.conf — auto-deploy reloads nginx automatically. Use docker exec inspection to verify what's actually running if needed.`
-        : `INFRASTRUCTURE HARD RULE: If you encounter server errors (502, 503, SSL errors, container down, wrong domain, DNS failures), say EXACTLY: "This looks like a server issue — flagging Gil 🚩" and STOP. Do not investigate, do not run commands, do not guess. This rule is absolute — no exceptions.`,
+        ? `INFRASTRUCTURE RULE: For 502/503 errors, container crashes, SSL errors, DNS failures, Coolify issues, or anything outside your project files — request help from Overlord. Say: "Overlord, [describe the issue and what you need]". Overlord monitors this chat and will handle server-side fixes. Do NOT tell ${profile.name} to ask Gil — Overlord is your escalation path. EXCEPTION: You CAN diagnose and fix nginx routing/config issues (wrong page served, URL not found) by editing nginx.conf — auto-deploy reloads nginx automatically. Use docker exec inspection to verify what's actually running if needed.`
+        : `INFRASTRUCTURE HARD RULE: If you encounter server errors (502, 503, SSL errors, container down, wrong domain, DNS failures), request help from Overlord by saying: "Overlord, [describe the issue]". Overlord monitors this chat and will fix it. Do NOT tell ${profile.name} to ask Gil. Do not investigate server issues yourself, do not run commands, do not guess.`,
       `DEPLOYMENT: When you edit project files, changes are AUTOMATICALLY committed to git and deployed live after you finish. You do NOT need to run git commands, docker commands, or /deploy. Just edit the files and the system handles the rest. Tell ${profile.name} their changes will go live automatically. Use WebFetch to verify the live site after deploying if needed.`,
       profile.projects.length === 0 ? `You currently have no projects. ${profile.name} can request a new project with /newproject <name> — Gil will approve it.` : '',
       'Keep responses WhatsApp-length. Use @ to read media files when referenced.',
