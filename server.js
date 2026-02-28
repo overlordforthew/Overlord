@@ -962,6 +962,21 @@ export function startServer(sockRef, sendResponse) {
         [user.id]
       );
 
+      // Auto-create MC account (email already verified via gate code)
+      const existing = await mcPool.query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
+      if (existing.rows.length === 0) {
+        const randomPass = crypto.randomBytes(32).toString('hex');
+        const hash = await bcrypt.hash(randomPass, 10);
+        await mcPool.query(
+          'INSERT INTO users (email, name, password_hash, email_verified) VALUES ($1, $2, $3, TRUE)',
+          [email.toLowerCase(), user.name, hash]
+        );
+        console.log(`[gate] Auto-created MC account for ${email}`);
+      } else {
+        // Ensure email_verified is true if they passed gate
+        await mcPool.query('UPDATE users SET email_verified = TRUE WHERE email = $1 AND email_verified = FALSE', [email.toLowerCase()]);
+      }
+
       // Check if NDA already accepted for this site
       const ndaResult = await mcPool.query('SELECT id FROM gate_nda WHERE gate_user_id = $1 AND site = $2', [user.id, site]);
       const ndaAccepted = ndaResult.rows.length > 0;
