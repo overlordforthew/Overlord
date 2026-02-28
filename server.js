@@ -798,18 +798,20 @@ export function startServer(sockRef, sendResponse) {
   // POST /api/boats
   app.post('/api/boats', requireMcAuth, authRateLimit(10, 60_000), async (req, res) => {
     try {
-      const { name, model, year, mmsi, home_port, boat_type, length_ft, beam_ft, draft_ft, fuel_capacity, water_capacity, engine_count, engine_type, registration, flag, photo_url, notes } = req.body;
+      const { name, model, year, mmsi, home_port, status, boat_type, length_ft, beam_ft, draft_ft, fuel_capacity, water_capacity, engine_count, engine_type, registration, flag, photo_url, notes } = req.body;
       if (!name || !name.trim()) return res.status(400).json({ error: 'Boat name is required.' });
+      const validStatuses = ['inactive', 'online', 'offline', 'alert'];
+      const boatStatus = validStatuses.includes(status) ? status : 'inactive';
       // Max 20 boats per user
       const countResult = await mcPool.query('SELECT COUNT(*) FROM boats WHERE user_id = $1', [req.mcUser.id]);
       if (parseInt(countResult.rows[0].count) >= 20) {
         return res.status(400).json({ error: 'Maximum 20 boats per account.' });
       }
       const result = await mcPool.query(
-        `INSERT INTO boats (user_id, name, model, year, mmsi, home_port, boat_type, length_ft, beam_ft, draft_ft, fuel_capacity, water_capacity, engine_count, engine_type, registration, flag, photo_url, notes)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *`,
+        `INSERT INTO boats (user_id, name, model, year, mmsi, home_port, status, boat_type, length_ft, beam_ft, draft_ft, fuel_capacity, water_capacity, engine_count, engine_type, registration, flag, photo_url, notes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
         [req.mcUser.id, name.trim(), (model || '').trim() || null, year ? parseInt(year) : null, (mmsi || '').trim() || null, (home_port || '').trim() || null,
-         (boat_type || '').trim() || null, length_ft ? parseFloat(length_ft) : null, beam_ft ? parseFloat(beam_ft) : null, draft_ft ? parseFloat(draft_ft) : null,
+         boatStatus, (boat_type || '').trim() || null, length_ft ? parseFloat(length_ft) : null, beam_ft ? parseFloat(beam_ft) : null, draft_ft ? parseFloat(draft_ft) : null,
          fuel_capacity ? parseInt(fuel_capacity) : null, water_capacity ? parseInt(water_capacity) : null, engine_count ? parseInt(engine_count) : 1,
          (engine_type || '').trim() || null, (registration || '').trim() || null, (flag || '').trim() || null, (photo_url || '').trim() || null, (notes || '').trim() || null]
       );
@@ -823,14 +825,16 @@ export function startServer(sockRef, sendResponse) {
   // PUT /api/boats/:id
   app.put('/api/boats/:id', requireMcAuth, authRateLimit(10, 60_000), async (req, res) => {
     try {
-      const { name, model, year, mmsi, home_port, boat_type, length_ft, beam_ft, draft_ft, fuel_capacity, water_capacity, engine_count, engine_type, registration, flag, photo_url, notes } = req.body;
+      const { name, model, year, mmsi, home_port, status, boat_type, length_ft, beam_ft, draft_ft, fuel_capacity, water_capacity, engine_count, engine_type, registration, flag, photo_url, notes } = req.body;
       if (!name || !name.trim()) return res.status(400).json({ error: 'Boat name is required.' });
+      const validStatuses = ['inactive', 'online', 'offline', 'alert'];
+      const boatStatus = validStatuses.includes(status) ? status : 'inactive';
       const result = await mcPool.query(
-        `UPDATE boats SET name=$1, model=$2, year=$3, mmsi=$4, home_port=$5, boat_type=$6, length_ft=$7, beam_ft=$8, draft_ft=$9,
-         fuel_capacity=$10, water_capacity=$11, engine_count=$12, engine_type=$13, registration=$14, flag=$15, photo_url=$16, notes=$17, updated_at=NOW()
-         WHERE id=$18 AND user_id=$19 RETURNING *`,
+        `UPDATE boats SET name=$1, model=$2, year=$3, mmsi=$4, home_port=$5, status=$6, boat_type=$7, length_ft=$8, beam_ft=$9, draft_ft=$10,
+         fuel_capacity=$11, water_capacity=$12, engine_count=$13, engine_type=$14, registration=$15, flag=$16, photo_url=$17, notes=$18, updated_at=NOW()
+         WHERE id=$19 AND user_id=$20 RETURNING *`,
         [name.trim(), (model || '').trim() || null, year ? parseInt(year) : null, (mmsi || '').trim() || null, (home_port || '').trim() || null,
-         (boat_type || '').trim() || null, length_ft ? parseFloat(length_ft) : null, beam_ft ? parseFloat(beam_ft) : null, draft_ft ? parseFloat(draft_ft) : null,
+         boatStatus, (boat_type || '').trim() || null, length_ft ? parseFloat(length_ft) : null, beam_ft ? parseFloat(beam_ft) : null, draft_ft ? parseFloat(draft_ft) : null,
          fuel_capacity ? parseInt(fuel_capacity) : null, water_capacity ? parseInt(water_capacity) : null, engine_count ? parseInt(engine_count) : 1,
          (engine_type || '').trim() || null, (registration || '').trim() || null, (flag || '').trim() || null, (photo_url || '').trim() || null, (notes || '').trim() || null,
          req.params.id, req.mcUser.id]
@@ -873,8 +877,8 @@ export function startServer(sockRef, sendResponse) {
       // Verify boat ownership
       const boat = await mcPool.query('SELECT id FROM boats WHERE id = $1 AND user_id = $2', [req.params.id, req.mcUser.id]);
       if (boat.rows.length === 0) return res.status(404).json({ error: 'Boat not found.' });
-      const limit = Math.min(parseInt(req.query.limit) || 50, 100);
-      const offset = parseInt(req.query.offset) || 0;
+      const limit = Math.max(1, Math.min(parseInt(req.query.limit) || 50, 100));
+      const offset = Math.max(0, parseInt(req.query.offset) || 0);
       const logType = req.query.type;
       let query = 'SELECT bl.*, u.name as user_name FROM boat_logs bl JOIN users u ON u.id = bl.user_id WHERE bl.boat_id = $1';
       const params = [req.params.id];
@@ -897,10 +901,12 @@ export function startServer(sockRef, sendResponse) {
       const { log_type, title, body, metadata } = req.body;
       const validTypes = ['note', 'maintenance', 'telemetry', 'alert'];
       const type = validTypes.includes(log_type) ? log_type : 'note';
-      if (!title && !body) return res.status(400).json({ error: 'Title or body is required.' });
+      const trimTitle = (title || '').trim() || null;
+      const trimBody = (body || '').trim() || null;
+      if (!trimTitle && !trimBody) return res.status(400).json({ error: 'Title or body is required.' });
       const result = await mcPool.query(
         'INSERT INTO boat_logs (boat_id, user_id, log_type, title, body, metadata) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
-        [req.params.id, req.mcUser.id, type, (title || '').trim() || null, (body || '').trim() || null, metadata ? JSON.stringify(metadata) : null]
+        [req.params.id, req.mcUser.id, type, trimTitle, trimBody, metadata ? JSON.stringify(metadata) : null]
       );
       res.status(201).json({ log: result.rows[0] });
     } catch (err) {
