@@ -372,6 +372,32 @@ export function startServer(sockRef, sendResponse) {
           unsubscribed_at TIMESTAMP
         )
       `);
+      // Site Gate tables
+      await mcPool.query(`
+        CREATE TABLE IF NOT EXISTS gate_users (
+          id SERIAL PRIMARY KEY,
+          email VARCHAR(255) NOT NULL,
+          name VARCHAR(255) NOT NULL,
+          code VARCHAR(6),
+          code_expires TIMESTAMP,
+          code_attempts INT DEFAULT 0,
+          verified BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT NOW(),
+          last_access TIMESTAMP DEFAULT NOW(),
+          UNIQUE(email)
+        )
+      `);
+      await mcPool.query(`
+        CREATE TABLE IF NOT EXISTS gate_nda (
+          id SERIAL PRIMARY KEY,
+          gate_user_id INT NOT NULL REFERENCES gate_users(id) ON DELETE CASCADE,
+          site VARCHAR(100) NOT NULL,
+          ip VARCHAR(45),
+          user_agent TEXT,
+          accepted_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(gate_user_id, site)
+        )
+      `);
       console.log('[mc-auth] DB init + migrations complete');
     } catch (err) {
       console.error('[mc-auth] DB init error:', err.message);
@@ -784,6 +810,213 @@ export function startServer(sockRef, sendResponse) {
       res.json({ message: 'Boat deleted.' });
     } catch (err) {
       console.error('[mc-boats] Delete error:', err.message);
+      res.status(500).json({ error: 'Something went wrong.' });
+    }
+  });
+
+  // ---- Site Gate (Passwordless Access Control) ----
+
+  const GATE_SITES = {
+    mastercommander: { label: 'Master&Commander', from: 'Master&Commander Access' },
+  };
+
+  const GATE_ORIGINS = new Set([
+    'https://mastercommander.namibarden.com',
+    'http://localhost:3000',
+    'http://localhost:3010',
+    'http://localhost:8080',
+  ]);
+
+  // CORS for /api/gate — accepts *.namibarden.com + localhost
+  app.use('/api/gate', (req, res, next) => {
+    const origin = req.headers.origin || '';
+    if (GATE_ORIGINS.has(origin) || /^https?:\/\/[a-z0-9-]+\.namibarden\.com$/.test(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    next();
+  });
+
+  // Gate rate limiter (reuses authRateMap)
+  function gateRateLimit(max, windowMs) {
+    return (req, res, next) => {
+      const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+      const key = `gate:${req.path}:${ip}`;
+      const now = Date.now();
+      let hits = authRateMap.get(key) || [];
+      hits = hits.filter(t => now - t < windowMs);
+      if (hits.length >= max) {
+        return res.status(429).json({ error: 'Too many attempts. Please try again later.' });
+      }
+      hits.push(now);
+      authRateMap.set(key, hits);
+      next();
+    };
+  }
+
+  // Gate JWT helper
+  function signGateToken(user, opts = {}) {
+    return jwt.sign(
+      { id: user.id, email: user.email, name: user.name, type: 'gate', ndaAccepted: opts.ndaAccepted || false },
+      MC_JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+  }
+
+  // Gate auth middleware
+  function requireGateAuth(req, res, next) {
+    const authHeader = req.headers.authorization || '';
+    if (!authHeader.startsWith('Bearer ')) return res.status(401).json({ error: 'Authentication required.' });
+    try {
+      const decoded = jwt.verify(authHeader.slice(7), MC_JWT_SECRET);
+      if (decoded.type !== 'gate') return res.status(401).json({ error: 'Invalid token type.' });
+      req.gateUser = decoded;
+      next();
+    } catch {
+      return res.status(401).json({ error: 'Invalid or expired token.' });
+    }
+  }
+
+  // POST /api/gate/request-code — send 6-digit code via email
+  app.post('/api/gate/request-code', gateRateLimit(3, 300_000), async (req, res) => {
+    try {
+      const { name, email, site } = req.body || {};
+      if (!name || !email || !site) return res.status(400).json({ error: 'Name, email, and site are required.' });
+      if (!GATE_SITES[site]) return res.status(400).json({ error: 'Unknown site.' });
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email address.' });
+
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+      // Upsert gate user
+      await mcPool.query(`
+        INSERT INTO gate_users (email, name, code, code_expires, code_attempts, verified)
+        VALUES ($1, $2, $3, $4, 0, FALSE)
+        ON CONFLICT (email) DO UPDATE SET
+          name = EXCLUDED.name,
+          code = EXCLUDED.code,
+          code_expires = EXCLUDED.code_expires,
+          code_attempts = 0
+      `, [email.toLowerCase(), name, code, expires]);
+
+      // Send email
+      if (mcMailer) {
+        const siteLabel = GATE_SITES[site].from || site;
+        await mcMailer.sendMail({
+          from: `"${siteLabel}" <${process.env.MC_SMTP_USER}>`,
+          to: email,
+          subject: `Your access code: ${code}`,
+          html: `
+            <div style="font-family:-apple-system,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">
+              <h2 style="margin:0 0 8px;color:#1a1a2e">${GATE_SITES[site].label || site}</h2>
+              <p style="color:#666;margin:0 0 24px">Your verification code is:</p>
+              <div style="background:#f4f4f8;border-radius:10px;padding:20px;text-align:center;margin:0 0 24px">
+                <span style="font-size:36px;font-weight:700;letter-spacing:8px;color:#1a1a2e">${code}</span>
+              </div>
+              <p style="color:#999;font-size:13px;margin:0">This code expires in 10 minutes. If you didn't request this, ignore this email.</p>
+            </div>
+          `,
+        });
+      } else {
+        console.log(`[gate] Code for ${email}: ${code} (no mailer configured)`);
+      }
+
+      res.json({ ok: true });
+    } catch (err) {
+      console.error('[gate] request-code error:', err.message);
+      res.status(500).json({ error: 'Something went wrong.' });
+    }
+  });
+
+  // POST /api/gate/verify-code — verify code, return JWT
+  app.post('/api/gate/verify-code', gateRateLimit(5, 60_000), async (req, res) => {
+    try {
+      const { email, code, site } = req.body || {};
+      if (!email || !code || !site) return res.status(400).json({ error: 'Email, code, and site are required.' });
+      if (!GATE_SITES[site]) return res.status(400).json({ error: 'Unknown site.' });
+
+      const result = await mcPool.query('SELECT * FROM gate_users WHERE email = $1', [email.toLowerCase()]);
+      if (result.rows.length === 0) return res.status(400).json({ error: 'No verification pending for this email.' });
+
+      const user = result.rows[0];
+
+      if (user.code_attempts >= 5) {
+        return res.status(429).json({ error: 'Too many failed attempts. Please request a new code.' });
+      }
+
+      if (!user.code || new Date(user.code_expires) < new Date()) {
+        return res.status(400).json({ error: 'Code expired. Please request a new one.' });
+      }
+
+      if (user.code !== code) {
+        await mcPool.query('UPDATE gate_users SET code_attempts = code_attempts + 1 WHERE id = $1', [user.id]);
+        return res.status(400).json({ error: 'Incorrect code. Please try again.' });
+      }
+
+      // Mark verified, clear code
+      await mcPool.query(
+        'UPDATE gate_users SET verified = TRUE, code = NULL, code_expires = NULL, code_attempts = 0, last_access = NOW() WHERE id = $1',
+        [user.id]
+      );
+
+      // Check if NDA already accepted for this site
+      const ndaResult = await mcPool.query('SELECT id FROM gate_nda WHERE gate_user_id = $1 AND site = $2', [user.id, site]);
+      const ndaAccepted = ndaResult.rows.length > 0;
+
+      const token = signGateToken({ id: user.id, email: user.email, name: user.name }, { ndaAccepted });
+      res.json({ token, ndaAccepted });
+    } catch (err) {
+      console.error('[gate] verify-code error:', err.message);
+      res.status(500).json({ error: 'Something went wrong.' });
+    }
+  });
+
+  // POST /api/gate/accept-nda — record NDA acceptance
+  app.post('/api/gate/accept-nda', requireGateAuth, gateRateLimit(5, 60_000), async (req, res) => {
+    try {
+      const { site } = req.body || {};
+      if (!site) return res.status(400).json({ error: 'Site is required.' });
+      if (!GATE_SITES[site]) return res.status(400).json({ error: 'Unknown site.' });
+
+      const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+      const userAgent = req.headers['user-agent'] || '';
+
+      await mcPool.query(`
+        INSERT INTO gate_nda (gate_user_id, site, ip, user_agent)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (gate_user_id, site) DO NOTHING
+      `, [req.gateUser.id, site, ip, userAgent]);
+
+      const token = signGateToken(
+        { id: req.gateUser.id, email: req.gateUser.email, name: req.gateUser.name },
+        { ndaAccepted: true }
+      );
+      res.json({ token });
+    } catch (err) {
+      console.error('[gate] accept-nda error:', err.message);
+      res.status(500).json({ error: 'Something went wrong.' });
+    }
+  });
+
+  // GET /api/gate/session — validate existing token + NDA status
+  app.get('/api/gate/session', requireGateAuth, gateRateLimit(20, 60_000), async (req, res) => {
+    try {
+      const site = req.query.site;
+      if (!site || !GATE_SITES[site]) return res.status(400).json({ error: 'Valid site parameter required.' });
+
+      // Update last_access
+      await mcPool.query('UPDATE gate_users SET last_access = NOW() WHERE id = $1', [req.gateUser.id]);
+
+      // Check NDA from DB (in case token is stale)
+      const ndaResult = await mcPool.query('SELECT id FROM gate_nda WHERE gate_user_id = $1 AND site = $2', [req.gateUser.id, site]);
+      const ndaAccepted = ndaResult.rows.length > 0;
+
+      res.json({ valid: true, ndaAccepted, name: req.gateUser.name, email: req.gateUser.email });
+    } catch (err) {
+      console.error('[gate] session error:', err.message);
       res.status(500).json({ error: 'Something went wrong.' });
     }
   });
