@@ -1035,6 +1035,7 @@ export function startServer(sockRef, sendResponse) {
       // Get or create Stripe customer
       const userResult = await mcPool.query('SELECT id, email, name, stripe_customer_id FROM users WHERE id = $1', [req.mcUser.id]);
       const user = userResult.rows[0];
+      if (!user) return res.status(404).json({ error: 'User not found.' });
       let customerId = user.stripe_customer_id;
 
       if (!customerId) {
