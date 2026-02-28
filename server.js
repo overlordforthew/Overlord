@@ -11,6 +11,7 @@ import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
+import Stripe from 'stripe';
 import { addReminder, removeReminder, listReminders } from './scheduler.js';
 
 const WEBHOOK_TOKEN = process.env.WEBHOOK_TOKEN || '';
@@ -380,6 +381,13 @@ export function startServer(sockRef, sendResponse) {
       await mcPool.query(`CREATE INDEX IF NOT EXISTS idx_boat_logs_boat_id ON boat_logs(boat_id)`);
       // User role column
       await mcPool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'owner'`);
+      // Stripe billing columns
+      await mcPool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)`);
+      await mcPool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id VARCHAR(255)`);
+      await mcPool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_plan VARCHAR(50)`);
+      await mcPool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(50) DEFAULT 'none'`);
+      await mcPool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_current_period_end TIMESTAMP`);
+      await mcPool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_cancel_at_period_end BOOLEAN DEFAULT FALSE`);
       await mcPool.query(`
         CREATE TABLE IF NOT EXISTS contact_submissions (
           id SERIAL PRIMARY KEY,
@@ -436,6 +444,28 @@ export function startServer(sockRef, sendResponse) {
   })();
 
   const MC_JWT_SECRET = process.env.MC_JWT_SECRET || 'fallback-dev-secret';
+
+  // ---- Stripe billing (MasterCommander) ----
+  const MC_PLANS = {
+    private: { name: 'Private Owner', mode: 'subscription', amount: 2900, interval: 'month', priceId: process.env.STRIPE_PRICE_PRIVATE || '', description: 'Single boat monitoring' },
+    delivery: { name: 'Delivery Captain', mode: 'subscription', amount: 4900, interval: 'month', priceId: process.env.STRIPE_PRICE_DELIVERY || '', description: 'Multi-boat delivery tracking' },
+    tech: { name: 'Marine Tech', mode: 'subscription', amount: 7900, interval: 'month', priceId: process.env.STRIPE_PRICE_TECH || '', description: 'Fleet diagnostics & alerts' },
+    fleet: { name: 'Fleet Operator', mode: 'subscription', amount: 14900, interval: 'month', priceId: process.env.STRIPE_PRICE_FLEET || '', description: 'Full fleet management' },
+  };
+
+  let _stripeClient = null;
+  function getStripe() {
+    if (!_stripeClient) {
+      const key = process.env.STRIPE_SECRET_KEY || '';
+      if (!key || key.includes('PLACEHOLDER')) return null;
+      _stripeClient = new Stripe(key);
+    }
+    return _stripeClient;
+  }
+  function isStripeConfigured() {
+    const key = process.env.STRIPE_SECRET_KEY || '';
+    return !!key && !key.includes('PLACEHOLDER');
+  }
 
   // SMTP transport (falls back to console logging if not configured)
   let mcMailer = null;
@@ -926,6 +956,214 @@ export function startServer(sockRef, sendResponse) {
     } catch (err) {
       console.error('[mc-boats] Log delete error:', err.message);
       res.status(500).json({ error: 'Something went wrong.' });
+    }
+  });
+
+  // ---- MasterCommander Billing ----
+
+  // CORS for /api/billing
+  app.use('/api/billing', (req, res, next) => {
+    const origin = req.headers.origin || '';
+    if (origin.includes('mastercommander.namibarden.com') || origin.includes('localhost')) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    next();
+  });
+
+  // CORS for /api/stripe (webhook — no auth header needed, but CORS for browser preflight)
+  app.use('/api/stripe', (req, res, next) => {
+    const origin = req.headers.origin || '';
+    if (origin.includes('mastercommander.namibarden.com') || origin.includes('localhost')) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Stripe-Signature');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    next();
+  });
+
+  // GET /api/billing/status — current plan + available plans
+  app.get('/api/billing/status', requireMcAuth, async (req, res) => {
+    try {
+      const result = await mcPool.query(
+        'SELECT subscription_plan, subscription_status, subscription_current_period_end, subscription_cancel_at_period_end FROM users WHERE id = $1',
+        [req.mcUser.id]
+      );
+      if (result.rows.length === 0) return res.status(404).json({ error: 'User not found.' });
+      const user = result.rows[0];
+      const plans = Object.entries(MC_PLANS).map(([key, plan]) => ({
+        id: key,
+        name: plan.name,
+        amount: plan.amount,
+        interval: plan.interval,
+        description: plan.description,
+        hasPrice: !!plan.priceId && !plan.priceId.includes('PLACEHOLDER'),
+      }));
+      res.json({
+        stripeConfigured: isStripeConfigured(),
+        currentPlan: user.subscription_plan || null,
+        status: user.subscription_status || 'none',
+        currentPeriodEnd: user.subscription_current_period_end || null,
+        cancelAtPeriodEnd: user.subscription_cancel_at_period_end || false,
+        plans,
+      });
+    } catch (err) {
+      console.error('[mc-billing] Status error:', err.message);
+      res.status(500).json({ error: 'Something went wrong.' });
+    }
+  });
+
+  // POST /api/billing/checkout — create Stripe Checkout session
+  app.post('/api/billing/checkout', requireMcAuth, async (req, res) => {
+    if (!isStripeConfigured()) {
+      return res.status(503).json({ error: 'Billing is not yet configured. Please contact us to get started.' });
+    }
+    try {
+      const { plan } = req.body;
+      const planConfig = MC_PLANS[plan];
+      if (!planConfig) return res.status(400).json({ error: 'Invalid plan.' });
+      if (!planConfig.priceId || planConfig.priceId.includes('PLACEHOLDER')) {
+        return res.status(503).json({ error: 'This plan is not yet available. Please contact us.' });
+      }
+
+      const stripe = getStripe();
+      // Get or create Stripe customer
+      const userResult = await mcPool.query('SELECT id, email, name, stripe_customer_id FROM users WHERE id = $1', [req.mcUser.id]);
+      const user = userResult.rows[0];
+      let customerId = user.stripe_customer_id;
+
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email,
+          name: user.name,
+          metadata: { mc_user_id: String(user.id) },
+        });
+        customerId = customer.id;
+        await mcPool.query('UPDATE users SET stripe_customer_id = $1 WHERE id = $2', [customerId, user.id]);
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        mode: planConfig.mode === 'subscription' ? 'subscription' : 'payment',
+        line_items: [{ price: planConfig.priceId, quantity: 1 }],
+        success_url: 'https://mastercommander.namibarden.com/dashboard.html#/billing?checkout=success',
+        cancel_url: 'https://mastercommander.namibarden.com/dashboard.html#/billing?checkout=canceled',
+        metadata: { mc_user_id: String(user.id), plan },
+      });
+
+      res.json({ url: session.url });
+    } catch (err) {
+      console.error('[mc-billing] Checkout error:', err.message);
+      res.status(500).json({ error: 'Could not create checkout session.' });
+    }
+  });
+
+  // POST /api/billing/portal — create Stripe Customer Portal session
+  app.post('/api/billing/portal', requireMcAuth, async (req, res) => {
+    if (!isStripeConfigured()) {
+      return res.status(503).json({ error: 'Billing is not yet configured.' });
+    }
+    try {
+      const userResult = await mcPool.query('SELECT stripe_customer_id FROM users WHERE id = $1', [req.mcUser.id]);
+      const user = userResult.rows[0];
+      if (!user?.stripe_customer_id) {
+        return res.status(400).json({ error: 'No billing account found. Subscribe to a plan first.' });
+      }
+
+      const stripe = getStripe();
+      const session = await stripe.billingPortal.sessions.create({
+        customer: user.stripe_customer_id,
+        return_url: 'https://mastercommander.namibarden.com/dashboard.html#/billing',
+      });
+
+      res.json({ url: session.url });
+    } catch (err) {
+      console.error('[mc-billing] Portal error:', err.message);
+      res.status(500).json({ error: 'Could not create portal session.' });
+    }
+  });
+
+  // POST /api/stripe/webhook — Stripe webhook handler (NO JWT — uses Stripe signature)
+  app.post('/api/stripe/webhook', async (req, res) => {
+    if (!isStripeConfigured()) return res.status(503).json({ error: 'Stripe not configured.' });
+
+    const stripe = getStripe();
+    const sig = req.headers['stripe-signature'];
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
+
+    if (!webhookSecret || webhookSecret.includes('PLACEHOLDER')) {
+      return res.status(503).json({ error: 'Webhook secret not configured.' });
+    }
+
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(req.rawBody, sig, webhookSecret);
+    } catch (err) {
+      console.error('[mc-stripe] Webhook signature verification failed:', err.message);
+      return res.status(400).json({ error: 'Invalid signature.' });
+    }
+
+    try {
+      switch (event.type) {
+        case 'checkout.session.completed': {
+          const session = event.data.object;
+          const userId = session.metadata?.mc_user_id;
+          const plan = session.metadata?.plan;
+          if (userId && plan && session.subscription) {
+            const sub = await stripe.subscriptions.retrieve(session.subscription);
+            await mcPool.query(
+              `UPDATE users SET stripe_subscription_id = $1, subscription_plan = $2, subscription_status = $3,
+               subscription_current_period_end = to_timestamp($4), subscription_cancel_at_period_end = $5
+               WHERE id = $6`,
+              [sub.id, plan, sub.status, sub.current_period_end, sub.cancel_at_period_end, parseInt(userId)]
+            );
+            console.log(`[mc-stripe] Checkout complete: user ${userId}, plan ${plan}, sub ${sub.id}`);
+          }
+          break;
+        }
+        case 'customer.subscription.updated': {
+          const sub = event.data.object;
+          await mcPool.query(
+            `UPDATE users SET subscription_status = $1, subscription_current_period_end = to_timestamp($2),
+             subscription_cancel_at_period_end = $3 WHERE stripe_subscription_id = $4`,
+            [sub.status, sub.current_period_end, sub.cancel_at_period_end, sub.id]
+          );
+          console.log(`[mc-stripe] Subscription updated: ${sub.id} → ${sub.status}`);
+          break;
+        }
+        case 'customer.subscription.deleted': {
+          const sub = event.data.object;
+          await mcPool.query(
+            `UPDATE users SET subscription_status = 'canceled', subscription_cancel_at_period_end = FALSE
+             WHERE stripe_subscription_id = $1`,
+            [sub.id]
+          );
+          console.log(`[mc-stripe] Subscription deleted: ${sub.id}`);
+          break;
+        }
+        case 'invoice.payment_failed': {
+          const invoice = event.data.object;
+          if (invoice.subscription) {
+            await mcPool.query(
+              `UPDATE users SET subscription_status = 'past_due' WHERE stripe_subscription_id = $1`,
+              [invoice.subscription]
+            );
+            console.log(`[mc-stripe] Payment failed for subscription: ${invoice.subscription}`);
+          }
+          break;
+        }
+        default:
+          console.log(`[mc-stripe] Unhandled event type: ${event.type}`);
+      }
+      res.json({ received: true });
+    } catch (err) {
+      console.error('[mc-stripe] Webhook processing error:', err.message);
+      res.status(500).json({ error: 'Webhook processing failed.' });
     }
   });
 
