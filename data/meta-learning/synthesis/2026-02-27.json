@@ -1,0 +1,17 @@
+{
+  "date": "2026-02-27",
+  "generatedAt": "2026-02-27T20:00:00.896Z",
+  "regressions": {
+    "count": 0,
+    "categories": [],
+    "items": []
+  },
+  "friction": {
+    "totalEvents": 17,
+    "byType": {
+      "slow_response": 17
+    },
+    "topIssue": "slow_response"
+  },
+  "insights": []
+}

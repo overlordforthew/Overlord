@@ -69,6 +69,10 @@ async function resolveContainerName(name) {
       } else {
         friendly = svc.charAt(0).toUpperCase() + svc.slice(1);
       }
+      // Distinguish app vs db containers (Coolify prefixes container names with db-, app-, etc.)
+      if (friendly && name.startsWith('db-')) {
+        friendly += '-db';
+      }
     }
     if (friendly) {
       CONTAINER_NAMES[name] = friendly; // cache it
@@ -509,8 +513,8 @@ export async function startScheduler(sockRef) {
     console.error('Failed to load reminders:', err.message);
   }
 
-  // 2. Daily briefing at 6am (Gil wakes ~5:30am)
-  cron.schedule('0 6 * * *', async () => {
+  // 2. Daily briefing at 6am Trinidad (= 10am UTC, Gil wakes ~5:30am AST)
+  cron.schedule('0 10 * * *', async () => {
     try {
       const briefing = await generateBriefing();
       await sockRef.sock.sendMessage(ADMIN_JID, { text: briefing });
@@ -519,7 +523,7 @@ export async function startScheduler(sockRef) {
       console.error('Failed to send daily briefing:', err.message);
     }
   });
-  console.log('☀️ Daily briefing scheduled (6:00 AM)');
+  console.log('☀️ Daily briefing scheduled (6:00 AM AST / 10:00 AM UTC)');
 
   // 3. URL monitoring every 15 minutes
   cron.schedule('*/15 * * * *', async () => {
@@ -541,9 +545,9 @@ export async function startScheduler(sockRef) {
   });
   console.log('📋 Log monitor scheduled (every 5 min)');
 
-  // 5. Nightly synthesis at 8pm — consolidate daily learnings (Loop 5)
-  // Gil turns off Starlink by 9pm, so all nightly jobs run before 8:30pm
-  cron.schedule('0 20 * * *', async () => {
+  // 5. Nightly synthesis at 8pm Trinidad (= midnight UTC)
+  // Gil turns off Starlink by 9pm AST, so all nightly jobs run before 8:30pm AST
+  cron.schedule('0 0 * * *', async () => {
     try {
       const synthesis = await generateDailySynthesis();
       // Only notify if there are meaningful events
@@ -558,10 +562,10 @@ export async function startScheduler(sockRef) {
       console.error('Nightly synthesis error:', err.message);
     }
   });
-  console.log('🧠 Nightly synthesis scheduled (8:00 PM)');
+  console.log('🧠 Nightly synthesis scheduled (8:00 PM AST / 00:00 UTC)');
 
-  // 6. Daily performance metrics at 8:15pm — record for trending (Loop 9)
-  cron.schedule('15 20 * * *', async () => {
+  // 6. Daily performance metrics at 8:15pm Trinidad (= 00:15 UTC)
+  cron.schedule('15 0 * * *', async () => {
     try {
       const { stdout: diskRaw } = await execAsync("df -h / | tail -1 | awk '{print $5}'", { timeout: 5000 });
       const { stdout: memRaw } = await execAsync("free | awk '/Mem/{printf \"%.1f\", $3/$2*100}'", { timeout: 5000 });
@@ -581,7 +585,7 @@ export async function startScheduler(sockRef) {
       console.error('Performance metrics error:', err.message);
     }
   });
-  console.log('📊 Performance trending scheduled (8:15 PM)');
+  console.log('📊 Performance trending scheduled (8:15 PM AST / 00:15 UTC)');
 
   // 7. Heartbeat — service health monitoring every 2 hours
   cron.schedule('0 */2 * * *', async () => {

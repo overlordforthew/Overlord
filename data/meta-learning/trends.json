@@ -7,6 +7,22 @@
       "memoryUsagePct": 25.7,
       "containersRunning": 16,
       "frictionEvents": 2
+    },
+    {
+      "date": "2026-02-27",
+      "timestamp": "2026-02-27T20:15:00.768Z",
+      "diskUsagePct": 40,
+      "memoryUsagePct": 27.8,
+      "containersRunning": 17,
+      "frictionEvents": 24
+    },
+    {
+      "date": "2026-02-28",
+      "timestamp": "2026-02-28T00:15:00.870Z",
+      "diskUsagePct": 34,
+      "memoryUsagePct": 27.8,
+      "containersRunning": 17,
+      "frictionEvents": 34
     }
   ]
 }
