@@ -349,6 +349,37 @@ export function startServer(sockRef, sendResponse) {
         )
       `);
       await mcPool.query(`CREATE INDEX IF NOT EXISTS idx_boats_user_id ON boats(user_id)`);
+      // Dashboard phase migrations — boats extended fields
+      await mcPool.query(`ALTER TABLE boats ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'inactive'`);
+      await mcPool.query(`ALTER TABLE boats ADD COLUMN IF NOT EXISTS boat_type VARCHAR(50)`);
+      await mcPool.query(`ALTER TABLE boats ADD COLUMN IF NOT EXISTS length_ft NUMERIC(5,1)`);
+      await mcPool.query(`ALTER TABLE boats ADD COLUMN IF NOT EXISTS beam_ft NUMERIC(5,1)`);
+      await mcPool.query(`ALTER TABLE boats ADD COLUMN IF NOT EXISTS draft_ft NUMERIC(5,1)`);
+      await mcPool.query(`ALTER TABLE boats ADD COLUMN IF NOT EXISTS fuel_capacity INT`);
+      await mcPool.query(`ALTER TABLE boats ADD COLUMN IF NOT EXISTS water_capacity INT`);
+      await mcPool.query(`ALTER TABLE boats ADD COLUMN IF NOT EXISTS engine_count INT DEFAULT 1`);
+      await mcPool.query(`ALTER TABLE boats ADD COLUMN IF NOT EXISTS engine_type VARCHAR(100)`);
+      await mcPool.query(`ALTER TABLE boats ADD COLUMN IF NOT EXISTS registration VARCHAR(100)`);
+      await mcPool.query(`ALTER TABLE boats ADD COLUMN IF NOT EXISTS flag VARCHAR(100)`);
+      await mcPool.query(`ALTER TABLE boats ADD COLUMN IF NOT EXISTS photo_url TEXT`);
+      await mcPool.query(`ALTER TABLE boats ADD COLUMN IF NOT EXISTS notes TEXT`);
+      await mcPool.query(`ALTER TABLE boats ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`);
+      // Boat logs table
+      await mcPool.query(`
+        CREATE TABLE IF NOT EXISTS boat_logs (
+          id SERIAL PRIMARY KEY,
+          boat_id INT NOT NULL REFERENCES boats(id) ON DELETE CASCADE,
+          user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          log_type VARCHAR(20) NOT NULL DEFAULT 'note',
+          title VARCHAR(255),
+          body TEXT,
+          metadata JSONB,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await mcPool.query(`CREATE INDEX IF NOT EXISTS idx_boat_logs_boat_id ON boat_logs(boat_id)`);
+      // User role column
+      await mcPool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'owner'`);
       await mcPool.query(`
         CREATE TABLE IF NOT EXISTS contact_submissions (
           id SERIAL PRIMARY KEY,
@@ -767,7 +798,7 @@ export function startServer(sockRef, sendResponse) {
   // POST /api/boats
   app.post('/api/boats', requireMcAuth, authRateLimit(10, 60_000), async (req, res) => {
     try {
-      const { name, model, year, mmsi, home_port } = req.body;
+      const { name, model, year, mmsi, home_port, boat_type, length_ft, beam_ft, draft_ft, fuel_capacity, water_capacity, engine_count, engine_type, registration, flag, photo_url, notes } = req.body;
       if (!name || !name.trim()) return res.status(400).json({ error: 'Boat name is required.' });
       // Max 20 boats per user
       const countResult = await mcPool.query('SELECT COUNT(*) FROM boats WHERE user_id = $1', [req.mcUser.id]);
@@ -775,8 +806,12 @@ export function startServer(sockRef, sendResponse) {
         return res.status(400).json({ error: 'Maximum 20 boats per account.' });
       }
       const result = await mcPool.query(
-        'INSERT INTO boats (user_id, name, model, year, mmsi, home_port) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-        [req.mcUser.id, name.trim(), (model || '').trim() || null, year ? parseInt(year) : null, (mmsi || '').trim() || null, (home_port || '').trim() || null]
+        `INSERT INTO boats (user_id, name, model, year, mmsi, home_port, boat_type, length_ft, beam_ft, draft_ft, fuel_capacity, water_capacity, engine_count, engine_type, registration, flag, photo_url, notes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *`,
+        [req.mcUser.id, name.trim(), (model || '').trim() || null, year ? parseInt(year) : null, (mmsi || '').trim() || null, (home_port || '').trim() || null,
+         (boat_type || '').trim() || null, length_ft ? parseFloat(length_ft) : null, beam_ft ? parseFloat(beam_ft) : null, draft_ft ? parseFloat(draft_ft) : null,
+         fuel_capacity ? parseInt(fuel_capacity) : null, water_capacity ? parseInt(water_capacity) : null, engine_count ? parseInt(engine_count) : 1,
+         (engine_type || '').trim() || null, (registration || '').trim() || null, (flag || '').trim() || null, (photo_url || '').trim() || null, (notes || '').trim() || null]
       );
       res.status(201).json({ boat: result.rows[0] });
     } catch (err) {
@@ -788,11 +823,17 @@ export function startServer(sockRef, sendResponse) {
   // PUT /api/boats/:id
   app.put('/api/boats/:id', requireMcAuth, authRateLimit(10, 60_000), async (req, res) => {
     try {
-      const { name, model, year, mmsi, home_port } = req.body;
+      const { name, model, year, mmsi, home_port, boat_type, length_ft, beam_ft, draft_ft, fuel_capacity, water_capacity, engine_count, engine_type, registration, flag, photo_url, notes } = req.body;
       if (!name || !name.trim()) return res.status(400).json({ error: 'Boat name is required.' });
       const result = await mcPool.query(
-        'UPDATE boats SET name = $1, model = $2, year = $3, mmsi = $4, home_port = $5 WHERE id = $6 AND user_id = $7 RETURNING *',
-        [name.trim(), (model || '').trim() || null, year ? parseInt(year) : null, (mmsi || '').trim() || null, (home_port || '').trim() || null, req.params.id, req.mcUser.id]
+        `UPDATE boats SET name=$1, model=$2, year=$3, mmsi=$4, home_port=$5, boat_type=$6, length_ft=$7, beam_ft=$8, draft_ft=$9,
+         fuel_capacity=$10, water_capacity=$11, engine_count=$12, engine_type=$13, registration=$14, flag=$15, photo_url=$16, notes=$17, updated_at=NOW()
+         WHERE id=$18 AND user_id=$19 RETURNING *`,
+        [name.trim(), (model || '').trim() || null, year ? parseInt(year) : null, (mmsi || '').trim() || null, (home_port || '').trim() || null,
+         (boat_type || '').trim() || null, length_ft ? parseFloat(length_ft) : null, beam_ft ? parseFloat(beam_ft) : null, draft_ft ? parseFloat(draft_ft) : null,
+         fuel_capacity ? parseInt(fuel_capacity) : null, water_capacity ? parseInt(water_capacity) : null, engine_count ? parseInt(engine_count) : 1,
+         (engine_type || '').trim() || null, (registration || '').trim() || null, (flag || '').trim() || null, (photo_url || '').trim() || null, (notes || '').trim() || null,
+         req.params.id, req.mcUser.id]
       );
       if (result.rows.length === 0) return res.status(404).json({ error: 'Boat not found.' });
       res.json({ boat: result.rows[0] });
@@ -810,6 +851,74 @@ export function startServer(sockRef, sendResponse) {
       res.json({ message: 'Boat deleted.' });
     } catch (err) {
       console.error('[mc-boats] Delete error:', err.message);
+      res.status(500).json({ error: 'Something went wrong.' });
+    }
+  });
+
+  // GET /api/boats/:id — single boat with all fields
+  app.get('/api/boats/:id', requireMcAuth, authRateLimit(20, 60_000), async (req, res) => {
+    try {
+      const result = await mcPool.query('SELECT * FROM boats WHERE id = $1 AND user_id = $2', [req.params.id, req.mcUser.id]);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'Boat not found.' });
+      res.json({ boat: result.rows[0] });
+    } catch (err) {
+      console.error('[mc-boats] Get error:', err.message);
+      res.status(500).json({ error: 'Something went wrong.' });
+    }
+  });
+
+  // GET /api/boats/:id/logs — paginated log entries
+  app.get('/api/boats/:id/logs', requireMcAuth, authRateLimit(20, 60_000), async (req, res) => {
+    try {
+      // Verify boat ownership
+      const boat = await mcPool.query('SELECT id FROM boats WHERE id = $1 AND user_id = $2', [req.params.id, req.mcUser.id]);
+      if (boat.rows.length === 0) return res.status(404).json({ error: 'Boat not found.' });
+      const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+      const offset = parseInt(req.query.offset) || 0;
+      const logType = req.query.type;
+      let query = 'SELECT bl.*, u.name as user_name FROM boat_logs bl JOIN users u ON u.id = bl.user_id WHERE bl.boat_id = $1';
+      const params = [req.params.id];
+      if (logType) { query += ' AND bl.log_type = $' + (params.length + 1); params.push(logType); }
+      query += ' ORDER BY bl.created_at DESC LIMIT $' + (params.length + 1) + ' OFFSET $' + (params.length + 2);
+      params.push(limit, offset);
+      const result = await mcPool.query(query, params);
+      res.json({ logs: result.rows });
+    } catch (err) {
+      console.error('[mc-boats] Logs list error:', err.message);
+      res.status(500).json({ error: 'Something went wrong.' });
+    }
+  });
+
+  // POST /api/boats/:id/logs — add log entry
+  app.post('/api/boats/:id/logs', requireMcAuth, authRateLimit(10, 60_000), async (req, res) => {
+    try {
+      const boat = await mcPool.query('SELECT id FROM boats WHERE id = $1 AND user_id = $2', [req.params.id, req.mcUser.id]);
+      if (boat.rows.length === 0) return res.status(404).json({ error: 'Boat not found.' });
+      const { log_type, title, body, metadata } = req.body;
+      const validTypes = ['note', 'maintenance', 'telemetry', 'alert'];
+      const type = validTypes.includes(log_type) ? log_type : 'note';
+      if (!title && !body) return res.status(400).json({ error: 'Title or body is required.' });
+      const result = await mcPool.query(
+        'INSERT INTO boat_logs (boat_id, user_id, log_type, title, body, metadata) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
+        [req.params.id, req.mcUser.id, type, (title || '').trim() || null, (body || '').trim() || null, metadata ? JSON.stringify(metadata) : null]
+      );
+      res.status(201).json({ log: result.rows[0] });
+    } catch (err) {
+      console.error('[mc-boats] Log create error:', err.message);
+      res.status(500).json({ error: 'Something went wrong.' });
+    }
+  });
+
+  // DELETE /api/boats/:id/logs/:logId — delete log entry
+  app.delete('/api/boats/:id/logs/:logId', requireMcAuth, authRateLimit(10, 60_000), async (req, res) => {
+    try {
+      const boat = await mcPool.query('SELECT id FROM boats WHERE id = $1 AND user_id = $2', [req.params.id, req.mcUser.id]);
+      if (boat.rows.length === 0) return res.status(404).json({ error: 'Boat not found.' });
+      const result = await mcPool.query('DELETE FROM boat_logs WHERE id = $1 AND boat_id = $2 RETURNING id', [req.params.logId, req.params.id]);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'Log entry not found.' });
+      res.json({ message: 'Log entry deleted.' });
+    } catch (err) {
+      console.error('[mc-boats] Log delete error:', err.message);
       res.status(500).json({ error: 'Something went wrong.' });
     }
   });
