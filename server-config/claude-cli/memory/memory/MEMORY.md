@@ -66,28 +66,27 @@
 - **Voice guide:** `knowledge/voice.md` — Britt mirrors Ailie's real customer interaction style
 - **Auto-deploy:** GitHub webhook → deploy-listener.js (port 9002, systemd `surfagent-deploy.service`)
 
-## OnlyHulls — AI Boat Matchmaking (formerly DateMyBoat)
+## OnlyHulls — AI Boat Matchmaking
 - **Path:** `/root/projects/OnlyHulls/` | **URL:** onlyhulls.com | **Repo:** bluemele/OnlyHulls
 - **Coolify:** qkggs84cs88o0gww4wc80gwo | **Deploy:** Coolify auto-deploy on git push
 - **Stack:** Next.js 16 (App Router, TS, Tailwind), PG 17 + pgvector, Meilisearch, Redis, Auth.js v5 (email/password), Stripe, Claude Sonnet 4.6, OpenAI embeddings, Resend, Hetzner S3
 - **Auth:** Auth.js v5 Credentials provider, bcrypt passwords, JWT sessions. Split config: `auth.config.ts` (edge-safe) + `auth.ts` (full with bcrypt/pg)
-- **Infra:** `infra/docker-compose.infra.yml` — onlyhulls-db (5433), onlyhulls-meilisearch (7701), onlyhulls-redis (6380). Volumes kept as `datemyboat-*` for data continuity.
-- **DB:** Database renamed to `onlyhulls`, PG user still `datemyboat` (can't rename while connected). 10 tables.
+- **Infra:** `infra/docker-compose.infra.yml` — onlyhulls-db (5433), onlyhulls-meilisearch (7701), onlyhulls-redis (6380). Volumes: `onlyhulls-db-data`, `onlyhulls-meili-data`, `onlyhulls-redis-data`.
+- **DB:** Database `onlyhulls`, PG user `onlyhulls`. 10 tables.
 - **Seed:** 30 sample boats seeded, migrations complete through 006
 - **Status:** Phase 1a code complete, deployed, Auth.js working. Needs real API keys (Stripe, Anthropic, OpenAI, Resend, S3)
 - **Coolify env vars:** 14 vars configured via API (AUTH_URL=onlyhulls.com, NEXT_PUBLIC_APP_URL=onlyhulls.com, RESEND_FROM_EMAIL=OnlyHulls, DATABASE_URL points to onlyhulls-db/onlyhulls)
 - **Build note:** All lib modules use lazy init (`getStripe()`, `getMeili()`, `getResend()`, etc.) to avoid build-time crashes. Lockfile must be generated with npm 10 (node:20-alpine) not npm 11
 - **Traefik:** File-based route in namibarden.yaml for onlyhulls.com + www redirect
-- **Spec:** `/home/gil/claude-up/DATEMYBOAT-SPEC-v2.md`
+- **Spec:** `/home/gil/claude-up/DATEMYBOAT-SPEC-v2.md` (historical filename)
 
-## Elmo — Elite Engineering Services (OnlyDrafting)
+## Elmo — Pacific Bim Engineering Services (OnlyDrafting)
 - **Path:** `/root/projects/Elmo/` | **URL:** onlydrafting.com (www redirects to root)
 - **Stack:** Static HTML/CSS/JS, nginx:alpine + brotli (same pattern as NamiBarden)
-- **Business:** Elite Engineering Services — permit drafting & ePlans coordination for Hawai'i
+- **Business:** Pacific Bim Engineering Services — permit drafting & ePlans coordination for Hawai'i
 - **Owner:** Elmo Herrera (Philippines) | **Email:** elmoherrera2014@gmail.com | **WhatsApp:** +63 929 414 2510
 - **Coolify:** zkk0k8gcgcss4osggs4k0kw4 | **Deploy:** Coolify auto-deploy on git push
 - **Domain:** onlydrafting.com on Cloudflare (zone 5a4473673d3df140fa184e36f8567031), A record + www CNAME (proxied)
-- **Old URL:** elmo.namibarden.com — removed from Coolify FQDN and nginx, no longer routed
 - **Contact form:** mailto: to elmoherrera2014@gmail.com (client-side)
 - **Created:** 2026-02-27
 

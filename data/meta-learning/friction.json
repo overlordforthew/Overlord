@@ -419,10 +419,136 @@
       "details": "278564ms for 109457291874478@lid",
       "durationMs": 278564,
       "timestamp": "2026-02-28T18:58:58.154Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "64589ms for 109457291874478@lid",
+      "durationMs": 64589,
+      "timestamp": "2026-02-28T19:36:12.869Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "218193ms for 109457291874478@lid",
+      "durationMs": 218193,
+      "timestamp": "2026-02-28T19:40:31.259Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "224884ms for 109457291874478@lid",
+      "durationMs": 224884,
+      "timestamp": "2026-02-28T19:45:54.480Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "301206ms for 109457291874478@lid",
+      "durationMs": 301206,
+      "timestamp": "2026-02-28T19:51:31.263Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "547420ms for 109457291874478@lid",
+      "durationMs": 547420,
+      "timestamp": "2026-02-28T20:09:48.713Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "562532ms for 109457291874478@lid",
+      "durationMs": 562532,
+      "timestamp": "2026-02-28T21:04:13.991Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "70810ms for 109457291874478@lid",
+      "durationMs": 70810,
+      "timestamp": "2026-02-28T21:05:25.177Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "70790ms for 84267677782098@lid",
+      "durationMs": 70790,
+      "timestamp": "2026-02-28T21:05:46.682Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "91426ms for 109457291874478@lid",
+      "durationMs": 91426,
+      "timestamp": "2026-02-28T21:07:56.877Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "114765ms for 84267677782098@lid",
+      "durationMs": 114765,
+      "timestamp": "2026-02-28T21:09:00.998Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "282872ms for 109457291874478@lid",
+      "durationMs": 282872,
+      "timestamp": "2026-02-28T21:12:40.183Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "442355ms for 109457291874478@lid",
+      "durationMs": 442355,
+      "timestamp": "2026-03-01T00:02:59.202Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "73554ms for 84267677782098@lid",
+      "durationMs": 73554,
+      "timestamp": "2026-03-01T00:04:20.106Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "82574ms for 84267677782098@lid",
+      "durationMs": 82574,
+      "timestamp": "2026-03-01T00:14:06.110Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "195444ms for 84267677782098@lid",
+      "durationMs": 195444,
+      "timestamp": "2026-03-01T00:26:12.514Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "219657ms for 84267677782098@lid",
+      "durationMs": 219657,
+      "timestamp": "2026-03-01T00:29:54.909Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "132879ms for 109457291874478@lid",
+      "durationMs": 132879,
+      "timestamp": "2026-03-01T08:04:15.786Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "119441ms for 109457291874478@lid",
+      "durationMs": 119441,
+      "timestamp": "2026-03-01T08:51:40.688Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "68037ms for 109457291874478@lid",
+      "durationMs": 68037,
+      "timestamp": "2026-03-01T09:07:25.532Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "87577ms for 109457291874478@lid",
+      "durationMs": 87577,
+      "timestamp": "2026-03-01T09:12:30.080Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "162059ms for 109457291874478@lid",
+      "durationMs": 162059,
+      "timestamp": "2026-03-01T09:18:56.391Z"
     }
   ],
   "summary": {
     "api_error": 2,
-    "slow_response": 68
+    "slow_response": 89
   }
 }

@@ -29,8 +29,12 @@ Check STATUS.md for current state. Known services:
 - **Overlord** — this WhatsApp bot + AI workspace
 - **BeastMode** — workout app (beastmode.namibarden.com)
 - **Lumina** — auth/account system (lumina.namibarden.com)
-- **ElSalvador** — land scout scraper (elsalvador.namibarden.com)
 - **NamiBarden** — main website (namibarden.com)
+- **MasterCommander** — AI boat monitor (mastercommander.namibarden.com)
+- **SurfaBabe** — wellness WhatsApp bot (surfababe.namibarden.com)
+- **Elmo** — Pacific Bim Engineering Services (onlydrafting.com)
+- **OnlyHulls** — AI boat matchmaking (onlyhulls.com)
+- **ElSalvador** — land scout scraper (OFFLINE)
 - **OpenClaw** — multi-channel AI gateway (STOPPED, kept installed at /opt/openclaw/)
 
 ## PERSONALITY
@@ -173,10 +177,13 @@ Most deploy automatically via Coolify webhooks on git push:
 
 - **/projects/BeastMode** — Node.js web app (beastmode.namibarden.com)
 - **/projects/NamiBarden** — Main website (namibarden.com) ⚠️ NO Coolify webhook — use `/deploy namibarden` to push + hot-copy files into container
-- **/projects/ElSalvador** — Python FastAPI land scout (elsalvador.namibarden.com)
+- **/projects/MasterCommander** — AI boat monitor (mastercommander.namibarden.com) ⚠️ No Coolify webhook — use `docker cp` to deploy
+- **/projects/ElSalvador** — Python FastAPI land scout (OFFLINE)
 - **/projects/Lumina** — Node.js + React auth system (lumina.namibarden.com)
 - **/projects/Overlord** — This bot's own code
 - **/projects/SurfaBabe** — SurfaBabe Wellness WhatsApp bot (surfababe.namibarden.com)
+- **/projects/Elmo** — Pacific Bim Engineering Services (onlydrafting.com)
+- **/projects/OnlyHulls** — AI boat matchmaking (onlyhulls.com)
 
 ## SKILL LOADING
 

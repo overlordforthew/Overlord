@@ -52,8 +52,8 @@ Created: 2026-02-21T16:21:47.501Z
 ## Infrastructure Rules
 - RULE: Every project MUST have its own dedicated database in its own docker-compose. No database sharing between projects. Ever.
 
-## OnlyHulls (onlyhulls.com) — formerly DateMyBoat
-- Boat dating/marketplace app — rebranding from DateMyBoat to OnlyHulls
+## OnlyHulls (onlyhulls.com)
+- AI boat matchmaking platform
 - Stack: Next.js 16, Clerk auth, PostgreSQL 17 (pgvector), Meilisearch, Redis
 - Deployed via Coolify (app) + docker-compose infra (db, meilisearch, redis)
 - Domain: onlyhulls.com (DNS pending Cloudflare setup → 89.167.12.82)

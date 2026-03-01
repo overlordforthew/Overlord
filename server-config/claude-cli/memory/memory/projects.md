@@ -29,8 +29,8 @@
 - Static/content site on root domain
 - Deployed via Coolify from bluemele/NamiBarden
 
-## Elmo (Easy Engineering Services)
-- Static single-page site at elmo.namibarden.com
+## Elmo (Pacific Bim Engineering Services — onlydrafting.com)
+- Static site at onlydrafting.com
 - Business: permit drafting & ePlans coordination for Hawai'i (Elmo Herrera)
 - Stack: nginx:alpine + brotli (same Dockerfile pattern as NamiBarden)
 - Contact: mailto: form to elmoherrera2014@gmail.com + WhatsApp float (+63 929 414 2510)
