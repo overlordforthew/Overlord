@@ -2674,7 +2674,7 @@ async function startBot() {
           }
 
           // Append model tag for genuine model responses (skip errors/blocked)
-          if (routeModelId !== 'unknown' && !guardOut.blocked) {
+          if (routeModelId !== 'unknown' && !guardOut.blocked && !response.startsWith('⚠️')) {
             let modelTag = routeModelId;
             if (modelTag.startsWith('claude-')) {
               modelTag = modelTag.replace(/^claude-/, '').replace(/-(\d+)-(\d+)$/, ' $1.$2');
