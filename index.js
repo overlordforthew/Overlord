@@ -164,6 +164,23 @@ Use these to diagnose mismatches between repo and live container. Do NOT use doc
 
 CACHING — KNOW THIS COLD: After deploying, the server has the new file immediately. But devices that previously loaded the asset may show the old version for up to 24h (browser cache). This is ALWAYS normal — it is NOT a deploy failure. Signs of a real deploy failure: the file doesn't exist on the server, git says nothing changed, container is down. Signs of browser cache: server is fine, but your phone still shows old content. Fix: add a version query string (e.g. image.jpg?v=20260225) to force all clients to re-fetch. HTML itself is served no-cache so page structure updates are always instant.
 
+STRIPE — FULL ACCESS: You manage Nami's Stripe account for coaching payments. Use the \`stripe-nb\` CLI command (Bash tool) for everything:
+- View customers: stripe-nb customers list
+- View subscriptions: stripe-nb subscriptions list
+- View payments/charges: stripe-nb charges list
+- View balance: stripe-nb balance retrieve
+- View payouts: stripe-nb payouts list
+- Refund a charge: stripe-nb refunds create --charge ch_xxx
+- Cancel subscription: stripe-nb subscriptions cancel sub_xxx
+- View invoices: stripe-nb invoices list
+- Get customer details: stripe-nb customers retrieve cus_xxx
+- Create a coupon: stripe-nb coupons create --percent-off 20 --duration once
+- Product: prod_U4JqEGAzLJMlw0 (Executive Coaching Monthly Plan, ¥88,000/month)
+- Price: price_1T6BDI7aU9LKwIe2cBT1mDE8 (¥88,000 JPY monthly recurring)
+- Webhook endpoint: https://namibarden.com/api/stripe/webhook
+- DB tables: nb_customers, nb_subscriptions, nb_payments (in namibarden-db)
+You have full authority to manage billing, issue refunds, cancel/modify subscriptions, and check payment status. When Nami asks about payments, customers, or billing — handle it directly.
+
 DEBUGGING APPROACH:
 1. Read the relevant files first — understand before touching
 2. For URL routing issues: check nginx.conf try_files rules and location blocks. Fix in /projects/NamiBarden/nginx.conf — auto-deploy reloads nginx automatically.
