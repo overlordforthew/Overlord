@@ -88,6 +88,16 @@ http:
       tls:
         certResolver: letsencrypt
 
+    # MasterCommander gate API → Overlord container
+    https-mastercommander-gate:
+      entryPoints:
+        - https
+      rule: "Host(`mastercommander.namibarden.com`) && PathPrefix(`/api/gate`)"
+      service: overlord-api
+      tls:
+        certResolver: letsencrypt
+      priority: 100
+
     # MasterCommander chat API → Overlord container
     https-mastercommander-chat:
       entryPoints:
@@ -128,6 +138,26 @@ http:
         certResolver: letsencrypt
       priority: 100
 
+    # MasterCommander billing API → Overlord container
+    https-mastercommander-billing:
+      entryPoints:
+        - https
+      rule: "Host(`mastercommander.namibarden.com`) && PathPrefix(`/api/billing`)"
+      service: overlord-api
+      tls:
+        certResolver: letsencrypt
+      priority: 100
+
+    # MasterCommander Stripe webhook → Overlord container
+    https-mastercommander-stripe:
+      entryPoints:
+        - https
+      rule: "Host(`mastercommander.namibarden.com`) && PathPrefix(`/api/stripe`)"
+      service: overlord-api
+      tls:
+        certResolver: letsencrypt
+      priority: 100
+
     # MasterCommander contact API → Overlord container
     https-mastercommander-contact:
       entryPoints:
@@ -138,15 +168,32 @@ http:
         certResolver: letsencrypt
       priority: 100
 
-    # NamiBarden contact API → Overlord container
-    https-namibarden-contact:
+    # === OnlyHulls (onlyhulls.com) ===
+    http-onlyhulls:
+      entryPoints:
+        - http
+      rule: "Host(`onlyhulls.com`) || Host(`www.onlyhulls.com`)"
+      middlewares:
+        - redirect-to-https-file
+      service: https-0-qkggs84cs88o0gww4wc80gwo@docker
+
+    https-onlyhulls:
       entryPoints:
         - https
-      rule: "Host(`namibarden.com`) && Path(`/api/contact`)"
-      service: overlord-api
+      rule: "Host(`onlyhulls.com`)"
+      service: https-0-qkggs84cs88o0gww4wc80gwo@docker
       tls:
         certResolver: letsencrypt
-      priority: 100
+
+    https-onlyhulls-www:
+      entryPoints:
+        - https
+      rule: "Host(`www.onlyhulls.com`)"
+      middlewares:
+        - redirect-to-non-www
+      service: https-0-qkggs84cs88o0gww4wc80gwo@docker
+      tls:
+        certResolver: letsencrypt
 
     # SurfaBabe deploy webhook (path on surfababe subdomain)
     https-surfababe-deploy:
@@ -208,6 +255,9 @@ http:
       loadBalancer:
         servers:
           - url: "http://mastercommander:80"
+
+    # OnlyHulls uses Coolify's auto-managed service (survives redeploys)
+    # No file-based service needed — routers reference the Docker-provider service directly
 
     overlord-api:
       loadBalancer:

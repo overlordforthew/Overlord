@@ -19,7 +19,7 @@ Created: 2026-02-23T01:26:07.396Z
 ## Services & Income (as of Feb 2026)
 - A: 3 Udemy online courses → $120/month (underperforming)
 - B: Personal coaching → 12,000 yen/person/month (60 min Zoom, ~10 client cap)
-- C: Executive Business Coaching → 49,800 yen/person/month (90 min + text support)
+- C: Executive Business Coaching → 88,000 yen/person/month (90 min + text support) — updated from 49,800 on Feb 28
 - D: Counselor & Coach Training → 26,000 yen/month or 300,000 yen/year (12-18 months, certificate)
 - E: YouTube → $400/month
 - F: Lumina journaling app → launching sometime 2026 (future income stream)
@@ -35,6 +35,7 @@ Created: 2026-02-23T01:26:07.396Z
 - Email is secondary / global fallback
 - Income model direction: Lumina (passive) → LINE list → live events → premium 1:1
 - Has 400+ email addresses from previous site (unsure of engagement level)
+- Payment system decision (Feb 28): Stripe + Coinbase Commerce — Stripe for subscriptions/one-time (coaching, seminars, courses, Lumina), Coinbase Commerce for crypto. Gil to integrate.
 - Email system decision (Feb 28): Build in-house with Gil's help — NOT using external services
 - Gil will handle email infrastructure (SMTP, deliverability, SPF/DKIM/DMARC)
 - Ai Chan builds: dashboard, list management, newsletter composer, analytics
