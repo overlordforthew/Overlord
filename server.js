@@ -1225,16 +1225,21 @@ export function startServer(sockRef, sendResponse) {
   }
 
   // Gate auth middleware
-  function requireGateAuth(req, res, next) {
+  async function requireGateAuth(req, res, next) {
     const authHeader = req.headers.authorization || '';
     if (!authHeader.startsWith('Bearer ')) return res.status(401).json({ error: 'Authentication required.' });
     try {
       const decoded = jwt.verify(authHeader.slice(7), MC_JWT_SECRET);
       if (decoded.type !== 'gate') return res.status(401).json({ error: 'Invalid token type.' });
-      req.gateUser = decoded;
+      const userCheck = await mcPool.query('SELECT id, email, name FROM gate_users WHERE id = $1', [decoded.id]);
+      if (userCheck.rows.length === 0) return res.status(401).json({ error: 'User no longer exists.' });
+      req.gateUser = userCheck.rows[0];
       next();
-    } catch {
-      return res.status(401).json({ error: 'Invalid or expired token.' });
+    } catch (err) {
+      if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+        return res.status(401).json({ error: 'Invalid or expired token.' });
+      }
+      return res.status(500).json({ error: 'Auth check failed.' });
     }
   }
 

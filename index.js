@@ -100,7 +100,7 @@ const CONFIG = {
   claudePath: process.env.CLAUDE_PATH || 'claude',
   claudeModel: process.env.CLAUDE_MODEL || '',
   routerMode: process.env.ROUTER_MODE || 'alpha',
-  maxResponseTime: 600_000,  // 10 min for complex tasks (deployments, multi-file edits)
+  maxResponseTime: 900_000,  // 15 min for complex tasks (page creation, multi-file edits)
 
   // ---- RESPONSE BEHAVIOR ----
   // Mode: 'all' = respond to every message
@@ -1752,15 +1752,17 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       let stdout = '';
       let stderr = '';
 
+      logger.info({ attempt, workDir, argsCount: args.length, promptLen: fullPrompt.length, model: route.model?.id }, 'Spawning Claude CLI');
       const proc = spawn(CONFIG.claudePath, args, {
         cwd: workDir,
         timeout: CONFIG.maxResponseTime,
-        env: { ...process.env, TERM: 'dumb', NODE_OPTIONS: '--max-old-space-size=1024', CLAUDE_CODE_MAX_OUTPUT_TOKENS: '8000' },
+        env: { ...process.env, TERM: 'dumb', NODE_OPTIONS: '--max-old-space-size=1024', CLAUDE_CODE_MAX_OUTPUT_TOKENS: '16000' },
         maxBuffer: 10 * 1024 * 1024,
       });
 
       // Session guard: track this process
       registerSession(chatJid, proc.pid);
+      logger.info({ pid: proc.pid }, 'Claude CLI spawned');
 
       proc.stdin.write(fullPrompt);
       proc.stdin.end();
@@ -1768,10 +1770,11 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       proc.stdout.on('data', (d) => { stdout += d.toString(); });
       proc.stderr.on('data', (d) => { stderr += d.toString(); });
 
-      proc.on('close', async (code) => {
+      proc.on('close', async (code, signal) => {
         // Session guard: untrack this process
         unregisterSession(chatJid);
         if (code !== 0 && !stdout) {
+          if (signal) logger.warn({ signal, code, pid: proc.pid, attempt }, 'Claude process killed by signal');
           // If resume failed (stale session), clear session and retry fresh
           if (sessionId && /session/i.test(stderr) && attempt < MAX_RETRIES) {
             logger.warn({ sessionId, stderr: stderr.substring(0, 300) }, 'Stale session, clearing and retrying fresh');
@@ -1784,7 +1787,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
             resolve({ retry: true });
             return;
           }
-          if (RETRYABLE_CODES.has(code) && attempt < MAX_RETRIES) {
+          if ((RETRYABLE_CODES.has(code) || code === null) && attempt < MAX_RETRIES) {
             // If timed out with a session, clear it — likely stale/hanging resume
             if (sessionId) {
               logger.warn({ code, sessionId, attempt }, 'Timeout with active session, clearing before retry');
@@ -2650,6 +2653,19 @@ async function startBot() {
   ensureDir(CONFIG.logsDir);
   ensureDir(CONFIG.mediaDir);
 
+  // Clear stale session files on startup (prevents ghost --resume after container restart)
+  try {
+    const dataEntries = await fs.readdir(CONFIG.dataDir, { withFileTypes: true });
+    let cleared = 0;
+    for (const entry of dataEntries) {
+      if (entry.isDirectory()) {
+        const sessionFile = path.join(CONFIG.dataDir, entry.name, 'session_id');
+        try { await fs.unlink(sessionFile); cleared++; } catch {}
+      }
+    }
+    if (cleared) logger.info({ cleared }, 'Cleared stale session files on startup');
+  } catch {}
+
   // Restore approved projects from disk
   await loadApprovedProjects();
 
@@ -2880,6 +2896,16 @@ async function startBot() {
 
           // Typing indicator
           if (CONFIG.typingIndicator) await currentSock.sendPresenceUpdate('composing', chatJid).catch(() => {});
+
+          // Send "working on it" ack for complex power user tasks (page creation, multi-file edits)
+          // This prevents the user thinking the bot is dead during long-running operations
+          const senderProfileForAck = getUserProfile(last.senderJid);
+          if (senderProfileForAck.role === 'power' && last.parsed.text && last.parsed.text.length > 20) {
+            const complexKeywords = /作って|作る|ページ|create|build|make|update.*page|add.*page|デプロイ|deploy/i;
+            if (complexKeywords.test(last.parsed.text)) {
+              await currentSock.sendMessage(chatJid, { text: '🔧 Working on it...' }).catch(() => {});
+            }
+          }
 
           // Ask Claude (with friction tracking)
           const _claudeStart = Date.now();

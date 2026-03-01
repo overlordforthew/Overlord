@@ -16,7 +16,7 @@ import { promisify } from 'util';
 const execAsync = promisify(exec);
 
 // Max time a Claude process can run before being considered hung (ms)
-const MAX_SESSION_AGE_MS = 10 * 60 * 1000; // 10 minutes (matches CONFIG.maxResponseTime)
+const MAX_SESSION_AGE_MS = 15 * 60 * 1000; // 15 minutes (matches CONFIG.maxResponseTime)
 
 // How often the guard scans for zombies (called externally via cron)
 // Active sessions tracked in memory (not persisted — they're transient)
