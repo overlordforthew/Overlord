@@ -457,6 +457,14 @@ export function startServer(sockRef, sendResponse) {
     fleet: { name: 'Fleet Operator', mode: 'subscription', amount: 14900, interval: 'month', priceId: process.env.STRIPE_PRICE_FLEET || '', description: 'Full fleet management' },
   };
 
+  // Plan limits for subscription enforcement
+  const PLAN_LIMITS = {
+    fleet: { maxBoats: 20, header: 'My Fleet' },
+    tech: { maxBoats: 10, header: 'My Boat' },
+    delivery: { maxBoats: 5, header: 'My Boat' },
+    private: { maxBoats: 1, header: 'My Boat' },
+  };
+
   let _stripeClient = null;
   function getStripe() {
     if (!_stripeClient) {
@@ -540,6 +548,19 @@ export function startServer(sockRef, sendResponse) {
     } catch {
       return res.status(401).json({ error: 'Invalid or expired token.' });
     }
+  }
+
+  // Subscription helpers
+  async function getMcSubscription(userId) {
+    const r = await mcPool.query(
+      'SELECT subscription_plan, subscription_status FROM users WHERE id = $1', [userId]
+    );
+    if (!r.rows[0]) return { plan: null, status: 'none' };
+    return { plan: r.rows[0].subscription_plan, status: r.rows[0].subscription_status || 'none' };
+  }
+
+  function hasActivePlan(sub) {
+    return sub.plan && sub.status === 'active' && !!PLAN_LIMITS[sub.plan];
   }
 
   // POST /api/auth/signup
@@ -821,8 +842,21 @@ export function startServer(sockRef, sendResponse) {
   // GET /api/boats
   app.get('/api/boats', requireMcAuth, authRateLimit(20, 60_000), async (req, res) => {
     try {
+      const sub = await getMcSubscription(req.mcUser.id);
+      const active = hasActivePlan(sub);
+      if (!active) {
+        return res.json({
+          boats: [],
+          subscription: { plan: sub.plan, status: sub.status, requiresPlan: true },
+          planOptions: Object.entries(MC_PLANS).map(([id, p]) => ({ id, name: p.name, amount: p.amount, interval: p.interval, description: p.description }))
+        });
+      }
+      const limits = PLAN_LIMITS[sub.plan];
       const result = await mcPool.query('SELECT * FROM boats WHERE user_id = $1 ORDER BY created_at', [req.mcUser.id]);
-      res.json({ boats: result.rows });
+      res.json({
+        boats: result.rows,
+        subscription: { plan: sub.plan, status: sub.status, maxBoats: limits.maxBoats, header: limits.header, boatCount: result.rows.length }
+      });
     } catch (err) {
       console.error('[mc-boats] List error:', err.message);
       res.status(500).json({ error: 'Something went wrong.' });
@@ -836,10 +870,15 @@ export function startServer(sockRef, sendResponse) {
       if (!name || !name.trim()) return res.status(400).json({ error: 'Boat name is required.' });
       const validStatuses = ['inactive', 'online', 'offline', 'alert'];
       const boatStatus = validStatuses.includes(status) ? status : 'inactive';
-      // Max 20 boats per user
+      // Plan enforcement
+      const sub = await getMcSubscription(req.mcUser.id);
+      if (!hasActivePlan(sub)) {
+        return res.status(403).json({ error: 'Active subscription required to add boats.' });
+      }
+      const limits = PLAN_LIMITS[sub.plan];
       const countResult = await mcPool.query('SELECT COUNT(*) FROM boats WHERE user_id = $1', [req.mcUser.id]);
-      if (parseInt(countResult.rows[0].count) >= 20) {
-        return res.status(400).json({ error: 'Maximum 20 boats per account.' });
+      if (parseInt(countResult.rows[0].count) >= limits.maxBoats) {
+        return res.status(403).json({ error: 'Your ' + MC_PLANS[sub.plan].name + ' plan allows up to ' + limits.maxBoats + ' boat' + (limits.maxBoats > 1 ? 's' : '') + '.' });
       }
       const result = await mcPool.query(
         `INSERT INTO boats (user_id, name, model, year, mmsi, home_port, status, boat_type, length_ft, beam_ft, draft_ft, fuel_capacity, water_capacity, engine_count, engine_type, registration, flag, photo_url, notes)
@@ -859,6 +898,8 @@ export function startServer(sockRef, sendResponse) {
   // PUT /api/boats/:id
   app.put('/api/boats/:id', requireMcAuth, authRateLimit(10, 60_000), async (req, res) => {
     try {
+      const sub = await getMcSubscription(req.mcUser.id);
+      if (!hasActivePlan(sub)) return res.status(403).json({ error: 'Active subscription required.' });
       const { name, model, year, mmsi, home_port, status, boat_type, length_ft, beam_ft, draft_ft, fuel_capacity, water_capacity, engine_count, engine_type, registration, flag, photo_url, notes } = req.body;
       if (!name || !name.trim()) return res.status(400).json({ error: 'Boat name is required.' });
       const validStatuses = ['inactive', 'online', 'offline', 'alert'];
@@ -884,6 +925,8 @@ export function startServer(sockRef, sendResponse) {
   // DELETE /api/boats/:id
   app.delete('/api/boats/:id', requireMcAuth, authRateLimit(10, 60_000), async (req, res) => {
     try {
+      const sub = await getMcSubscription(req.mcUser.id);
+      if (!hasActivePlan(sub)) return res.status(403).json({ error: 'Active subscription required.' });
       const result = await mcPool.query('DELETE FROM boats WHERE id = $1 AND user_id = $2 RETURNING id', [req.params.id, req.mcUser.id]);
       if (result.rows.length === 0) return res.status(404).json({ error: 'Boat not found.' });
       res.json({ message: 'Boat deleted.' });
@@ -896,6 +939,8 @@ export function startServer(sockRef, sendResponse) {
   // GET /api/boats/:id — single boat with all fields
   app.get('/api/boats/:id', requireMcAuth, authRateLimit(20, 60_000), async (req, res) => {
     try {
+      const sub = await getMcSubscription(req.mcUser.id);
+      if (!hasActivePlan(sub)) return res.status(403).json({ error: 'Active subscription required.' });
       const result = await mcPool.query('SELECT * FROM boats WHERE id = $1 AND user_id = $2', [req.params.id, req.mcUser.id]);
       if (result.rows.length === 0) return res.status(404).json({ error: 'Boat not found.' });
       res.json({ boat: result.rows[0] });
@@ -908,6 +953,8 @@ export function startServer(sockRef, sendResponse) {
   // GET /api/boats/:id/logs — paginated log entries
   app.get('/api/boats/:id/logs', requireMcAuth, authRateLimit(20, 60_000), async (req, res) => {
     try {
+      const sub = await getMcSubscription(req.mcUser.id);
+      if (!hasActivePlan(sub)) return res.status(403).json({ error: 'Active subscription required.' });
       // Verify boat ownership
       const boat = await mcPool.query('SELECT id FROM boats WHERE id = $1 AND user_id = $2', [req.params.id, req.mcUser.id]);
       if (boat.rows.length === 0) return res.status(404).json({ error: 'Boat not found.' });
@@ -930,6 +977,8 @@ export function startServer(sockRef, sendResponse) {
   // POST /api/boats/:id/logs — add log entry
   app.post('/api/boats/:id/logs', requireMcAuth, authRateLimit(10, 60_000), async (req, res) => {
     try {
+      const sub = await getMcSubscription(req.mcUser.id);
+      if (!hasActivePlan(sub)) return res.status(403).json({ error: 'Active subscription required.' });
       const boat = await mcPool.query('SELECT id FROM boats WHERE id = $1 AND user_id = $2', [req.params.id, req.mcUser.id]);
       if (boat.rows.length === 0) return res.status(404).json({ error: 'Boat not found.' });
       const { log_type, title, body, metadata } = req.body;
@@ -952,6 +1001,8 @@ export function startServer(sockRef, sendResponse) {
   // DELETE /api/boats/:id/logs/:logId — delete log entry
   app.delete('/api/boats/:id/logs/:logId', requireMcAuth, authRateLimit(10, 60_000), async (req, res) => {
     try {
+      const sub = await getMcSubscription(req.mcUser.id);
+      if (!hasActivePlan(sub)) return res.status(403).json({ error: 'Active subscription required.' });
       const boat = await mcPool.query('SELECT id FROM boats WHERE id = $1 AND user_id = $2', [req.params.id, req.mcUser.id]);
       if (boat.rows.length === 0) return res.status(404).json({ error: 'Boat not found.' });
       const result = await mcPool.query('DELETE FROM boat_logs WHERE id = $1 AND boat_id = $2 RETURNING id', [req.params.logId, req.params.id]);
