@@ -9,7 +9,7 @@ import hashlib
 from typing import Optional, Dict, List
 
 from prompt_guard.models import Severity, Action, DetectionResult, SanitizeResult
-from prompt_guard.patterns import SECRET_PATTERNS, CREDENTIAL_PATH_PATTERNS
+from prompt_guard.patterns import CREDENTIAL_PATH_PATTERNS
 
 
 # Enterprise DLP: Redaction Patterns
@@ -62,19 +62,11 @@ def scan_output(response_text: str, config: Dict, check_canary_fn=None) -> Detec
         reasons.append("canary_token_in_output")
         max_severity = Severity.CRITICAL
 
-    # 2. Secret patterns (reuse existing SECRET_PATTERNS)
-    text_lower = response_text.lower()
-    for lang, patterns in SECRET_PATTERNS.items():
-        for pattern in patterns:
-            try:
-                if re.search(pattern, text_lower, re.IGNORECASE):
-                    if "secret_in_output" not in reasons:
-                        reasons.append("secret_in_output")
-                    patterns_matched.append(f"output:{lang}:secret:{pattern[:40]}")
-                    if Severity.HIGH.value > max_severity.value:
-                        max_severity = Severity.HIGH
-            except re.error:
-                pass
+    # 2. Secret patterns — SKIPPED for output scanning.
+    # SECRET_PATTERNS detect users ASKING for secrets (input-mode social engineering).
+    # In output, normal project discussion naturally mentions "config", "api key",
+    # ".env" etc. causing false positives. Output DLP relies on credential FORMAT
+    # patterns (step 3) which match actual key material, not conversational mentions.
 
     # 3. Common credential format patterns
     credential_formats = [
