@@ -67,4 +67,4 @@ RUN mkdir -p auth data logs media
 
 EXPOSE 3001
 
-CMD ["sh", "-c", "cp /tmp/.gitconfig-host /root/.gitconfig 2>/dev/null; cp /tmp/.git-credentials-host /root/.git-credentials 2>/dev/null; if [ -n \"$OPENROUTER_KEY\" ]; then llm keys set openrouter --value \"$OPENROUTER_KEY\" 2>/dev/null; fi; ./traefik-watcher.sh >> /app/logs/traefik-watcher.log 2>&1 & exec node index.js"]
+CMD ["sh", "-c", "cp /tmp/.gitconfig-host /root/.gitconfig 2>/dev/null; cp /tmp/.git-credentials-host /root/.git-credentials 2>/dev/null; if [ -n \"$OPENROUTER_KEY\" ]; then llm keys set openrouter --value \"$OPENROUTER_KEY\" 2>/dev/null; fi; node -e \"try{const f='/root/.claude.json';const c=JSON.parse(require('fs').readFileSync(f));delete c.mcpServers;require('fs').writeFileSync(f,JSON.stringify(c,null,2))}catch{}\" 2>/dev/null; ./traefik-watcher.sh >> /app/logs/traefik-watcher.log 2>&1 & exec node index.js"]

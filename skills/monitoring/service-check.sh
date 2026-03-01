@@ -44,7 +44,7 @@ fi
 
 # Check web endpoints
 echo "--- Web Services ---"
-for PAIR in "namibarden.com" "beastmode.namibarden.com" "lumina.namibarden.com" "elsalvador.namibarden.com"; do
+for PAIR in "namibarden.com" "lumina.namibarden.com" "onlydrafting.com"; do
     CODE=$(curl -sL -o /dev/null -w '%{http_code}' --max-time 5 "https://$PAIR" 2>/dev/null || echo "000")
     if [ "$CODE" -ge 200 ] && [ "$CODE" -lt 400 ]; then
         echo "  UP  ($CODE) https://$PAIR"

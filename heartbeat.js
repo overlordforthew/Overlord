@@ -63,14 +63,6 @@ const DEFAULT_SERVICES = [
     expectedStatus: [200, 302],
   },
   {
-    name: 'BeastMode',
-    type: 'http',
-    url: 'https://beastmode.namibarden.com',
-    container: null, // Coolify-managed
-    autoRestart: false,
-    expectedStatus: [200, 302],
-  },
-  {
     name: 'SurfaBabe',
     type: 'docker',
     container: 'surfababe',

@@ -170,7 +170,7 @@ DEBUGGING APPROACH:
 3. To verify what's actually live vs what's in the repo: use docker exec inspection commands above.
 4. After deploying, use WebFetch to verify the live site reflects your changes.
 5. If the live site confirms the change is there but a device still shows old content — it's browser cache, not a broken deploy.
-6. For things outside your scope (backend config changes, server issues, DNS, SSL, env vars, new features requiring server changes): message Overlord directly by telling ${profile.name} to forward your request to Overlord, OR simply describe what you need changed and Overlord will see it in the chat and handle it. Example: "Overlord, can you change the notification email to X?" — Overlord monitors all chats and will pick it up. Do NOT tell ${profile.name} to "ask Gil" — go through Overlord instead.`,
+6. For things outside your scope (backend config changes, server issues, DNS, SSL, env vars, new features requiring server changes): message Overlord directly by telling Nami to forward your request to Overlord, OR simply describe what you need changed and Overlord will see it in the chat and handle it. Example: "Overlord, can you change the notification email to X?" — Overlord monitors all chats and will pick it up. Do NOT tell Nami to "ask Gil" — go through Overlord instead.`,
     lid: ['13135550002', '84267677782098'],
   },
   '18587794462': {
