@@ -32,6 +32,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import crypto from 'crypto';
+import https from 'https';
 import os from 'os';
 import qrcode from 'qrcode-terminal';
 
@@ -57,6 +58,25 @@ import sharp from 'sharp';
 import pg from 'pg';
 
 const execAsync = promisify(exec);
+
+/** Shell-free HTTPS JSON request helper */
+function httpJson(url, { method = 'GET', headers = {}, body = null, timeout = 10000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const opts = { method, hostname: parsed.hostname, path: parsed.pathname + parsed.search, headers, timeout };
+    const req = https.request(opts, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); } catch { resolve({ raw: data }); }
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')); });
+    if (body) req.write(body);
+    req.end();
+  });
+}
 
 // ============================================================
 // CONFIGURATION
@@ -2336,18 +2356,14 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
       try {
         const key = process.env.NB_STRIPE_KEY;
         if (!key) return { error: 'No NB_STRIPE_KEY in env' };
-        const opts = [
-          `curl -s -X ${method}`,
-          `-u "${key}:"`,
-          `"https://api.stripe.com/v1${endpoint}"`,
-        ];
+        const auth = Buffer.from(`${key}:`).toString('base64');
+        const headers = { 'Authorization': `Basic ${auth}` };
+        let body = null;
         if (data) {
-          for (const [k, v] of Object.entries(data)) {
-            opts.push(`-d "${k}=${v}"`);
-          }
+          headers['Content-Type'] = 'application/x-www-form-urlencoded';
+          body = new URLSearchParams(data).toString();
         }
-        const { stdout } = await execAsync(opts.join(' '), { timeout: 10000 });
-        return JSON.parse(stdout);
+        return await httpJson(`https://api.stripe.com/v1${endpoint}`, { method, headers, body });
       } catch (err) {
         return { error: err.message };
       }
@@ -2415,6 +2431,7 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
       case 'refund': {
         if (!subArg) return '❌ Usage: /stripe refund <charge_id>';
         if (!isAdmin(senderJid)) return '❌ Only admin can issue refunds.';
+        if (!/^ch_[a-zA-Z0-9]+$/.test(subArg)) return '❌ Invalid charge ID (must start with ch_)';
         const r = await stripeApi('/refunds', 'POST', { charge: subArg });
         if (r.error) return `❌ ${r.error}`;
         if (r.id) return `✅ Refund ${r.id} created — ${fmtMoney(r.amount, r.currency)}`;
@@ -2452,15 +2469,9 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
       try {
         const token = process.env.CLOUDFLARE_API_TOKEN;
         if (!token) return { error: 'No CLOUDFLARE_API_TOKEN in env' };
-        const opts = [
-          `curl -s -X ${method}`,
-          `"https://api.cloudflare.com/client/v4${endpoint}"`,
-          `-H "Authorization: Bearer ${token}"`,
-          `-H "Content-Type: application/json"`,
-        ];
-        if (body) opts.push(`--data '${JSON.stringify(body)}'`);
-        const { stdout } = await execAsync(opts.join(' '), { timeout: 10000 });
-        return JSON.parse(stdout);
+        const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+        const bodyStr = body ? JSON.stringify(body) : null;
+        return await httpJson(`https://api.cloudflare.com/client/v4${endpoint}`, { method, headers, body: bodyStr });
       } catch (err) {
         return { error: err.message };
       }
@@ -2491,6 +2502,7 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
         const url = parts[1];
         const zoneId = CF_ZONES[domain];
         if (!zoneId) return `❌ Unknown domain: ${domain}\nManaged: ${Object.keys(CF_ZONES).join(', ')}`;
+        if (url && !/^https?:\/\//.test(url)) return '❌ URL must start with http:// or https://';
         const body = url ? { files: [url] } : { purge_everything: true };
         const resp = await cfApi(`/zones/${zoneId}/purge_cache`, 'POST', body);
         if (resp.error) return `❌ ${resp.error}`;
