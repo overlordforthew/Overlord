@@ -73,12 +73,13 @@ export function startServer(sockRef, sendResponse) {
   app.post('/webhook/github', async (req, res) => {
     try {
       const secret = process.env.GITHUB_WEBHOOK_SECRET;
-      if (secret) {
-        const sig = req.headers['x-hub-signature-256'];
-        const expected = 'sha256=' + crypto.createHmac('sha256', secret)
-          .update(req.rawBody).digest('hex');
-        if (sig !== expected) return res.status(401).json({ error: 'Bad signature' });
-      }
+      if (!secret) return res.status(503).json({ error: 'Webhook secret not configured' });
+      const sig = req.headers['x-hub-signature-256'];
+      if (!sig) return res.status(401).json({ error: 'Missing signature' });
+      const expected = 'sha256=' + crypto.createHmac('sha256', secret)
+        .update(req.rawBody).digest('hex');
+      if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected)))
+        return res.status(401).json({ error: 'Bad signature' });
 
       const event = req.headers['x-github-event'];
       const p = req.body;
@@ -103,9 +104,11 @@ export function startServer(sockRef, sendResponse) {
     }
   });
 
-  // POST /webhook/coolify — deploy notifications
+  // POST /webhook/coolify — deploy notifications (token-protected)
   app.post('/webhook/coolify', async (req, res) => {
     try {
+      const token = (req.headers.authorization || '').replace('Bearer ', '');
+      if (!token || token !== process.env.WEBHOOK_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
       const { status, project, environment, message: msg } = req.body;
       const text = msg || `Coolify: ${project || 'unknown'} deploy ${status || 'update'} (${environment || 'production'})`;
       await sockRef.sock.sendMessage(ADMIN_JID, { text });
@@ -443,7 +446,8 @@ export function startServer(sockRef, sendResponse) {
     }
   })();
 
-  const MC_JWT_SECRET = process.env.MC_JWT_SECRET || 'fallback-dev-secret';
+  const MC_JWT_SECRET = process.env.MC_JWT_SECRET;
+  if (!MC_JWT_SECRET) logger.warn('MC_JWT_SECRET not set — MasterCommander auth will fail');
 
   // ---- Stripe billing (MasterCommander) ----
   const MC_PLANS = {
