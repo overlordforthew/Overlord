@@ -1746,6 +1746,14 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
             return;
           }
           if (RETRYABLE_CODES.has(code) && attempt < MAX_RETRIES) {
+            // If timed out with a session, clear it — likely stale/hanging resume
+            if (sessionId) {
+              logger.warn({ code, sessionId, attempt }, 'Timeout with active session, clearing before retry');
+              try { await fs.unlink(path.join(contactDir(chatJid), 'session_id')); } catch {}
+              sessionId = null;
+              const resumeIdx = args.indexOf('--resume');
+              if (resumeIdx !== -1) args.splice(resumeIdx, 2);
+            }
             logger.warn({ code, stderr: stderr.substring(0, 300), attempt }, 'Claude transient error, retrying');
             resolve({ retry: true });
           } else {

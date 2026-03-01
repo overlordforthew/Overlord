@@ -545,10 +545,28 @@
       "details": "162059ms for 109457291874478@lid",
       "durationMs": 162059,
       "timestamp": "2026-03-01T09:18:56.391Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "78089ms for 109457291874478@lid",
+      "durationMs": 78089,
+      "timestamp": "2026-03-01T09:49:05.078Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "427970ms for 84267677782098@lid",
+      "durationMs": 427970,
+      "timestamp": "2026-03-01T13:35:11.382Z"
+    },
+    {
+      "type": "slow_response",
+      "details": "67343ms for 84267677782098@lid",
+      "durationMs": 67343,
+      "timestamp": "2026-03-01T14:15:23.117Z"
     }
   ],
   "summary": {
     "api_error": 2,
-    "slow_response": 89
+    "slow_response": 92
   }
 }
