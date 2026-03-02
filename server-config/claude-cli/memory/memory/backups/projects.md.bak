@@ -33,7 +33,7 @@
 
 ## MasterCommander
 - Auth handled by Overlord's server.js (not self-contained)
-- DB: dedicated `mastercommander-db` container, tables: `users`, `boats`, `boat_logs`, `gate_users`, `gate_nda`, `contact_submissions`, `newsletter_subscribers`
+- DB tables: `mc_users`, `boats` in BeastMode's PG instance
 - Chat widget hits Overlord `/api/web-chat` via Traefik
 - Deploy: `docker cp` into container (no webhook)
 

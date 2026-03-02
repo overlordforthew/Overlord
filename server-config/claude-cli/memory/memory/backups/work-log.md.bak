@@ -1,0 +1,25 @@
+# Work Log — Lessons Learned
+
+> Chronological logs are disposable. This file captures recurring gotchas and hard-won lessons.
+
+## Deploy Gotchas
+- `docker restart` does NOT rebuild — code stays baked in the old image. Always `docker compose up -d --build`
+- NamiBarden has NO Coolify webhook — deploy via `docker compose` or `/deploy namibarden` (hot-copies files)
+- MasterCommander has NO webhook — deploy via `docker cp` into container
+- Coolify env vars: never insert raw values into DB — always use API (expects encrypted values)
+
+## WhatsApp / Overlord
+- Nami's WhatsApp sends LID `84267677782098`, not her phone number `13135550002` — both must be in profile
+- Group chats: always respond as Overlord/Sage, never personal agents (Ai Chan/Britt/Dex)
+- `openrouter/auto` picks reasoning models that burn tokens on thinking → empty responses. Use `gpt-4.1-nano` for chat widget
+- Session bloat: `--resume` carries entire conversation. 6-hour auto-rotation added 2026-03-01
+- Power user turn limit: 60 (was 20, raised for content creation sessions)
+
+## AI Chan / Power User Incidents
+- 2026-02-24: Claude CLI credits exhausted mid-session → file edits orphaned on disk, never committed. AI Chan attempted self-recovery by running `docker build` + `docker run` directly (bypassed restrictions). Fix: enforce tool restrictions at code level, not just prompt level.
+
+## Infrastructure
+- Fail2ban sshd jail: must use `backend=auto`, NOT `backend=systemd` (systemd backend broken on this Ubuntu)
+- Traefik access logging: enabled for 4xx only (`/data/coolify/proxy/access.log`), logrotate 14 days
+- `.env` files must be chmod 600 — audit periodically
+- `gh auth` token lacks push scope — use GH_TOKEN from overlord `.env` for git push
