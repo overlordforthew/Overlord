@@ -1,40 +1,45 @@
-# Cloudflare API Reference
 
-## Credentials
-- **Token:** `CLOUDFLARE_API_TOKEN` in `/root/overlord/.env`
-- **Account ID:** `099cbdaaadc71eef10329f795a4e564f`
-- **Account:** Gilbarden@gmail.com
-- **Permissions:** Zone DNS Edit, Zone Settings Edit, SSL/Certs Edit, Page Rules Edit, Zone Read, Analytics Read — All zones
-- **Note:** Use account-scoped verify endpoint: `/client/v4/accounts/{account_id}/tokens/verify` (user-scoped `/client/v4/user/tokens/verify` returns invalid for this token type)
 
-## Zones
+CLOUDFLARE API REFERENCE
 
+CREDENTIALS
+- Token: `CLOUDFLARE_API_TOKEN` in `/root/overlord/.env`
+- Account ID: `099cbdaaadc71eef10329f795a4e564f`
+- Account: Gilbarden@gmail.com
+- Token ID: `5aa57ca0c6ae27710079094badd19659` (User API Token, no expiry)
+- Permissions: Zone Read, Zone Edit, DNS Edit, Zone Settings Read, SSL/Certs Edit, Page Rules Edit, Cache Purge, Account Settings Read — All zones
+- Note: User-scoped verify works: `/client/v4/user/tokens/verify`. Account-scoped also works: `/client/v4/accounts/{id}/tokens/verify`
+- Limitation: User API Tokens can't self-rotate via API (CF restriction). Account-level "API Tokens Edit" only manages Account tokens, not User tokens.
+- Health check: `/root/overlord/scripts/rotate-cf-token.sh` runs quarterly via cron — verifies token + permissions, logs warnings if anything fails.
+
+ZONES
 | Domain | Zone ID | Status |
 |--------|---------|--------|
 | namibarden.com | 51ea8958dc949e1793c0d31435cfa699 | active |
 | onlydrafting.com | 5a4473673d3df140fa184e36f8567031 | active |
+| onlyhulls.com | 3d950be33832c344c40e7bd75a5c7ac2 | active |
 
-## Common API Patterns
+COMMON API PATTERNS
 
-### Auth header
+AUTH HEADER
 ```
 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"
 -H "Content-Type: application/json"
 ```
 
-### List zones
+LIST ZONES
 ```bash
 curl -s "https://api.cloudflare.com/client/v4/zones?account.id=$ACCOUNT_ID" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-### List DNS records for a zone
+LIST DNS RECORDS
 ```bash
 curl -s "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-### Create A record (proxied)
+CREATE A RECORD (PROXIED)
 ```bash
 curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records" \
   -H "Authorization: Bearer $TOKEN" \
@@ -42,7 +47,7 @@ curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records
   --data '{"type":"A","name":"example.com","content":"89.167.12.82","ttl":1,"proxied":true}'
 ```
 
-### Create CNAME (www → root)
+CREATE CNAME (www → root)
 ```bash
 curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records" \
   -H "Authorization: Bearer $TOKEN" \
@@ -50,13 +55,13 @@ curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records
   --data '{"type":"CNAME","name":"www","content":"example.com","ttl":1,"proxied":true}'
 ```
 
-### Delete a DNS record
+DELETE DNS RECORD
 ```bash
 curl -s -X DELETE "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$RECORD_ID" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-### Update a DNS record
+UPDATE DNS RECORD
 ```bash
 curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$RECORD_ID" \
   -H "Authorization: Bearer $TOKEN" \
@@ -64,21 +69,20 @@ curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/
   --data '{"type":"A","name":"example.com","content":"89.167.12.82","ttl":1,"proxied":true}'
 ```
 
-## New Domain Setup Workflow
+NEW DOMAIN SETUP WORKFLOW
 
-1. **Get zone ID:** After domain is added to Cloudflare, query `/zones?name=domain.com`
-2. **Create DNS records:**
+1. GET ZONE ID: Query `/zones?name=domain.com`
+2. CREATE DNS RECORDS:
    - A record for root (`domain.com`) → `89.167.12.82` (proxied)
    - CNAME for `www` → `domain.com` (proxied)
-3. **Add to Coolify:**
-   - Update FQDN in Coolify DB: `docker exec coolify-db psql -U coolify -c "UPDATE applications SET fqdn = 'https://existing.com,https://newdomain.com,https://www.newdomain.com' WHERE uuid = '...'"`
+3. UPDATE COOLIFY DB:
+   - `docker exec coolify-db psql -U coolify -c "UPDATE applications SET fqdn = 'https://existing.com,https://newdomain.com,https://www.newdomain.com' WHERE uuid = '...'"`
    - Clear custom_labels: `UPDATE applications SET custom_labels = NULL WHERE uuid = '...'`
-   - Trigger redeploy via Coolify API: `POST /api/v1/applications/{uuid}/restart`
-   - Coolify auto-generates Traefik labels with routers for all domains + Let's Encrypt certs
-4. **Verify:** `curl -sI https://newdomain.com` should return 200
+4. TRIGGER REDeploy: `POST /api/v1/applications/{uuid}/restart`
+5. VERIFY: `curl -sI https://newdomain.com` returns 200
 
-## Notes
-- Cloudflare proxy (orange cloud) = traffic goes through CF edge, hides server IP, provides DDoS protection
-- TTL=1 means "automatic" when proxied
-- SSL mode should be "Full (strict)" since Traefik provides valid Let's Encrypt certs
+NOTES
+- Cloudflare proxy (orange cloud) = traffic through CF edge, hides server IP, DDoS protection
+- TTL=1 = automatic when proxied
+- SSL mode = "Full (strict)" (Traefik provides valid Let's Encrypt certs)
 - Server IP: `89.167.12.82` (Hetzner CX33)
