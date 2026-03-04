@@ -998,6 +998,30 @@ export function startServer(sockRef, sendResponse) {
     }
   });
 
+  // PUT /api/boats/:id/logs/:logId — edit log entry
+  app.put('/api/boats/:id/logs/:logId', requireMcAuth, authRateLimit(10, 60_000), async (req, res) => {
+    try {
+      const sub = await getMcSubscription(req.mcUser.id);
+      if (!hasActivePlan(sub)) return res.status(403).json({ error: 'Active subscription required.' });
+      const boat = await mcPool.query('SELECT id FROM boats WHERE id = $1 AND user_id = $2', [req.params.id, req.mcUser.id]);
+      if (boat.rows.length === 0) return res.status(404).json({ error: 'Boat not found.' });
+      const { log_type, title, body } = req.body;
+      const validTypes = ['note', 'maintenance', 'telemetry', 'alert'];
+      const sets = [];
+      const params = [req.params.logId, req.params.id];
+      if (log_type && validTypes.includes(log_type)) { sets.push('log_type = $' + (params.length + 1)); params.push(log_type); }
+      if (title !== undefined) { sets.push('title = $' + (params.length + 1)); params.push((title || '').trim() || null); }
+      if (body !== undefined) { sets.push('body = $' + (params.length + 1)); params.push((body || '').trim() || null); }
+      if (sets.length === 0) return res.status(400).json({ error: 'Nothing to update.' });
+      const result = await mcPool.query('UPDATE boat_logs SET ' + sets.join(', ') + ' WHERE id = $1 AND boat_id = $2 RETURNING *', params);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'Log entry not found.' });
+      res.json({ log: result.rows[0] });
+    } catch (err) {
+      console.error('[mc-boats] Log update error:', err.message);
+      res.status(500).json({ error: 'Something went wrong.' });
+    }
+  });
+
   // DELETE /api/boats/:id/logs/:logId — delete log entry
   app.delete('/api/boats/:id/logs/:logId', requireMcAuth, authRateLimit(10, 60_000), async (req, res) => {
     try {

@@ -56,7 +56,9 @@ tar czf "$BACKUP_DIR/coolify-config-$DATE.tar.gz" \
 # 4. Backup databases (all PostgreSQL containers)
 for CONTAINER in $(docker ps --filter "ancestor=postgres:17-alpine" --format '{{.Names}}' 2>/dev/null); do
     log "Dumping database from $CONTAINER..."
-    docker exec "$CONTAINER" pg_dumpall -U postgres 2>/dev/null | gzip > "$BACKUP_DIR/db-$CONTAINER-$DATE.sql.gz" || log "WARN: Failed to dump $CONTAINER"
+    PG_USER=$(docker inspect "$CONTAINER" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^POSTGRES_USER=' | cut -d= -f2)
+    PG_USER="${PG_USER:-postgres}"
+    docker exec "$CONTAINER" pg_dumpall -U "$PG_USER" 2>/dev/null | gzip > "$BACKUP_DIR/db-$CONTAINER-$DATE.sql.gz" || log "WARN: Failed to dump $CONTAINER"
 done
 
 # 5. Clean old backups (keep last 7 days)

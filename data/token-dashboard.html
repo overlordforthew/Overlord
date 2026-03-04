@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Token Usage Dashboard — 2026-03-04</title>
+<style>
+  :root { --bg: #0d1117; --card: #161b22; --border: #30363d; --text: #c9d1d9;
+           --accent: #58a6ff; --green: #3fb950; --yellow: #d29922; --red: #f85149; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          background: var(--bg); color: var(--text); padding: 20px; max-width: 1200px; margin: 0 auto; }
+  h1 { color: var(--accent); margin-bottom: 5px; }
+  .subtitle { color: #8b949e; margin-bottom: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .stat { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .stat .label { font-size: 12px; color: #8b949e; text-transform: uppercase; }
+  .stat .value { font-size: 24px; font-weight: 600; color: var(--accent); }
+  .stat .detail { font-size: 11px; color: #8b949e; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 16px; }
+  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 13px; }
+  th { color: #8b949e; font-weight: 500; }
+  .path { font-family: monospace; font-size: 12px; word-break: break-all; }
+  details { background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+             margin-bottom: 8px; }
+  summary { padding: 12px 16px; cursor: pointer; font-weight: 500; }
+  summary:hover { color: var(--accent); }
+  .badge { background: var(--border); padding: 2px 8px; border-radius: 10px; font-size: 11px;
+            font-weight: 400; margin-left: 8px; }
+  details table { margin: 0 16px 12px; width: calc(100% - 32px); }
+  section { margin-bottom: 28px; }
+  section > h2 { color: var(--accent); font-size: 16px; margin-bottom: 12px;
+                   border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  .chart { display: flex; align-items: flex-end; gap: 8px; height: 120px; padding: 0 4px;
+            background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; }
+  .bar { width: 100%; max-width: 40px; background: var(--accent); border-radius: 3px 3px 0 0;
+          min-height: 2px; transition: height 0.3s; }
+  .bar-wrap span { font-size: 10px; color: #8b949e; margin-top: 4px; }
+  .opt { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .opt li { margin: 6px 0 6px 16px; font-size: 13px; }
+  .cache-bar { height: 20px; border-radius: 10px; overflow: hidden; display: flex; margin-top: 4px; }
+  .cache-bar .read { background: var(--green); }
+  .cache-bar .create { background: var(--yellow); }
+  footer { text-align: center; color: #484f58; font-size: 11px; margin-top: 32px; padding-top: 16px;
+            border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+  <h1>Token Usage Dashboard</h1>
+  <p class="subtitle">Week of 2026-02-25 to 2026-03-04 &middot; 1 days of data</p>
+
+  <div class="grid">
+    <div class="stat">
+      <div class="label">Total Calls</div>
+      <div class="value">1,055</div>
+      <div class="detail">~1,055/day</div>
+    </div>
+    <div class="stat">
+      <div class="label">Output Tokens</div>
+      <div class="value">177.7K</div>
+      <div class="detail">~177.7K/day</div>
+    </div>
+    <div class="stat">
+      <div class="label">Input Tokens</div>
+      <div class="value">20.6K</div>
+      <div class="detail">incl. 67.4M cached</div>
+    </div>
+    <div class="stat">
+      <div class="label">Cache Hit Rate</div>
+      <div class="value">95%</div>
+      <div class="detail">
+        <div class="cache-bar">
+          <div class="read" style="width:94.68727135880339%"></div>
+          <div class="create" style="width:5.312728641196614%"></div>
+        </div>
+        read vs create
+      </div>
+    </div>
+    <div class="stat">
+      <div class="label">Context Boot</div>
+      <div class="value">~14.1K</div>
+      <div class="detail">55KB loaded per session</div>
+    </div>
+    <div class="stat">
+      <div class="label">OpenRouter (Free)</div>
+      <div class="value">6</div>
+      <div class="detail">15.5K tokens (free)</div>
+    </div>
+  </div>
+
+  <section>
+    <h2>Daily Activity</h2>
+    <div class="chart"><div class="bar-wrap"><div class="bar" style="height:100.0%"></div><span>03-04</span></div></div>
+  </section>
+
+  <section>
+    <h2>Per-Model Usage</h2>
+    <table>
+      <tr><th>Model</th><th>Calls</th><th>Input</th><th>Output</th><th>Cache Read</th><th>Cache Create</th></tr>
+      <tr><td>Opus 4.6</td><td>561</td><td>7.0K</td><td>99.1K</td><td>41.8M</td><td>1.5M</td></tr><tr><td>Haiku 4.5</td><td>332</td><td>13.5K</td><td>44.0K</td><td>16.2M</td><td>1.6M</td></tr><tr><td>Sonnet 4.6</td><td>162</td><td>206</td><td>34.6K</td><td>9.5M</td><td>692.1K</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>Per-Source Usage</h2>
+    <table>
+      <tr><th>Source</th><th>Calls</th><th>Input</th><th>Output</th></tr>
+      <tr><td>CLI Sessions</td><td>1,024</td><td>20.6K</td><td>177.5K</td></tr><tr><td>WhatsApp Bot</td><td>17</td><td>51</td><td>85</td></tr><tr><td>Lumina</td><td>10</td><td>27</td><td>98</td></tr><tr><td>Temp/shannon</td><td>4</td><td>12</td><td>4</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>Daily Breakdown</h2>
+    <table>
+      <tr><th>Date</th><th>Calls</th><th>Input</th><th>Output</th><th>Cache Read</th><th>Cache Create</th></tr>
+      <tr><td>2026-03-04</td><td>1,055</td><td>20.6K</td><td>177.7K</td><td>67.4M</td><td>3.8M</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>Context Files (Loaded Per Session)</h2>
+    <p style="color:#8b949e;font-size:13px;margin-bottom:12px;">
+      Total: 55.2KB / ~14,125 tokens &middot; estimated at 4 bytes/token
+    </p>
+    
+        <details>
+          <summary>Always Loaded <span class="badge">5.6KB / ~1,432 tok</span></summary>
+          <table class="files">
+            <tr><th>File</th><th>Size</th><th>Lines</th><th>Est. Tokens</th></tr>
+            <tr><td class="path">CLAUDE.md</td><td>3.1KB</td><td>57</td><td>~802</td></tr>
+<tr><td class="path">.claude/rules/security.md</td><td>1.4KB</td><td>29</td><td>~347</td></tr>
+<tr><td class="path">.claude/rules/deploy.md</td><td>1.1KB</td><td>28</td><td>~283</td></tr>
+          </table>
+        </details>
+        <details>
+          <summary>Overlord <span class="badge">16.8KB / ~4,308 tok</span></summary>
+          <table class="files">
+            <tr><th>File</th><th>Size</th><th>Lines</th><th>Est. Tokens</th></tr>
+            <tr><td class="path">overlord/CLAUDE.md</td><td>16.8KB</td><td>338</td><td>~4,308</td></tr>
+          </table>
+        </details>
+        <details>
+          <summary>Project: Elmo <span class="badge">1.2KB / ~318 tok</span></summary>
+          <table class="files">
+            <tr><th>File</th><th>Size</th><th>Lines</th><th>Est. Tokens</th></tr>
+            <tr><td class="path">projects/Elmo/CLAUDE.md</td><td>1.2KB</td><td>36</td><td>~318</td></tr>
+          </table>
+        </details>
+        <details>
+          <summary>Project: Lumina <span class="badge">1.5KB / ~377 tok</span></summary>
+          <table class="files">
+            <tr><th>File</th><th>Size</th><th>Lines</th><th>Est. Tokens</th></tr>
+            <tr><td class="path">projects/Lumina/CLAUDE.md</td><td>1.5KB</td><td>42</td><td>~377</td></tr>
+          </table>
+        </details>
+        <details>
+          <summary>Project: MasterCommander <span class="badge">2.0KB / ~520 tok</span></summary>
+          <table class="files">
+            <tr><th>File</th><th>Size</th><th>Lines</th><th>Est. Tokens</th></tr>
+            <tr><td class="path">projects/MasterCommander/CLAUDE.md</td><td>2.0KB</td><td>53</td><td>~520</td></tr>
+          </table>
+        </details>
+        <details>
+          <summary>Project: NamiBarden <span class="badge">1.7KB / ~439 tok</span></summary>
+          <table class="files">
+            <tr><th>File</th><th>Size</th><th>Lines</th><th>Est. Tokens</th></tr>
+            <tr><td class="path">projects/NamiBarden/CLAUDE.md</td><td>1.7KB</td><td>43</td><td>~439</td></tr>
+          </table>
+        </details>
+        <details>
+          <summary>Project: OnlyHulls <span class="badge">1.7KB / ~441 tok</span></summary>
+          <table class="files">
+            <tr><th>File</th><th>Size</th><th>Lines</th><th>Est. Tokens</th></tr>
+            <tr><td class="path">projects/OnlyHulls/CLAUDE.md</td><td>1.7KB</td><td>39</td><td>~441</td></tr>
+          </table>
+        </details>
+        <details>
+          <summary>Project: SurfaBabe <span class="badge">3.2KB / ~819 tok</span></summary>
+          <table class="files">
+            <tr><th>File</th><th>Size</th><th>Lines</th><th>Est. Tokens</th></tr>
+            <tr><td class="path">projects/SurfaBabe/CLAUDE.md</td><td>3.2KB</td><td>79</td><td>~819</td></tr>
+          </table>
+        </details>
+        <details>
+          <summary>Project: shannon <span class="badge">9.6KB / ~2,462 tok</span></summary>
+          <table class="files">
+            <tr><th>File</th><th>Size</th><th>Lines</th><th>Est. Tokens</th></tr>
+            <tr><td class="path">projects/shannon/CLAUDE.md</td><td>9.6KB</td><td>159</td><td>~2,462</td></tr>
+          </table>
+        </details>
+        <details>
+          <summary>Shared Memory <span class="badge">11.7KB / ~3,009 tok</span></summary>
+          <table class="files">
+            <tr><th>File</th><th>Size</th><th>Lines</th><th>Est. Tokens</th></tr>
+            <tr><td class="path">.claude/projects/-root/memory/MEMORY.md</td><td>4.0KB</td><td>74</td><td>~1,033</td></tr>
+<tr><td class="path">.claude/projects/-root/memory/infrastructure.md</td><td>2.2KB</td><td>36</td><td>~573</td></tr>
+<tr><td class="path">.claude/projects/-root/memory/cloudflare.md</td><td>2.2KB</td><td>48</td><td>~567</td></tr>
+<tr><td class="path">.claude/projects/-root/memory/projects.md</td><td>1.6KB</td><td>39</td><td>~421</td></tr>
+<tr><td class="path">.claude/projects/-root/memory/work-log.md</td><td>0.9KB</td><td>23</td><td>~225</td></tr>
+<tr><td class="path">.claude/projects/-root/memory/mastercommander-plans.md</td><td>0.7KB</td><td>13</td><td>~190</td></tr>
+          </table>
+        </details>
+  </section>
+
+  <section>
+    <h2>Optimization Recommendations</h2>
+    <div class="opt"><ul><li>LARGE FILE: overlord/CLAUDE.md (16.8KB / ~4,308 tokens) — consider condensing</li>
+<li>GOOD CACHE HIT RATE: 95% — sessions reusing cached context efficiently</li>
+<li>HIGH SESSION VOLUME: ~1055 calls/day — consider consolidating tasks into fewer sessions</li></ul></div>
+  </section>
+
+  <footer>Generated 2026-03-04 10:57 &middot; Overlord Token Dashboard</footer>
+</body>
+</html>

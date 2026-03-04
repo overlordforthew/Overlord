@@ -1,572 +1,308 @@
 {
   "events": [
     {
-      "type": "api_error",
-      "details": "⚠️ I'm temporarily unavailable. Try again in a few minutes.",
-      "durationMs": 151154,
-      "timestamp": "2026-02-26T20:29:03.822Z"
+      "type": "slow_response",
+      "details": "252575ms for 109457291874478@lid",
+      "durationMs": 252575,
+      "timestamp": "2026-03-01T19:59:14.872Z"
     },
     {
       "type": "slow_response",
-      "details": "82498ms for 109457291874478@lid",
-      "durationMs": 82498,
-      "timestamp": "2026-02-26T22:00:24.254Z"
+      "details": "366829ms for 109457291874478@lid",
+      "durationMs": 366829,
+      "timestamp": "2026-03-01T20:07:26.993Z"
     },
     {
       "type": "slow_response",
-      "details": "88633ms for 84267677782098@lid",
-      "durationMs": 88633,
-      "timestamp": "2026-02-26T23:28:45.377Z"
+      "details": "95089ms for 84267677782098@lid",
+      "durationMs": 95089,
+      "timestamp": "2026-03-01T20:37:27.495Z"
     },
     {
       "type": "slow_response",
-      "details": "421948ms for 109457291874478@lid",
-      "durationMs": 421948,
-      "timestamp": "2026-02-26T23:28:51.414Z"
+      "details": "125558ms for 84267677782098@lid",
+      "durationMs": 125558,
+      "timestamp": "2026-03-01T20:39:35.947Z"
     },
     {
       "type": "slow_response",
-      "details": "154204ms for 84267677782098@lid",
-      "durationMs": 154204,
-      "timestamp": "2026-02-26T23:37:01.819Z"
+      "details": "67174ms for 84267677782098@lid",
+      "durationMs": 67174,
+      "timestamp": "2026-03-01T20:40:45.254Z"
     },
     {
       "type": "slow_response",
-      "details": "80360ms for 109457291874478@lid",
-      "durationMs": 80360,
-      "timestamp": "2026-02-27T00:12:18.064Z"
+      "details": "134793ms for 84267677782098@lid",
+      "durationMs": 134793,
+      "timestamp": "2026-03-01T20:46:03.830Z"
     },
     {
       "type": "slow_response",
-      "details": "67926ms for 84267677782098@lid",
-      "durationMs": 67926,
-      "timestamp": "2026-02-27T00:53:27.679Z"
+      "details": "159532ms for 84267677782098@lid",
+      "durationMs": 159532,
+      "timestamp": "2026-03-01T21:06:28.753Z"
     },
     {
       "type": "slow_response",
-      "details": "86770ms for 84267677782098@lid",
-      "durationMs": 86770,
-      "timestamp": "2026-02-27T13:25:18.187Z"
+      "details": "111800ms for 109457291874478@lid",
+      "durationMs": 111800,
+      "timestamp": "2026-03-02T00:37:06.044Z"
     },
     {
       "type": "slow_response",
-      "details": "125423ms for 84267677782098@lid",
-      "durationMs": 125423,
-      "timestamp": "2026-02-27T13:32:55.256Z"
+      "details": "87883ms for 84267677782098@lid",
+      "durationMs": 87883,
+      "timestamp": "2026-03-02T01:22:36.283Z"
     },
     {
       "type": "slow_response",
-      "details": "132595ms for 84267677782098@lid",
-      "durationMs": 132595,
-      "timestamp": "2026-02-27T13:36:43.832Z"
+      "details": "109558ms for 109457291874478@lid",
+      "durationMs": 109558,
+      "timestamp": "2026-03-02T01:26:21.931Z"
     },
     {
       "type": "slow_response",
-      "details": "75923ms for 84267677782098@lid",
-      "durationMs": 75923,
-      "timestamp": "2026-02-27T13:51:22.631Z"
+      "details": "98607ms for 84267677782098@lid",
+      "durationMs": 98607,
+      "timestamp": "2026-03-02T01:29:38.386Z"
     },
     {
       "type": "slow_response",
-      "details": "98398ms for 84267677782098@lid",
-      "durationMs": 98398,
-      "timestamp": "2026-02-27T14:34:57.914Z"
+      "details": "85019ms for 84267677782098@lid",
+      "durationMs": 85019,
+      "timestamp": "2026-03-02T01:41:38.283Z"
     },
     {
       "type": "slow_response",
-      "details": "442296ms for 84267677782098@lid",
-      "durationMs": 442296,
-      "timestamp": "2026-02-27T14:54:45.910Z"
+      "details": "199956ms for 84267677782098@lid",
+      "durationMs": 199956,
+      "timestamp": "2026-03-02T01:47:56.406Z"
     },
     {
       "type": "slow_response",
-      "details": "251267ms for 84267677782098@lid",
-      "durationMs": 251267,
-      "timestamp": "2026-02-27T14:58:59.564Z"
+      "details": "69211ms for 84267677782098@lid",
+      "durationMs": 69211,
+      "timestamp": "2026-03-02T01:49:08.243Z"
     },
     {
       "type": "slow_response",
-      "details": "85407ms for 84267677782098@lid",
-      "durationMs": 85407,
-      "timestamp": "2026-02-27T16:35:08.122Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "169903ms for 84267677782098@lid",
-      "durationMs": 169903,
-      "timestamp": "2026-02-27T16:44:29.586Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "298361ms for 84267677782098@lid",
-      "durationMs": 298361,
-      "timestamp": "2026-02-27T17:03:57.027Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "68789ms for 84267677782098@lid",
-      "durationMs": 68789,
-      "timestamp": "2026-02-27T17:05:06.866Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "61591ms for 84267677782098@lid",
-      "durationMs": 61591,
-      "timestamp": "2026-02-27T17:16:17.888Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "71723ms for 84267677782098@lid",
-      "durationMs": 71723,
-      "timestamp": "2026-02-27T17:19:26.181Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "115697ms for 84267677782098@lid",
-      "durationMs": 115697,
-      "timestamp": "2026-02-27T17:27:13.545Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "232384ms for 84267677782098@lid",
-      "durationMs": 232384,
-      "timestamp": "2026-02-27T17:57:10.363Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "316569ms for 84267677782098@lid",
-      "durationMs": 316569,
-      "timestamp": "2026-02-27T20:06:31.365Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "68293ms for 109457291874478@lid",
-      "durationMs": 68293,
-      "timestamp": "2026-02-27T20:06:51.492Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "456149ms for 84267677782098@lid",
-      "durationMs": 456149,
-      "timestamp": "2026-02-27T20:42:14.766Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "1006849ms for 84267677782098@lid",
-      "durationMs": 1006849,
-      "timestamp": "2026-02-27T20:59:02.034Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "543767ms for 84267677782098@lid",
-      "durationMs": 543767,
-      "timestamp": "2026-02-27T21:54:13.242Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "93097ms for 84267677782098@lid",
-      "durationMs": 93097,
-      "timestamp": "2026-02-27T22:46:57.793Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "274475ms for 84267677782098@lid",
-      "durationMs": 274475,
-      "timestamp": "2026-02-27T22:58:35.033Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "90589ms for 84267677782098@lid",
-      "durationMs": 90589,
-      "timestamp": "2026-02-27T23:02:31.119Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "76931ms for 84267677782098@lid",
-      "durationMs": 76931,
-      "timestamp": "2026-02-27T23:03:50.212Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "60545ms for 84267677782098@lid",
-      "durationMs": 60545,
-      "timestamp": "2026-02-27T23:04:51.189Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "147324ms for 84267677782098@lid",
-      "durationMs": 147324,
-      "timestamp": "2026-02-27T23:07:18.689Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "62837ms for 84267677782098@lid",
-      "durationMs": 62837,
-      "timestamp": "2026-02-27T23:08:23.656Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "106866ms for 84267677782098@lid",
-      "durationMs": 106866,
-      "timestamp": "2026-02-27T23:18:21.416Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "367508ms for 84267677782098@lid",
-      "durationMs": 367508,
-      "timestamp": "2026-02-27T23:24:31.329Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "80585ms for 84267677782098@lid",
-      "durationMs": 80585,
-      "timestamp": "2026-02-27T23:31:37.739Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "135094ms for 84267677782098@lid",
-      "durationMs": 135094,
-      "timestamp": "2026-02-27T23:34:08.951Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "83553ms for 84267677782098@lid",
-      "durationMs": 83553,
-      "timestamp": "2026-02-27T23:36:30.789Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "60115ms for 109457291874478@lid",
-      "durationMs": 60115,
-      "timestamp": "2026-02-28T00:07:15.997Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "125825ms for 84267677782098@lid",
-      "durationMs": 125825,
-      "timestamp": "2026-02-28T00:16:31.358Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "273310ms for 84267677782098@lid",
-      "durationMs": 273310,
-      "timestamp": "2026-02-28T00:48:57.401Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "63439ms for 109457291874478@lid",
-      "durationMs": 63439,
-      "timestamp": "2026-02-28T10:40:50.709Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "71931ms for 109457291874478@lid",
-      "durationMs": 71931,
-      "timestamp": "2026-02-28T10:47:46.593Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "570098ms for 109457291874478@lid",
-      "durationMs": 570098,
-      "timestamp": "2026-02-28T10:57:59.211Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "126902ms for 109457291874478@lid",
-      "durationMs": 126902,
-      "timestamp": "2026-02-28T11:00:06.480Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "148620ms for 84267677782098@lid",
-      "durationMs": 148620,
-      "timestamp": "2026-02-28T13:19:12.317Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "144590ms for 84267677782098@lid",
-      "durationMs": 144590,
-      "timestamp": "2026-02-28T13:34:18.541Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "82517ms for 84267677782098@lid",
-      "durationMs": 82517,
-      "timestamp": "2026-02-28T13:37:56.687Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "279635ms for 109457291874478@lid",
-      "durationMs": 279635,
-      "timestamp": "2026-02-28T14:04:01.799Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "101089ms for 84267677782098@lid",
-      "durationMs": 101089,
-      "timestamp": "2026-02-28T14:08:02.458Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "88649ms for 109457291874478@lid",
-      "durationMs": 88649,
-      "timestamp": "2026-02-28T15:19:14.483Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "150560ms for 109457291874478@lid",
-      "durationMs": 150560,
-      "timestamp": "2026-02-28T15:21:45.773Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "106104ms for 84267677782098@lid",
-      "durationMs": 106104,
-      "timestamp": "2026-02-28T15:31:32.805Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "214838ms for 84267677782098@lid",
-      "durationMs": 214838,
-      "timestamp": "2026-02-28T15:39:48.582Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "102499ms for 109457291874478@lid",
-      "durationMs": 102499,
-      "timestamp": "2026-02-28T15:40:24.189Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "64013ms for 84267677782098@lid",
-      "durationMs": 64013,
-      "timestamp": "2026-02-28T16:01:11.376Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "100536ms for 109457291874478@lid",
-      "durationMs": 100536,
-      "timestamp": "2026-02-28T16:42:03.728Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "154905ms for 84267677782098@lid",
-      "durationMs": 154905,
-      "timestamp": "2026-02-28T17:06:47.230Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "106299ms for 84267677782098@lid",
-      "durationMs": 106299,
-      "timestamp": "2026-02-28T17:12:30.087Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "146271ms for 84267677782098@lid",
-      "durationMs": 146271,
-      "timestamp": "2026-02-28T17:38:39.914Z"
+      "details": "132102ms for 84267677782098@lid",
+      "durationMs": 132102,
+      "timestamp": "2026-03-02T01:51:20.546Z"
     },
     {
       "type": "api_error",
       "details": "⚠️ I'm temporarily unavailable. Try again in a few minutes.",
-      "durationMs": 81772,
-      "timestamp": "2026-02-28T18:02:03.983Z"
+      "durationMs": 62016,
+      "timestamp": "2026-03-02T12:12:18.536Z"
+    },
+    {
+      "type": "api_error",
+      "details": "⚠️ I'm temporarily unavailable. Try again in a few minutes.",
+      "durationMs": 53478,
+      "timestamp": "2026-03-02T12:13:12.612Z"
     },
     {
       "type": "slow_response",
-      "details": "117057ms for 84267677782098@lid",
-      "durationMs": 117057,
-      "timestamp": "2026-02-28T18:08:58.362Z"
+      "details": "62697ms for 84267677782098@lid",
+      "durationMs": 62697,
+      "timestamp": "2026-03-02T16:34:07.623Z"
     },
     {
       "type": "slow_response",
-      "details": "125064ms for 84267677782098@lid",
-      "durationMs": 125064,
-      "timestamp": "2026-02-28T18:27:54.789Z"
+      "details": "133264ms for 84267677782098@lid",
+      "durationMs": 133264,
+      "timestamp": "2026-03-02T16:37:26.960Z"
     },
     {
       "type": "slow_response",
-      "details": "215666ms for 109457291874478@lid",
-      "durationMs": 215666,
-      "timestamp": "2026-02-28T18:35:56.804Z"
+      "details": "102966ms for 84267677782098@lid",
+      "durationMs": 102966,
+      "timestamp": "2026-03-02T16:39:12.472Z"
     },
     {
       "type": "slow_response",
-      "details": "192271ms for 84267677782098@lid",
-      "durationMs": 192271,
-      "timestamp": "2026-02-28T18:44:55.410Z"
+      "details": "64531ms for 84267677782098@lid",
+      "durationMs": 64531,
+      "timestamp": "2026-03-02T16:44:48.943Z"
     },
     {
       "type": "slow_response",
-      "details": "479276ms for 109457291874478@lid",
-      "durationMs": 479276,
-      "timestamp": "2026-02-28T18:53:07.283Z"
+      "details": "68511ms for 84267677782098@lid",
+      "durationMs": 68511,
+      "timestamp": "2026-03-02T16:47:21.615Z"
     },
     {
       "type": "slow_response",
-      "details": "71777ms for 109457291874478@lid",
-      "durationMs": 71777,
-      "timestamp": "2026-02-28T18:54:19.435Z"
+      "details": "151663ms for 84267677782098@lid",
+      "durationMs": 151663,
+      "timestamp": "2026-03-02T17:24:42.566Z"
     },
     {
       "type": "slow_response",
-      "details": "98056ms for 84267677782098@lid",
-      "durationMs": 98056,
-      "timestamp": "2026-02-28T18:54:28.481Z"
+      "details": "82744ms for 84267677782098@lid",
+      "durationMs": 82744,
+      "timestamp": "2026-03-02T17:35:28.127Z"
     },
     {
       "type": "slow_response",
-      "details": "278564ms for 109457291874478@lid",
-      "durationMs": 278564,
-      "timestamp": "2026-02-28T18:58:58.154Z"
+      "details": "96330ms for 84267677782098@lid",
+      "durationMs": 96330,
+      "timestamp": "2026-03-02T17:43:58.729Z"
     },
     {
       "type": "slow_response",
-      "details": "64589ms for 109457291874478@lid",
-      "durationMs": 64589,
-      "timestamp": "2026-02-28T19:36:12.869Z"
+      "details": "89302ms for 84267677782098@lid",
+      "durationMs": 89302,
+      "timestamp": "2026-03-02T17:54:10.616Z"
     },
     {
       "type": "slow_response",
-      "details": "218193ms for 109457291874478@lid",
-      "durationMs": 218193,
-      "timestamp": "2026-02-28T19:40:31.259Z"
+      "details": "62019ms for 84267677782098@lid",
+      "durationMs": 62019,
+      "timestamp": "2026-03-02T18:02:49.594Z"
     },
     {
       "type": "slow_response",
-      "details": "224884ms for 109457291874478@lid",
-      "durationMs": 224884,
-      "timestamp": "2026-02-28T19:45:54.480Z"
+      "details": "713145ms for 84267677782098@lid",
+      "durationMs": 713145,
+      "timestamp": "2026-03-02T18:21:22.167Z"
     },
     {
       "type": "slow_response",
-      "details": "301206ms for 109457291874478@lid",
-      "durationMs": 301206,
-      "timestamp": "2026-02-28T19:51:31.263Z"
+      "details": "94687ms for 84267677782098@lid",
+      "durationMs": 94687,
+      "timestamp": "2026-03-02T18:22:59.511Z"
     },
     {
       "type": "slow_response",
-      "details": "547420ms for 109457291874478@lid",
-      "durationMs": 547420,
-      "timestamp": "2026-02-28T20:09:48.713Z"
+      "details": "90007ms for 84267677782098@lid",
+      "durationMs": 90007,
+      "timestamp": "2026-03-02T18:43:37.132Z"
     },
     {
       "type": "slow_response",
-      "details": "562532ms for 109457291874478@lid",
-      "durationMs": 562532,
-      "timestamp": "2026-02-28T21:04:13.991Z"
+      "details": "84861ms for 84267677782098@lid",
+      "durationMs": 84861,
+      "timestamp": "2026-03-02T18:59:28.945Z"
     },
     {
       "type": "slow_response",
-      "details": "70810ms for 109457291874478@lid",
-      "durationMs": 70810,
-      "timestamp": "2026-02-28T21:05:25.177Z"
+      "details": "75119ms for 84267677782098@lid",
+      "durationMs": 75119,
+      "timestamp": "2026-03-02T19:13:56.830Z"
     },
     {
       "type": "slow_response",
-      "details": "70790ms for 84267677782098@lid",
-      "durationMs": 70790,
-      "timestamp": "2026-02-28T21:05:46.682Z"
+      "details": "119114ms for 84267677782098@lid",
+      "durationMs": 119114,
+      "timestamp": "2026-03-02T19:46:52.666Z"
     },
     {
       "type": "slow_response",
-      "details": "91426ms for 109457291874478@lid",
-      "durationMs": 91426,
-      "timestamp": "2026-02-28T21:07:56.877Z"
+      "details": "70907ms for 84267677782098@lid",
+      "durationMs": 70907,
+      "timestamp": "2026-03-02T22:42:30.041Z"
     },
     {
       "type": "slow_response",
-      "details": "114765ms for 84267677782098@lid",
-      "durationMs": 114765,
-      "timestamp": "2026-02-28T21:09:00.998Z"
+      "details": "86334ms for 84267677782098@lid",
+      "durationMs": 86334,
+      "timestamp": "2026-03-02T23:31:04.355Z"
     },
     {
       "type": "slow_response",
-      "details": "282872ms for 109457291874478@lid",
-      "durationMs": 282872,
-      "timestamp": "2026-02-28T21:12:40.183Z"
+      "details": "61370ms for 84267677782098@lid",
+      "durationMs": 61370,
+      "timestamp": "2026-03-03T00:29:13.574Z"
+    },
+    {
+      "type": "api_error",
+      "details": "⚠️ I'm temporarily unavailable. Try again in a few minutes.",
+      "durationMs": 103015,
+      "timestamp": "2026-03-03T01:03:58.376Z"
     },
     {
       "type": "slow_response",
-      "details": "442355ms for 109457291874478@lid",
-      "durationMs": 442355,
-      "timestamp": "2026-03-01T00:02:59.202Z"
+      "details": "154883ms for 84267677782098@lid",
+      "durationMs": 154883,
+      "timestamp": "2026-03-03T12:07:43.257Z"
     },
     {
       "type": "slow_response",
-      "details": "73554ms for 84267677782098@lid",
-      "durationMs": 73554,
-      "timestamp": "2026-03-01T00:04:20.106Z"
+      "details": "503023ms for 84267677782098@lid",
+      "durationMs": 503023,
+      "timestamp": "2026-03-03T23:25:21.437Z"
     },
     {
       "type": "slow_response",
-      "details": "82574ms for 84267677782098@lid",
-      "durationMs": 82574,
-      "timestamp": "2026-03-01T00:14:06.110Z"
+      "details": "253951ms for 109457291874478@lid",
+      "durationMs": 253951,
+      "timestamp": "2026-03-03T23:49:55.372Z"
     },
     {
       "type": "slow_response",
-      "details": "195444ms for 84267677782098@lid",
-      "durationMs": 195444,
-      "timestamp": "2026-03-01T00:26:12.514Z"
+      "details": "442421ms for 109457291874478@lid",
+      "durationMs": 442421,
+      "timestamp": "2026-03-04T00:08:13.380Z"
     },
     {
       "type": "slow_response",
-      "details": "219657ms for 84267677782098@lid",
-      "durationMs": 219657,
-      "timestamp": "2026-03-01T00:29:54.909Z"
+      "details": "225570ms for 109457291874478@lid",
+      "durationMs": 225570,
+      "timestamp": "2026-03-04T00:23:20.685Z"
     },
     {
       "type": "slow_response",
-      "details": "132879ms for 109457291874478@lid",
-      "durationMs": 132879,
-      "timestamp": "2026-03-01T08:04:15.786Z"
+      "details": "136391ms for 109457291874478@lid",
+      "durationMs": 136391,
+      "timestamp": "2026-03-04T00:49:16.443Z"
+    },
+    {
+      "type": "api_error",
+      "details": "⚠️ Had a hiccup (code 143). Retried 2x.",
+      "durationMs": 1812478,
+      "timestamp": "2026-03-04T10:17:25.274Z"
     },
     {
       "type": "slow_response",
-      "details": "119441ms for 109457291874478@lid",
-      "durationMs": 119441,
-      "timestamp": "2026-03-01T08:51:40.688Z"
+      "details": "1023319ms for 109457291874478@lid",
+      "durationMs": 1023319,
+      "timestamp": "2026-03-04T10:34:49.535Z"
     },
     {
       "type": "slow_response",
-      "details": "68037ms for 109457291874478@lid",
-      "durationMs": 68037,
-      "timestamp": "2026-03-01T09:07:25.532Z"
+      "details": "120467ms for 109457291874478@lid",
+      "durationMs": 120467,
+      "timestamp": "2026-03-04T10:38:31.003Z"
     },
     {
       "type": "slow_response",
-      "details": "87577ms for 109457291874478@lid",
-      "durationMs": 87577,
-      "timestamp": "2026-03-01T09:12:30.080Z"
+      "details": "79930ms for 109457291874478@lid",
+      "durationMs": 79930,
+      "timestamp": "2026-03-04T10:46:35.098Z"
     },
     {
       "type": "slow_response",
-      "details": "162059ms for 109457291874478@lid",
-      "durationMs": 162059,
-      "timestamp": "2026-03-01T09:18:56.391Z"
+      "details": "75525ms for 109457291874478@lid",
+      "durationMs": 75525,
+      "timestamp": "2026-03-04T11:00:18.644Z"
     },
     {
       "type": "slow_response",
-      "details": "78089ms for 109457291874478@lid",
-      "durationMs": 78089,
-      "timestamp": "2026-03-01T09:49:05.078Z"
+      "details": "103752ms for 109457291874478@lid",
+      "durationMs": 103752,
+      "timestamp": "2026-03-04T16:56:03.876Z"
     },
     {
       "type": "slow_response",
-      "details": "427970ms for 84267677782098@lid",
-      "durationMs": 427970,
-      "timestamp": "2026-03-01T13:35:11.382Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "67343ms for 84267677782098@lid",
-      "durationMs": 67343,
-      "timestamp": "2026-03-01T14:15:23.117Z"
+      "details": "185952ms for 109457291874478@lid",
+      "durationMs": 185952,
+      "timestamp": "2026-03-04T19:42:02.489Z"
     }
   ],
   "summary": {
-    "api_error": 2,
-    "slow_response": 92
+    "slow_response": 46,
+    "api_error": 4
   }
 }

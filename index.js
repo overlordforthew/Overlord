@@ -1826,7 +1826,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
           /rate limit/i,
           /overloaded/i,
           /insufficient_quota/i,
-          /billing/i,
+          /billing.*overdue|billing.*failed|account.*billing.*issue/i,
           /authentication.*error/i,
           /invalid.*api.?key/i,
         ];

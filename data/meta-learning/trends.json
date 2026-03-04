@@ -31,6 +31,30 @@
       "memoryUsagePct": 37.6,
       "containersRunning": 21,
       "frictionEvents": 44
+    },
+    {
+      "date": "2026-03-02",
+      "timestamp": "2026-03-02T00:15:01.034Z",
+      "diskUsagePct": 36,
+      "memoryUsagePct": 45.1,
+      "containersRunning": 20,
+      "frictionEvents": 7
+    },
+    {
+      "date": "2026-03-03",
+      "timestamp": "2026-03-03T00:15:01.042Z",
+      "diskUsagePct": 36,
+      "memoryUsagePct": 26.3,
+      "containersRunning": 20,
+      "frictionEvents": 28
+    },
+    {
+      "date": "2026-03-04",
+      "timestamp": "2026-03-04T00:15:00.985Z",
+      "diskUsagePct": 39,
+      "memoryUsagePct": 25.2,
+      "containersRunning": 20,
+      "frictionEvents": 6
     }
   ]
 }
