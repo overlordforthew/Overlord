@@ -23,5 +23,9 @@
     "deny": [],
     "defaultMode": "dontAsk"
   },
-  "model": "opus"
+  "model": "opus",
+  "statusLine": {
+    "type": "command",
+    "command": "bash /root/.claude/statusline-command.sh"
+  }
 }

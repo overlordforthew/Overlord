@@ -6,9 +6,7 @@
 - **root** — primary workspace at `/root/overlord/`, all cron jobs, Coolify, Docker daemon
 - **gil** (UID 1000) — SSH via Tailscale, passwordless sudo, has Claude CLI + git credentials
 - **Cron (root):** health-check (6h), backup (midnight), morning-brief (6am), claude auth refresh (6h), auto-journal (11:55pm), session cleanup (3am), memory cleanup (3:30am), CF token rotation (quarterly)
-- **File upload workflows:**
-  - `cb up` → SCP clipboard to `/tmp/clipboard.png`, say `cb` in CLI
-  - `claude up` folder (Windows Desktop) → SCP to `/home/gil/claude-up/`, say "check claude-up" in CLI
+- **File upload workflows:** `cb up` → SCP clipboard to `/tmp/clipboard.png`, say `cb`; `claude up` folder → SCP to `/home/gil/claude-up/`, say "check claude-up"
 
 ## Overlord — WhatsApp AI Bot
 - **Stack:** Node.js, Baileys, Claude CLI | **Container:** `overlord` on coolify network
@@ -21,16 +19,10 @@
 - **Stack:** Node.js + Express + React, PG 17, JWT
 - **Note:** Coolify `.env` is source of truth (local `/var/www/lumina/.env` is stale)
 
-## BeastMode — OFFLINE
-- Containers removed, app stopped. **Coolify:** ug80oocw84scswk084kcw0ok (frontend) + eoc8084s8gckk4skgsg08k08 (API)
-
-## ElSalvador — OFFLINE
-- OFFLINE since 2026-02-26. Data volume preserved. **Coolify:** q0wcsgo0wccsgkows08gocks
-
 ## MasterCommander — AI Boat Monitor
 - **Stack:** Static HTML/CSS/JS + auth (JWT, PG, Nodemailer), nginx:alpine
 - **Auth backend:** Overlord server.js, PG `users`/`boats`/`gate_users`/`boat_logs` tables (in `mastercommander-db`)
-- **Product:** AI boat monitor — OS images + cloud subscription. NO hardware shipping.
+- **Product:** AI boat monitor — OS images + cloud subscription, NO hardware shipping
 
 ## Stripe (NamiBarden)
 - **Account:** Gilbert Barden (gilbarden@gmail.com) | US | Payouts + Charges enabled
