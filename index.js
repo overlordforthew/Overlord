@@ -123,7 +123,7 @@ const CONFIG = {
   batchWindowMs: 2000,
 
   // Rolling context: how many recent messages to keep per chat
-  contextWindowSize: 50,
+  contextWindowSize: 20,
 
   // Typing indicator
   typingIndicator: true,
