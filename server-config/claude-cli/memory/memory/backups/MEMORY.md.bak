@@ -1,11 +1,11 @@
-# Server Memory — Overlord
+/root/CLAUDE.md
 
-> Core config in `/root/CLAUDE.md`. Deploy rules in `.claude/rules/deploy.md`. Security in `.claude/rules/security.md`.
+Core config in `/root/CLAUDE.md`. Deploy rules in `.claude/rules/deploy.md`. Security in `.claude/rules/security.md`.
 
 ## User Accounts
 - **root** — primary workspace at `/root/overlord/`, all cron jobs, Coolify, Docker daemon
-- **gil** (UID 1000) — SSH via Tailscale, passwordless sudo, has Claude CLI + git credentials
-- **Cron (root):** health-check (6h), backup (midnight), morning-brief (6am), claude auth refresh (6h), auto-journal (11:55pm), session cleanup (3am), memory cleanup (3:30am), CF token rotation (quarterly)
+- **gil** (UID 1000) — SSH via Tailscale, passwordless sudo, Claude CLI + git credentials
+- **Cron (root):** health-check (6h), backup (midnight), morning-brief (6am), Claude auth refresh (6h), auto-journal (11:55pm), session cleanup (3am), memory cleanup (3:30am), CF token rotation (quarterly)
 - **File upload workflows:** `cb up` → SCP clipboard to `/tmp/clipboard.png`, say `cb`; `claude up` folder → SCP to `/home/gil/claude-up/`, say "check claude-up"
 
 ## Overlord — WhatsApp AI Bot
@@ -36,14 +36,14 @@
 - **NOT Coolify-managed** — standalone docker-compose
 - **DB:** 6 tables (nb_admin, nb_subscribers, nb_contacts, nb_campaigns, nb_campaign_recipients, nb_email_events)
 - **Admin:** `/admin/` dashboard | **API:** Express port 3100 (nginx `/api/`)
-- **Nami LID:** WhatsApp sends `84267677782098` (not `13135550002`)
+- **Nami LID:** WhatsApp sends `84267677782098`
 - **SMTP:** Gmail app password (overlord.gil.ai@gmail.com)
 
 ## SurfaBabe — Wellness WhatsApp AI
 - **Stack:** Node.js, Baileys, Claude CLI (Overlord fork) | **Container:** `surfababe` (port 3002)
 - **Admin:** Ailie | **Business:** +84 39 264 8332 | **Email:** uptoyou.wellness@gmail.com
 - **Models:** Opus 4.6 (Ailie), Sonnet 4.6 (customers) | **Mode:** `silent` until activated
-- **DB:** PG 17 (surfababe-db), 7 tables | **CRM:** /stats, /customers, /orders, /paid, /note, /tag
+- **DB:** PG 17 (surfababe-db), 7 tables | **CRM:** `/stats`, `/customers`, `/orders`, `/paid`, `/note`, `/tag`
 
 ## OnlyHulls — AI Boat Matchmaking
 - **Coolify:** qkggs84cs88o0gww4wc80gwo | **Repo:** bluemele/OnlyHulls
@@ -51,7 +51,7 @@
 - **Infra:** `infra/docker-compose.infra.yml` — ports 5433/7701/6380
 - **DB:** `onlyhulls` (user `onlyhulls`), 10 tables, migrations through 006
 - **Status:** Phase 1a deployed. Needs real API keys (Stripe, Anthropic, OpenAI, Resend, S3)
-- **Build note:** Lazy init (`getStripe()` etc.), lockfile needs npm 10 (node:20-alpine)
+- **Build note:** Lazy init, lockfile needs npm 10 (node:20-alpine)
 - **Traefik:** File-based route in namibarden.yaml
 
 ## Elmo — Pacific Bim Engineering (OnlyDrafting)

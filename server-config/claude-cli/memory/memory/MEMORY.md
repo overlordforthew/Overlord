@@ -1,84 +1,74 @@
-/root/CLAUDE.md
+User Accounts  
+- **root**: primary workspace /root/overlord/, all cron jobs, Coolify, Docker daemon  
+- **gil** (UID 1000): SSH via Tailscale, passwordless sudo, Claude CLI/git credentials  
+- **Cron (root)**: health-check 6h, backup midnight, morning-brief 6am, Claude auth refresh 6h, auto-journal 11:55pm, session cleanup 3am, memory cleanup 3:30am, CF token rotation quarterly  
+- **File upload workflows**: `cb up` → SCP clipboard to /tmp/clipboard.png, `claude up folder` → SCP to /home/gil/claude-up/, say "check claude-up"  
 
-Core config in `/root/CLAUDE.md`. Deploy rules in `.claude/rules/deploy.md`. Security in `.claude/rules/security.md`.
+Overlord — WhatsApp AI Bot  
+- Stack: Node.js, Baileys, Claude CLI | Container: overlord on coolify network  
+- Per-chat memory: /root/overlord/data/<chat_id>/memory.md  
+- Session rotation: 6-hour auto-expire on CLI sessions  
+- Web chat: POST /api/web-chat → MC widget via OpenRouter (gpt-4.1-nano)  
 
-## User Accounts
-- **root** — primary workspace at `/root/overlord/`, all cron jobs, Coolify, Docker daemon
-- **gil** (UID 1000) — SSH via Tailscale, passwordless sudo, Claude CLI + git credentials
-- **Cron (root):** health-check (6h), backup (midnight), morning-brief (6am), Claude auth refresh (6h), auto-journal (11:55pm), session cleanup (3am), memory cleanup (3:30am), CF token rotation (quarterly)
-- **File upload workflows:** `cb up` → SCP clipboard to `/tmp/clipboard.png`, say `cb`; `claude up` folder → SCP to `/home/gil/claude-up/`, say "check claude-up"
+Lumina — Auth/Account System  
+- Coolify: okw0cwwgskcow8k8o08gsok0 | Port: 3456  
+- Stack: Node.js + Express + React, PG 17, JWT  
+- Note: Coolify .env is source of truth (local /var/www/lumina/.env is stale)  
 
-## Overlord — WhatsApp AI Bot
-- **Stack:** Node.js, Baileys, Claude CLI | **Container:** `overlord` on coolify network
-- **Per-chat memory:** `/root/overlord/data/<chat_id>/memory.md`
-- **Session rotation:** 6-hour auto-expire on CLI sessions
-- **Web chat:** `POST /api/web-chat` — MC widget via OpenRouter (gpt-4.1-nano)
+MasterCommander — AI Boat Monitor  
+- Stack: Static HTML/CSS/JS + auth (JWT, PG, Nodemailer), nginx:alpine  
+- Auth backend: Overlord server.js, PG tables (users/boats/gate_users/boat_logs) in mastercommander-db  
+- Product: OS images + cloud subscription, NO hardware shipping  
 
-## Lumina — Auth/Account System
-- **Coolify:** okw0cwwgskcow8k8o08gsok0 | **Port:** 3456
-- **Stack:** Node.js + Express + React, PG 17, JWT
-- **Note:** Coolify `.env` is source of truth (local `/var/www/lumina/.env` is stale)
+Stripe (NamiBarden)  
+- Account: Gilbert Barden (gilbarden@gmail.com) | US | Payouts + Charges enabled  
+- CLI: stripe-nb <command> → loads NamiBarden key from .env  
+- Keys: /root/projects/NamiBarden/.env (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET)  
+- Webhook: https://namibarden.com/api/stripe/webhook  
+- Config: /root/.config/stripe/config.toml (chmod 600)  
 
-## MasterCommander — AI Boat Monitor
-- **Stack:** Static HTML/CSS/JS + auth (JWT, PG, Nodemailer), nginx:alpine
-- **Auth backend:** Overlord server.js, PG `users`/`boats`/`gate_users`/`boat_logs` tables (in `mastercommander-db`)
-- **Product:** AI boat monitor — OS images + cloud subscription, NO hardware shipping
+NamiBarden — Main Site + Newsletter  
+- Stack: Node.js 20 + Express + nginx, PG 17 (namibarden-db)  
+- NOT Coolify-managed — standalone docker-compose  
+- DB: 6 tables (nb_admin, nb_subscribers, nb_contacts, nb_campaigns, nb_campaign_recipients, nb_email_events)  
+- Admin: /admin/ dashboard | API: Express port 3100 (nginx /api/)  
+- Nami LID: WhatsApp sends 84267677782098  
+- SMTP: Gmail app password (overlord.gil.ai@gmail.com)  
 
-## Stripe (NamiBarden)
-- **Account:** Gilbert Barden (gilbarden@gmail.com) | US | Payouts + Charges enabled
-- **CLI:** `stripe-nb <command>` — wrapper that loads NamiBarden key from `.env`
-- **Keys:** in `/root/projects/NamiBarden/.env` (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET)
-- **Webhook:** `https://namibarden.com/api/stripe/webhook`
-- **Config:** `/root/.config/stripe/config.toml` (chmod 600)
+SurfaBabe — Wellness WhatsApp AI  
+- Stack: Node.js, Baileys, Claude CLI (Overlord fork) | Container: surfababe (port 3002)  
+- Admin: Ailie | Business: +84 39 264 8332 | Email: uptoyou.wellness@gmail.com  
+- Models: Opus 4.6 (Ailie), Sonnet 4.6 (customers) | Mode: silent until activated  
+- DB: PG 17 (surfababe-db), 7 tables | CRM: /stats, /customers, /orders, /paid, /note, /tag  
 
-## NamiBarden — Main Site + Newsletter
-- **Stack:** Node.js 20 + Express + nginx, PG 17 (`namibarden-db`)
-- **NOT Coolify-managed** — standalone docker-compose
-- **DB:** 6 tables (nb_admin, nb_subscribers, nb_contacts, nb_campaigns, nb_campaign_recipients, nb_email_events)
-- **Admin:** `/admin/` dashboard | **API:** Express port 3100 (nginx `/api/`)
-- **Nami LID:** WhatsApp sends `84267677782098`
-- **SMTP:** Gmail app password (overlord.gil.ai@gmail.com)
+OnlyHulls — AI Boat Matchmaking  
+- Coolify: qkggs84cs88o0gww4wc80gwo | Repo: bluemele/OnlyHulls  
+- Stack: Next.js 16, PG 17 + pgvector, Meilisearch, Redis, Auth.js v5, Stripe  
+- Infra: ports 5433/7701/6380  
+- DB: onlyhulls (user onlyhulls), 10 tables, migrations through 006  
+- Status: Phase 1a deployed. Needs real API keys (Stripe, Anthropic, OpenAI, Resend, S3)  
+- Build note: Lazy init, lockfile needs npm 10 (node:20-alpine)  
 
-## SurfaBabe — Wellness WhatsApp AI
-- **Stack:** Node.js, Baileys, Claude CLI (Overlord fork) | **Container:** `surfababe` (port 3002)
-- **Admin:** Ailie | **Business:** +84 39 264 8332 | **Email:** uptoyou.wellness@gmail.com
-- **Models:** Opus 4.6 (Ailie), Sonnet 4.6 (customers) | **Mode:** `silent` until activated
-- **DB:** PG 17 (surfababe-db), 7 tables | **CRM:** `/stats`, `/customers`, `/orders`, `/paid`, `/note`, `/tag`
+Elmo — Pacific Bim Engineering (OnlyDrafting)  
+- Coolify: zkk0k8gcgcss4osggs4k0kw4  
+- Stack: Static HTML/CSS/JS, nginx:alpine  
+- Owner: Elmo Herrera | Email: elmoherrera2014@gmail.com | WhatsApp: +63 929 414 2510  
+- Domain: onlydrafting.com on Cloudflare (zone 5a4473673d3df140fa184e36f8567031)  
 
-## OnlyHulls — AI Boat Matchmaking
-- **Coolify:** qkggs84cs88o0gww4wc80gwo | **Repo:** bluemele/OnlyHulls
-- **Stack:** Next.js 16, PG 17 + pgvector, Meilisearch, Redis, Auth.js v5, Stripe
-- **Infra:** `infra/docker-compose.infra.yml` — ports 5433/7701/6380
-- **DB:** `onlyhulls` (user `onlyhulls`), 10 tables, migrations through 006
-- **Status:** Phase 1a deployed. Needs real API keys (Stripe, Anthropic, OpenAI, Resend, S3)
-- **Build note:** Lazy init, lockfile needs npm 10 (node:20-alpine)
-- **Traefik:** File-based route in namibarden.yaml
+Portable Agents  
+- Path: /root/agents/ (repo: bluemele/agents, private)  
+- Agents: AI Chan (Nami), Britt (Ailie), Dex (Seneca)  
+- Build: ./build.sh claude → .claude/agents/{name}.md  
 
-## Elmo — Pacific Bim Engineering (OnlyDrafting)
-- **Coolify:** zkk0k8gcgcss4osggs4k0kw4 | **Stack:** Static HTML/CSS/JS, nginx:alpine
-- **Owner:** Elmo Herrera | **Email:** elmoherrera2014@gmail.com | **WhatsApp:** +63 929 414 2510
-- **Domain:** onlydrafting.com on Cloudflare (zone 5a4473673d3df140fa184e36f8567031)
+Coolify API  
+- Token: COOLIFY_API_TOKEN in /root/overlord/.env (Sanctum token ID 13)  
+- Endpoint: http://127.0.0.1:8000/api/v1  
+- Usage: curl -H "Authorization: Bearer $COOLIFY_API_TOKEN" -H "Accept: application/json" $API/...  
+- Env vars: POST .../applications/{uuid}/envs (encrypts properly, persists across deploys)  
+- Redeploy: POST .../applications/{uuid}/restart  
+- Example error: Inserting raw values into environment_variables DB table — use API for encryption  
 
-## Portable Agents
-- **Path:** `/root/agents/` (repo: bluemele/agents, private)
-- **Agents:** AI Chan (Nami), Britt (Ailie), Dex (Seneca)
-- **Build:** `./build.sh claude` → `.claude/agents/{name}.md`
-
-## Coolify API
-- **Token:** `COOLIFY_API_TOKEN` in `/root/overlord/.env` (Sanctum token ID 13)
-- **Endpoint:** `http://127.0.0.1:8000/api/v1`
-- **Usage:** `curl -H "Authorization: Bearer $COOLIFY_API_TOKEN" -H "Accept: application/json" $API/...`
-- **Env vars:** `POST .../applications/{uuid}/envs` (encrypts properly, persists across deploys)
-- **Redeploy:** `POST .../applications/{uuid}/restart`
-- **IMPORTANT:** Never insert raw values into `environment_variables` DB table — Coolify expects encrypted values. Always use the API.
-
-## Cloudflare API
-- **Token:** `CLOUDFLARE_API_TOKEN` in `/root/overlord/.env`
-- **Account ID:** `099cbdaaadc71eef10329f795a4e564f`
-- **Zones:** namibarden.com, onlydrafting.com, onlyhulls.com
-- **Detailed reference:** [cloudflare.md](cloudflare.md)
-
-## See Also
-- [infrastructure.md](infrastructure.md) — container/DB/volume/network map
-- [projects.md](projects.md) — detailed project notes
-- [work-log.md](work-log.md) — session work logs
+Cloudflare API  
+- Token: CLOUDFLARE_API_TOKEN in /root/overlord/.env  
+- Account ID: 099cbdaaadc71eef10329f795a4e564f  
+- Zones: namibarden.com, onlydrafting.com, onlyhulls.com

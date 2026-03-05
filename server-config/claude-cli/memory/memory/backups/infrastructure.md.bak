@@ -1,5 +1,3 @@
-
-
 ContainerInventory (20 containers)
 
 | Project | App Container | DB Container | Network | Port |

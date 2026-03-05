@@ -1,42 +1,39 @@
 # Project Deep Notes
 
-> Quick reference is in MEMORY.md. This file has gotchas, quirks, and operational details.
-
 ## Overlord
-- Main code: `index.js` (~2700 lines) | Config: `CLAUDE.md`, `.env`
+- Main code: `index.js`
+- Config: `CLAUDE.md`, `.env`
 - Dependencies: @whiskeysockets/baileys, pino, qrcode-terminal
-- Session rotation: 6-hour auto-expire (prevents JSONL bloat)
+- Session rotation: 6-hour auto-expire
 - Stale session retry: auto-clears session_id on CLI errors, retries fresh
-- Router modes: alpha (Opus only), beta (Anthropic family), charlie (all models incl. free)
-- Session guard: kills zombie Claude processes >10min (session-guard.js)
-- Heartbeat: 2hr health checks, 3 failures → auto-restart, 5 → alert Gil (heartbeat.js)
+- Router modes: alpha (Opus), beta (Anthropic), charlie (all models)
+- Session guard: kills zombie Claude processes >10min
+- Heartbeat: 2hr health checks, 3 failures → auto-restart, 5 → alert Gil
 
 ## NamiBarden
-- NOT Coolify — standalone docker-compose (common mistake)
-- nginx proxies `/api/` → Express on port 3100
-- Contact form → saves to DB + emails Gil + WhatsApp via Overlord `/api/send`
+- nginx proxies `/api/` → Express (port 3100)
+- Contact form → DB + email Gil + WhatsApp via Overlord `/api/send`
 - Newsletter: campaign composer with open/click tracking, unsubscribe
 - SMTP: Gmail app password (overlord.gil.ai@gmail.com)
 
 ## SurfaBabe
-- Overlord fork — shares architecture but separate codebase/container/DB
-- Voice guide: `knowledge/voice.md` — Britt mirrors Ailie's real style
+- Fork of Overlord – separate codebase/container/DB
+- Voice guide: `knowledge/voice.md` (Britt mirrors Ailie)
 - Products: 7 items (skincare + cleaning), VND pricing, bilingual EN/VI
-- Auto-deploy: GitHub webhook → deploy-listener.js (port 9002, systemd `surfagent-deploy.service`)
+- Auto-deploy: GitHub webhook → `deploy-listener.js` (port 9002, systemd `surfagent-deploy.service`)
 
 ## OnlyHulls
-- Auth.js v5 split config: `auth.config.ts` (edge-safe) + `auth.ts` (full with bcrypt/pg)
-- Build: lazy init for all lib modules (`getStripe()`, `getMeili()`, etc.) — required or build crashes
-- Lockfile: must be generated with npm 10 (node:20-alpine), npm 11 breaks it
-- Spec: `/home/gil/claude-up/DATEMYBOAT-SPEC-v2.md` (historical filename)
-- Coolify env vars: 14 configured (AUTH_URL, APP_URL, RESEND_FROM_EMAIL, DATABASE_URL, etc.)
+- Auth: `auth.config.ts` (edge-safe) + `auth.ts` (bcrypt/pg)
+- Build: lazy init for all lib modules
+- Lockfile: npm 10 (node:20-alpine), npm 11 breaks it
+- Spec: `/home/gil/claude-up/DATEMYBOAT-SPEC-v2.md`
+- Coolify env vars: 14 (AUTH_URL, APP_URL, RESEND_FROM_EMAIL, DATABASE_URL, etc.)
 
 ## MasterCommander
-- Auth handled by Overlord's server.js (not self-contained)
-- DB: dedicated `mastercommander-db` container, tables: `users`, `boats`, `boat_logs`, `gate_users`, `gate_nda`, `contact_submissions`, `newsletter_subscribers`
-- Chat widget hits Overlord `/api/web-chat` via Traefik
-- Deploy: `docker cp` into container (no webhook)
+- Auth: Overlord's `server.js`
+- DB: `mastercommander-db` container, tables: `users`, `boats`, `boat_logs`, `gate_users`, `gate_nda`, `contact_submissions`, `newsletter_subscribers`
+- Chat widget: Overlord `/api/web-chat` via Traefik
+- Deploy: `docker cp`
 
-## OpenClaw — STOPPED
-- Multi-channel AI gateway, installed at `/opt/openclaw/`
-- Not running, kept for reference only
+## OpenClaw
+- Multi-channel AI gateway, installed at `/opt/openclaw/` (stopped)
