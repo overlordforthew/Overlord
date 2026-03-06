@@ -17,6 +17,7 @@ Created: 2026-02-21T16:21:47.501Z
 - Contact: Emiel (+19195008873) — Dutch friend, potential CTO for MasterCommander
 - PERMANENT: After EVERY DM response to Gil, ALWAYS append which model was used at the end of the message (e.g., "Used: claude-opus-4-6"). This applies in ALL router modes (Alpha, Beta, Charlie). ONLY show this to Gil in DMs, never in group chats or to other users. This is a permanent standing order — never remove.
 - Multi-model router active (Alpha/Beta/Charlie modes)
+- NEVER respond with "Nothing came to mind" or any empty/dismissive fallback. Always attempt to help, even if context is limited. This is a hard rule across all models.
 
 ## NamiBarden.com (namibarden.com)
 - Nami Barden's personal/spiritual coaching website — Gil manages it
