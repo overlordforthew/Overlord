@@ -56,8 +56,27 @@ import { getSessionGuardStatus } from './session-guard.js';
 import QRCode from 'qrcode';
 import sharp from 'sharp';
 import pg from 'pg';
+import {
+  createTask, updateTask, closeTask, getTask, getAllTasks, getActiveTasks,
+  getLastActiveTask, getRecentDoneTasks, addTaskEvent, getTaskEvents,
+  inferTaskKind, formatTaskList, formatTaskDetail, formatTaskSummary, TaskStatus,
+} from './task-store.js';
+import {
+  getChatState, setChatState, clearChatState,
+  getStandingOrders, addStandingOrder, removeStandingOrder,
+  formatStandingOrders, formatStandingOrdersList,
+} from './state-store.js';
+import { executeTaskAutonomously, scheduleVerification } from './executor.js';
 
 const execAsync = promisify(exec);
+const ADMIN_FALLBACK_ESCALATION_PATTERNS = [
+  /nothing came to mind/i,
+  /try rephrasing/i,
+  /don't have visibility into that/i,
+  /do not have visibility into that/i,
+  /can't read it/i,
+  /cannot read it/i,
+];
 
 /** Shell-free HTTPS JSON request helper */
 function httpJson(url, { method = 'GET', headers = {}, body = null, timeout = 10000 } = {}) {
@@ -1482,6 +1501,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
   const isAdminUser = profile.role === 'admin';
   const isPower = profile.role === 'power';
   const memory = await getMemory(chatJid);
+  const recentMessages = conversationContext.get(chatJid, 20);
   const recentContext = conversationContext.format(chatJid, 30);
   let sessionId = await getSessionId(chatJid);
 
@@ -1569,7 +1589,78 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
     prompt.push(`- Group chat: match the energy, don't over-explain, be a good participant`);
   }
 
+  // ---- TASK CONTEXT INJECTION (admin DMs only) ----
+  if (isAdminUser && !inGroup) {
+    try {
+      const chatState = await getChatState(chatJid);
+      const standingOrders = await getStandingOrders();
+
+      if (chatState.activeTaskId) {
+        const activeTask = await getTask(chatState.activeTaskId);
+        if (activeTask && ![TaskStatus.DONE, TaskStatus.ABANDONED].includes(activeTask.status)) {
+          prompt.push('');
+          prompt.push('[ACTIVE TASK]');
+          prompt.push(`ID: ${activeTask.id} | Title: ${activeTask.title}`);
+          prompt.push(`Status: ${activeTask.status} | Kind: ${activeTask.kind}`);
+          if (activeTask.lastResult) prompt.push(`Last result: ${activeTask.lastResult.substring(0, 200)}`);
+          if (activeTask.nextAction) prompt.push(`Next: ${activeTask.nextAction}`);
+          if (activeTask.blockedReason) prompt.push(`Blocked reason: ${activeTask.blockedReason}`);
+          if (chatState.awaitingConfirmation && chatState.lastQuestion) {
+            prompt.push(`AWAITING YOUR CONFIRMATION for: ${chatState.lastQuestion.substring(0, 200)}`);
+          }
+          prompt.push('When the user says "yes/proceed/do it/confirm", continue this task.');
+          prompt.push('When the user says "repair/fix/continue", resume this task from where it left off.');
+          prompt.push('When the task is fully complete, say "Task complete:" followed by the result.');
+        }
+      } else if (chatState.lastOperationalTopic) {
+        prompt.push('');
+        prompt.push(`[LAST OPERATIONAL TOPIC]: ${chatState.lastOperationalTopic.substring(0, 150)}`);
+      }
+
+      if (standingOrders.length > 0) {
+        prompt.push('');
+        prompt.push(formatStandingOrders(standingOrders));
+      }
+    } catch (err) {
+      logger.warn({ err: err.message }, 'Task context injection failed (non-fatal)');
+    }
+  }
+
   const fullPrompt = prompt.join('\n');
+
+  const shouldEscalateAdminFallback = (responseText, currentRoute) => (
+    isAdminUser &&
+    !inGroup &&
+    currentRoute?.escalatable &&
+    currentRoute?.model?.id !== MODEL_REGISTRY.opus.id &&
+    ADMIN_FALLBACK_ESCALATION_PATTERNS.some((pattern) => pattern.test(responseText || ''))
+  );
+
+  const switchRouteToOpus = () => {
+    route.model = MODEL_REGISTRY.opus;
+    route.via = 'claude-cli';
+    route.maxTurns = null;
+    route.tools = null;
+    route.escalatable = false;
+
+    const modelIdx = args.indexOf('--model');
+    if (modelIdx !== -1) args[modelIdx + 1] = MODEL_REGISTRY.opus.id;
+
+    const turnsIdx = args.indexOf('--max-turns');
+    if (turnsIdx !== -1) args[turnsIdx + 1] = '100';
+
+    for (let i = args.length - 1; i >= 0; i--) {
+      if (args[i] === '--allowedTools') {
+        args.splice(i, 2);
+      }
+    }
+
+    const resumeIdx = args.indexOf('--resume');
+    if (resumeIdx !== -1) {
+      args.splice(resumeIdx, 2);
+      sessionId = null;
+    }
+  };
 
   // Build CLI args
   const args = ['-p', '--output-format', 'json', '--max-turns', '100'];
@@ -1607,10 +1698,15 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
   const route = await routeMessage(parsed, {
     isAdmin: isAdminUser,
     isPower,
+    isGroup: inGroup,
     triageReason,
     mode: CONFIG.routerMode,
+    recentMessages,
   });
   logger.info(`🔀 Route: ${route.model.id} (${route.taskType}) via ${route.via} [${CONFIG.routerMode} mode, classified by ${route.classifiedBy}]`);
+  if (String(route.classifiedBy || '').startsWith('admin_shorthand_')) {
+    logger.info({ text: parsed.text, classifiedBy: route.classifiedBy, taskType: route.taskType }, 'Admin shorthand routing matched');
+  }
 
   // Build system prompt based on role
   let sysPrompt;
@@ -1618,7 +1714,9 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
     sysPrompt = [
       `You are ${agentName}, a WhatsApp AI. Personality: helpful, witty, concise.`,
       'Admin user — full server access.',
-      `AUTONOMY RULES: 1) Act first, report after. Never ask "should I?" — just do it. 2) Stuck? Try 3 different approaches before escalating. Use web search, read docs, test alternatives creatively. 3) Only escalate when genuinely stuck after exhausting options. 4) Report results, not plans: "I tried X, Y, Z — here's what worked." 5) Exception: destructive/irreversible actions still need confirmation (deleting data, refunds, spending money, force-push).`,
+      `AUTONOMY RULES: 1) Act first, report after. Never ask "should I?" — just do it. 2) Stuck? Try 3 different approaches before escalating. 3) Only escalate when genuinely stuck after exhausting all options. 4) Report results, not plans. 5) Destructive/irreversible actions (deleting data, refunds, spending money, force-push) still need confirmation.`,
+      `TASK CONTINUITY: If [ACTIVE TASK] is shown in context, you are mid-task. "yes/proceed/ok" = confirm and continue. "repair/fix" = resume from last result. "check/status" = report current task state. Say "Task complete: [summary]" when you fully finish a task.`,
+      `AUTO-REPAIR BEHAVIOR: For container/service issues, autonomously: 1) check logs 2) identify root cause 3) fix it 4) verify it works. Report root cause and fix, not just the symptom.`,
       'Keep responses WhatsApp-length. Use @ to read media files when referenced.',
       `Update ${cDir}/memory.md when you learn key facts about people.`,
       `You are running as model "${route.model.id}" (router: ${CONFIG.routerMode} mode, task: ${route.taskType}).`,
@@ -1746,6 +1844,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
   // Auto-retry on transient signal errors (SIGTERM=143, SIGKILL=137, SIGABRT=134)
   const RETRYABLE_CODES = new Set([143, 137, 134]);
   const MAX_RETRIES = 2;
+  let fallbackEscalatedToOpus = false;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     const result = await new Promise((resolve) => {
@@ -1839,6 +1938,18 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
           }
           logger.error({ response: response.substring(0, 200), attempt }, 'Claude API error (all retries exhausted)');
           resolve({ retry: false, text: '⚠️ I\'m temporarily unavailable. Try again in a few minutes.' });
+          return;
+        }
+
+        if (!fallbackEscalatedToOpus && shouldEscalateAdminFallback(response, route)) {
+          fallbackEscalatedToOpus = true;
+          logger.warn({
+            response: response.substring(0, 200),
+            fromModel: route.model.id,
+            taskType: route.taskType,
+          }, 'Admin DM fallback response from smaller model, escalating to Opus');
+          switchRouteToOpus();
+          resolve({ retry: true });
           return;
         }
 
@@ -1958,7 +2069,91 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
 
   if (cmd === '/clear') {
     try { await fs.unlink(path.join(contactDir(chatJid), 'session_id')); } catch { }
+    if (isAdmin(senderJid)) await clearChatState(chatJid).catch(() => {});
     return '🔄 Session cleared!';
+  }
+
+  // ---- TASK COMMANDS (admin only) ----
+  if (cmd === '/tasks' && isAdmin(senderJid)) {
+    const active = await getActiveTasks(chatJid);
+    const recent = await getRecentDoneTasks(chatJid, 24);
+    const lines = ['📋 *Task Status*', ''];
+    if (active.length > 0) {
+      lines.push('*Active:*');
+      lines.push(formatTaskList(active));
+    } else {
+      lines.push('No active tasks.');
+    }
+    if (recent.length > 0) {
+      lines.push('', '*Completed (24h):*');
+      recent.slice(0, 5).forEach(t => lines.push(formatTaskSummary(t)));
+    }
+    return lines.join('\n');
+  }
+
+  if (cmd.startsWith('/task ') && isAdmin(senderJid)) {
+    const parts = fullText.substring(6).trim().split(/\s+/);
+    const sub = parts[0];
+    const taskId = parts[1];
+
+    if (sub === 'done' && taskId) {
+      const t = await getTask(taskId);
+      if (!t) return `❌ Task ${taskId} not found.`;
+      await closeTask(taskId, TaskStatus.DONE, 'Manually closed by admin');
+      const st = await getChatState(chatJid);
+      if (st.activeTaskId === taskId) await clearChatState(chatJid);
+      return `✅ Task [${taskId}] closed: ${t.title}`;
+    }
+
+    if (sub === 'cancel' && taskId) {
+      const t = await getTask(taskId);
+      if (!t) return `❌ Task ${taskId} not found.`;
+      await closeTask(taskId, TaskStatus.ABANDONED, 'Cancelled by admin');
+      const st = await getChatState(chatJid);
+      if (st.activeTaskId === taskId) await clearChatState(chatJid);
+      return `❌ Task [${taskId}] cancelled: ${t.title}`;
+    }
+
+    if (sub === 'run' && taskId) {
+      const t = await getTask(taskId);
+      if (!t) return `❌ Task ${taskId} not found.`;
+      executeTaskAutonomously(t, sockRef).catch(() => {});
+      return `🔧 Running task [${taskId}] autonomously: ${t.title}`;
+    }
+
+    if (sub === 'clear') {
+      await clearChatState(chatJid);
+      return '🧹 Active task state cleared.';
+    }
+
+    // /task <id> — show detail
+    const t = await getTask(sub);
+    if (t) {
+      const events = await getTaskEvents(sub, 10);
+      return formatTaskDetail(t, events);
+    }
+
+    return '❌ Usage: /tasks | /task <id> | /task done <id> | /task cancel <id> | /task run <id> | /task clear';
+  }
+
+  // ---- STANDING ORDER COMMANDS (admin only) ----
+  if (cmd === '/orders' && isAdmin(senderJid)) {
+    const orders = await getStandingOrders();
+    return `📜 *Standing Orders:*\n\n${formatStandingOrdersList(orders)}\n\nAdd: /order <rule> | Remove: /order rm <id>`;
+  }
+
+  if (cmd.startsWith('/order ') && isAdmin(senderJid)) {
+    const orderArg = fullText.substring(7).trim();
+    if (orderArg.startsWith('rm ')) {
+      const orderId = orderArg.substring(3).trim();
+      const removed = await removeStandingOrder(orderId);
+      return removed ? `✅ Standing order [${orderId}] removed.` : `❌ Not found: ${orderId}`;
+    }
+    if (orderArg) {
+      const newId = await addStandingOrder(orderArg);
+      return `✅ Standing order added [${newId}]:\n"${orderArg}"`;
+    }
+    return '❌ Usage: /order <rule> | /order rm <id>';
   }
 
   if (cmd === '/context') return `📜 Recent context:\n\n${conversationContext.format(chatJid, 10)}`;
@@ -2540,6 +2735,17 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
         '/threshold [0.0-1.0] — Smart mode chattiness',
         '/briefing — Server health summary',
         '',
+        '📋 Tasks (Agentic):',
+        '/tasks — Active + recent tasks',
+        '/task <id> — Task detail',
+        '/task done <id> — Mark done',
+        '/task cancel <id> — Abandon task',
+        '/task run <id> — Run autonomously',
+        '/task clear — Clear active task state',
+        '/orders — List standing orders',
+        '/order <rule> — Add standing order',
+        '/order rm <id> — Remove standing order',
+        '',
         '⏰ Reminders:',
         '/remind <time> <msg> — Set a reminder',
         '/reminders — List active reminders',
@@ -2642,6 +2848,69 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
 // CONTACT NAMES
 // ============================================================
 const contactNames = new Map();
+
+// ============================================================
+// TASK STATE MANAGEMENT
+// ============================================================
+
+const TASK_COMPLETION_SIGNALS = /task complete:|✅ done:|completed\.|fixed\.|deployed\.|resolved\.|working now|verified live|all good/i;
+const TASK_CONFIRMATION_REQUEST = /want me to|should i|shall i|need approval|confirm before|proceed\?/i;
+
+/**
+ * Update task state after every admin DM response.
+ * Tracks: confirmation requests, task completions, operational context.
+ */
+async function updateAdminTaskState(chatJid, userMessage, botResponse) {
+  try {
+    const state = await getChatState(chatJid);
+
+    // Track operational context from user message
+    if (OPERATIONAL_CONTEXT_PATTERNS.test(userMessage)) {
+      await setChatState(chatJid, { lastOperationalTopic: userMessage.substring(0, 200) });
+    }
+
+    // Detect if bot asked for confirmation
+    if (TASK_CONFIRMATION_REQUEST.test(botResponse)) {
+      await setChatState(chatJid, {
+        awaitingConfirmation: true,
+        lastQuestion: botResponse.substring(0, 300),
+      });
+    } else if (state.awaitingConfirmation) {
+      await setChatState(chatJid, { awaitingConfirmation: false, lastQuestion: null });
+    }
+
+    // Detect task completion signal in bot response
+    if (state.activeTaskId && TASK_COMPLETION_SIGNALS.test(botResponse)) {
+      await closeTask(state.activeTaskId, TaskStatus.DONE, botResponse.substring(0, 300));
+      await setChatState(chatJid, {
+        activeTaskId: null,
+        awaitingConfirmation: false,
+        lastActionTaken: botResponse.substring(0, 150),
+      });
+      logger.info({ taskId: state.activeTaskId }, 'Task auto-closed from completion signal');
+    }
+
+    // Auto-create task for complex operational admin messages (if none active)
+    if (!state.activeTaskId && userMessage) {
+      const quickClass = classifyTask({ text: userMessage, hasMedia: false }, true);
+      if (quickClass === 'complex' && OPERATIONAL_CONTEXT_PATTERNS.test(userMessage)) {
+        const task = await createTask({
+          title: userMessage.substring(0, 100),
+          kind: inferTaskKind(userMessage),
+          chatJid,
+          owner: 'Gil',
+          source: 'user',
+        }).catch(() => null);
+        if (task) {
+          await setChatState(chatJid, { activeTaskId: task.id, awaitingConfirmation: false });
+          logger.info({ taskId: task.id, title: task.title }, 'Auto-created task from admin message');
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn({ err: err.message }, 'updateAdminTaskState error (non-fatal)');
+  }
+}
 
 // ============================================================
 // WHATSAPP BOT
@@ -2948,6 +3217,11 @@ async function startBot() {
 
           // Send (with media detection + auto-split) — use current socket reference
           await sendResponse(currentSock, chatJid, finalResponse);
+
+          // ---- TASK STATE UPDATE (admin DMs only) ----
+          if (isAdmin(last.senderJid) && !isGroup(chatJid)) {
+            updateAdminTaskState(chatJid, last.parsed.text || '', finalResponse).catch(() => {});
+          }
 
           // Auto-deploy: if power user edited project files, commit + deploy automatically
           const senderProfile = getUserProfile(last.senderJid);

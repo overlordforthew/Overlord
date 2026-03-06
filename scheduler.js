@@ -23,6 +23,8 @@ import {
 } from './meta-learning.js';
 import { runHeartbeat } from './heartbeat.js';
 import { sweepZombies } from './session-guard.js';
+import { createTask, getActiveTasks, getRecentDoneTasks, formatTaskList, TaskStatus } from './task-store.js';
+import { executeTaskAutonomously } from './executor.js';
 
 const execAsync = promisify(exec);
 
@@ -278,6 +280,18 @@ export async function generateBriefing() {
     lines.push('', '✅ No errors in the last 6 hours');
   }
 
+  // Task status
+  try {
+    const activeTasks = await getActiveTasks();
+    const doneTasks = await getRecentDoneTasks(null, 24);
+    if (activeTasks.length > 0) {
+      lines.push('', `📋 Active tasks (${activeTasks.length}):\n${formatTaskList(activeTasks).substring(0, 400)}`);
+    }
+    if (doneTasks.length > 0) {
+      lines.push(`✅ Completed (24h): ${doneTasks.length} task(s)`);
+    }
+  } catch { /* non-fatal */ }
+
   return lines.join('\n');
 }
 
@@ -490,6 +504,45 @@ async function checkContainerLogs(sockRef) {
       console.log(`⚠️ Sent ${alerts.length} log alert(s)`);
     } catch (err) {
       console.error('Failed to send log alert:', err.message);
+    }
+
+    // Auto-create repair tasks for each alert and attempt autonomous fix
+    for (const alert of alerts) {
+      try {
+        // Extract container name from alert
+        const containerMatch = alert.match(/🐳 ([^:]+):/);
+        const containerName = containerMatch ? containerMatch[1].trim() : 'unknown';
+
+        // Check if there's already an active task for this container
+        const existing = await getActiveTasks(ADMIN_JID);
+        const alreadyTracked = existing.some(t =>
+          t.title.toLowerCase().includes(containerName.toLowerCase()) ||
+          t.kind === 'repair'
+        );
+
+        if (!alreadyTracked) {
+          const task = await createTask({
+            title: `Auto-repair: ${containerName} error detected`,
+            kind: 'repair',
+            chatJid: ADMIN_JID,
+            owner: 'Gil',
+            project: containerName,
+            priority: 'high',
+            riskLevel: 'low',
+            successCriteria: `${containerName} container healthy, no new errors`,
+            nextAction: `Check logs for ${containerName}, identify root cause, fix it, verify recovery`,
+            source: 'observer',
+          });
+          console.log(`🔧 Created repair task ${task.id} for ${containerName}`);
+
+          // Execute autonomously in background (non-blocking)
+          executeTaskAutonomously(task, sockRef).catch(err => {
+            console.error(`Repair task ${task.id} failed:`, err.message);
+          });
+        }
+      } catch (err) {
+        console.error('Failed to create auto-repair task:', err.message);
+      }
     }
   }
 }
