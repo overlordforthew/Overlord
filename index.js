@@ -78,6 +78,9 @@ const ADMIN_FALLBACK_ESCALATION_PATTERNS = [
   /cannot read it/i,
 ];
 
+// Matches messages about operational/infrastructure topics (used for task auto-creation)
+const OPERATIONAL_CONTEXT_PATTERNS = /\b(error|errors|failed|failure|broken|issue|problem|repair|fix|deploy|restart|rebuild|container|docker|database|db|auth|ssl|nginx|traefik|logs?|server|push|commit|migrate|health check)\b/i;
+
 /** Shell-free HTTPS JSON request helper */
 function httpJson(url, { method = 'GET', headers = {}, body = null, timeout = 10000 } = {}) {
   return new Promise((resolve, reject) => {

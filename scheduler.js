@@ -513,11 +513,11 @@ async function checkContainerLogs(sockRef) {
         const containerMatch = alert.match(/🐳 ([^:]+):/);
         const containerName = containerMatch ? containerMatch[1].trim() : 'unknown';
 
-        // Check if there's already an active task for this container
+        // Check if there's already an active repair task for this specific container
         const existing = await getActiveTasks(ADMIN_JID);
         const alreadyTracked = existing.some(t =>
-          t.title.toLowerCase().includes(containerName.toLowerCase()) ||
-          t.kind === 'repair'
+          t.kind === 'repair' &&
+          t.project === containerName
         );
 
         if (!alreadyTracked) {

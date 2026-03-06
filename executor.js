@@ -217,11 +217,15 @@ export async function executeTaskAutonomously(task, sockRef) {
         lastResult: responseText.substring(0, 400),
         awaitingApproval: true,
       });
-      await setChatState(chatJid, {
-        activeTaskId: task.id,
-        awaitingConfirmation: true,
-        lastQuestion: responseText.substring(0, 300),
-      });
+      // Only take over chat state if no other task is currently active
+      const currentState = await import('./state-store.js').then(m => m.getChatState(chatJid));
+      if (!currentState.activeTaskId || currentState.activeTaskId === task.id) {
+        await setChatState(chatJid, {
+          activeTaskId: task.id,
+          awaitingConfirmation: true,
+          lastQuestion: responseText.substring(0, 300),
+        });
+      }
       await safeSend(sockRef, chatJid,
         `⏳ *Task paused — needs your input:*\n\n${task.title}\n\n${responseText.substring(0, 500)}`
       );
@@ -285,11 +289,15 @@ export async function executeTaskAutonomously(task, sockRef) {
 
     // Done
     await closeTask(task.id, TaskStatus.DONE, responseText.substring(0, 400));
-    await setChatState(chatJid, {
-      activeTaskId: null,
-      awaitingConfirmation: false,
-      lastActionTaken: `Completed: ${task.title}`,
-    });
+    // Only clear activeTaskId if we own it — don't wipe an unrelated active task
+    const stateAtDone = await import('./state-store.js').then(m => m.getChatState(chatJid));
+    if (stateAtDone.activeTaskId === task.id) {
+      await setChatState(chatJid, {
+        activeTaskId: null,
+        awaitingConfirmation: false,
+        lastActionTaken: `Completed: ${task.title}`,
+      });
+    }
 
     // Notify on background/observer tasks
     if (task.source === 'observer' || task.source === 'scheduler') {
