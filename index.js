@@ -1651,7 +1651,6 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
     route.model = MODEL_REGISTRY.opus;
     route.via = 'claude-cli';
     route.maxTurns = null;
-    route.tools = null;
     route.escalatable = false;
 
     const modelIdx = args.indexOf('--model');
@@ -1660,9 +1659,13 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
     const turnsIdx = args.indexOf('--max-turns');
     if (turnsIdx !== -1) args[turnsIdx + 1] = '100';
 
-    for (let i = args.length - 1; i >= 0; i--) {
-      if (args[i] === '--allowedTools') {
-        args.splice(i, 2);
+    // Only strip tool restrictions for admin — preserve permissions for regular users
+    if (isAdminUser) {
+      route.tools = null;
+      for (let i = args.length - 1; i >= 0; i--) {
+        if (args[i] === '--allowedTools') {
+          args.splice(i, 2);
+        }
       }
     }
 
@@ -1952,9 +1955,8 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
           return;
         }
 
-        // Escalate to Opus if smaller model gave empty or low-quality response (admin DMs only)
+        // Escalate to Opus if smaller model gave empty or low-quality response
         const shouldEscalateEmpty = !fallbackEscalatedToOpus &&
-          isAdminUser && !inGroup &&
           route?.escalatable &&
           route?.model?.id !== MODEL_REGISTRY.opus.id &&
           (!response || response.trim().length < 10);
