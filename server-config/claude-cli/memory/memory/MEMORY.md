@@ -45,6 +45,9 @@ Coolify API
 - Token: COOLIFY_API_TOKEN in /root/overlord/.env  
 - Usage: curl -H "Authorization: Bearer $COOLIFY_API_TOKEN" $API/...  
 
-Shannon (AI Pentest Framework)  
-- Path: /root/projects/shannon/ | Model: Sonnet  
+Shannon (AI Pentest Framework)
+- Path: /root/projects/shannon/ | Model: Sonnet
 - Run: `./shannon start URL=<url> REPO=<name>`
+- Audit logs: /root/projects/shannon/audit-logs/
+- Runs completed: Lumina, MasterCommander, NamiBarden, OnlyDrafting (Elmo), OnlyHulls
+- Fixes applied: OnlyHulls (rate limiting, IDOR, open redirect, SSRF, enumeration, TOCTOU)

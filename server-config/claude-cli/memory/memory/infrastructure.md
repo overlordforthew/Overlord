@@ -1,10 +1,12 @@
+
+
 ContainerInventory (20 containers)
 
-| Project | App Container | DB Container | Network | Port |
+|Project | App Container | DB Container | Network | Port |
 |---------|--------------|--------------|---------|------|
 | **Overlord** | `overlord` | `mastercommander-db` (shared) | coolify | 127.0.0.1:3001 |
 | **SurfaBabe** | `surfababe` | `surfababe-db` | coolify | 127.0.0.1:3002 |
-| **MasterCommander** | `mastercommander` (nginx) | `mastercommander-db` | coolify | 127.0.0.1:3010 |
+| **MasterCommander** | `mastercommander` (nginx) | `mastercommander-db` (shared) | coolify | 127.0.0.1:3010 |
 | **NamiBarden** | `namibarden` | `namibarden-db` | standalone (docker-compose labels) | 80 internal |
 | **Lumina** | `lumina-app` | `lumina-db` | okw0cwwgskcow8k8o08gsok0 (isolated) | 3456 internal |
 | **OnlyHulls** | Coolify `qkggs84cs88o0gww4wc80gwo-*` | `onlyhulls-db` + `onlyhulls-meilisearch` + `onlyhulls-redis` | coolify | 127.0.0.1:5433/7701/6380 |
@@ -18,8 +20,8 @@ Databases (all PG 17 except coolify-db PG 15)
 | `mastercommander-db` | `mastercommander` (users, boats, boat_logs, gate_users, gate_nda, contact_submissions, newsletter_subscribers) | MasterCommander + Overlord auth endpoints |
 | `namibarden-db` | `namibarden` (nb_admin, nb_subscribers, nb_contacts, nb_campaigns, nb_campaign_recipients, nb_email_events) | NamiBarden |
 | `surfababe-db` | `surfababe` (7 tables) | SurfaBabe |
-| `onlyhulls-db` | `onlyhulls` (users, boats, boat_dna, boat_media, buyer_profiles, matches, introductions, dreamboard, ai_conversations) + pgvector | OnlyHulls |
 | `lumina-db` | `lumina` | Lumina |
+| `onlyhulls-db` | `onlyhulls` (users, boats, boat_dna, boat_media, buyer_profiles, matches, introductions, dreamboard, ai_conversations) + pgvector | OnlyHulls |
 
 Networks
 - `coolify` — main network, most services

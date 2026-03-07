@@ -1,16 +1,17 @@
-0 */6 * * * /root/overlord/scripts/health-check.sh > /dev/null 2>&1 && /root/overlord/scripts/update-status.sh > /dev/null 2>&1
 0 0 * * * /root/overlord/scripts/backup.sh >> /root/overlord/logs/backup.log 2>&1
-0 6 * * * /root/overlord/scripts/morning-brief.sh > /root/overlord/logs/morning-brief.log 2>&1
-0 */6 * * * /usr/bin/claude auth status > /dev/null 2>&1
-55 23 * * * /root/overlord/scripts/auto-journal.sh >> /root/overlord/logs/journal.log 2>&1
-# Daily token aggregation (before 3am cleanup)
-55 2 * * * /root/overlord/scripts/token-aggregate.sh >> /root/overlord/logs/token-aggregate.log 2>&1
-# Weekly token dashboard (Sunday 8am)
-0 8 * * 0 /root/overlord/scripts/token-dashboard.sh >> /root/overlord/logs/token-dashboard.log 2>&1
-# Clean stale Claude CLI sessions (older than 5 days) and debug logs (older than 2 days)
 0 3 * * * find /root/.claude/projects/ -name "*.jsonl" -mtime +5 -delete; find /root/.claude/debug/ -name "*.txt" -mtime +2 -delete
-# Daily memory file cleanup and simplification
-30 3 * * * /root/overlord/scripts/memory-cleanup.sh >> /root/overlord/logs/memory-cleanup.log 2>&1
-# Rotate Cloudflare API token every 90 days (1st of Jan/Apr/Jul/Oct at 4am)
 0 4 1 1,4,7,10 * /root/overlord/scripts/rotate-cf-token.sh >> /var/log/cf-rotate.log 2>&1
+0 */6 * * * /root/overlord/scripts/health-check.sh > /dev/null 2>&1 && /root/overlord/scripts/update-status.sh > /dev/null 2>&1
+0 6 * * * /root/overlord/scripts/morning-brief.sh > /root/overlord/logs/morning-brief.log 2>&1
+0 */6 * * * /root/projects/shannon/scripts/refresh-token.sh
+0 */6 * * * /usr/bin/claude auth status > /dev/null 2>&1
+0 8 * * 0 /root/overlord/scripts/token-dashboard.sh >> /root/overlord/logs/token-dashboard.log 2>&1
+30 3 * * * /root/overlord/scripts/memory-cleanup.sh >> /root/overlord/logs/memory-cleanup.log 2>&1
+55 23 * * * /root/overlord/scripts/auto-journal.sh >> /root/overlord/logs/journal.log 2>&1
+55 2 * * * /root/overlord/scripts/token-aggregate.sh >> /root/overlord/logs/token-aggregate.log 2>&1
 5 */6 * * * /root/projects/shannon/sync-oauth.sh > /dev/null 2>&1
+# Clean stale Claude CLI sessions (older than 5 days) and debug logs (older than 2 days)
+# Daily memory file cleanup and simplification
+# Daily token aggregation (before 3am cleanup)
+# Rotate Cloudflare API token every 90 days (1st of Jan/Apr/Jul/Oct at 4am)
+# Weekly token dashboard (Sunday 8am)
