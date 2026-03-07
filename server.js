@@ -440,6 +440,7 @@ export function startServer(sockRef, sendResponse) {
           UNIQUE(gate_user_id, site)
         )
       `);
+      await mcPool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INT NOT NULL DEFAULT 0`);
       console.log('[mc-auth] DB init + migrations complete');
     } catch (err) {
       console.error('[mc-auth] DB init error:', err.message);
@@ -541,11 +542,11 @@ export function startServer(sockRef, sendResponse) {
 
   // JWT helper
   function signToken(user) {
-    return jwt.sign({ id: user.id, email: user.email, name: user.name }, MC_JWT_SECRET, { expiresIn: '180d' });
+    return jwt.sign({ id: user.id, email: user.email, name: user.name, tv: user.token_version ?? 0 }, MC_JWT_SECRET, { expiresIn: '180d' });
   }
 
   // Reusable JWT auth middleware for MasterCommander
-  function requireMcAuth(req, res, next) {
+  async function requireMcAuth(req, res, next) {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
       return res.status(401).json({ error: 'Authentication required.' });
@@ -554,6 +555,11 @@ export function startServer(sockRef, sendResponse) {
       const decoded = jwt.verify(authHeader.slice(7), MC_JWT_SECRET);
       if (decoded.type === 'gate') {
         return res.status(401).json({ error: 'Invalid token type.' });
+      }
+      // Verify token_version matches DB — invalidates tokens after password change
+      const r = await mcPool.query('SELECT token_version FROM users WHERE id = $1', [decoded.id]);
+      if (!r.rows[0] || r.rows[0].token_version !== (decoded.tv ?? 0)) {
+        return res.status(401).json({ error: 'Session expired. Please log in again.' });
       }
       req.mcUser = decoded;
       next();
@@ -828,7 +834,7 @@ export function startServer(sockRef, sendResponse) {
       const valid = await bcrypt.compare(current_password, result.rows[0].password_hash);
       if (!valid) return res.status(401).json({ error: 'Current password is incorrect.' });
       const hash = await bcrypt.hash(new_password, 10);
-      await mcPool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, req.mcUser.id]);
+      await mcPool.query('UPDATE users SET password_hash = $1, token_version = token_version + 1 WHERE id = $2', [hash, req.mcUser.id]);
       res.json({ message: 'Password changed successfully.' });
     } catch (err) {
       console.error('[mc-auth] Change password error:', err.message);
