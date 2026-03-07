@@ -192,6 +192,95 @@ const COMPLEX_PATTERNS = /\b(fix|debug|deploy|implement|build|create|refactor|mi
 const MEDIUM_PATTERNS = /\b(research|compare|analyze|explain|summarize|digest|review|describe|translate|help.*(?:me|us)\s+(?:understand|figure|plan)|what.*(?:do you think|should I)|how.*(?:does|do|can|would|should)|tell me about|look up|search for|what(?:'s| is) the (?:disk|memory|cpu|status|uptime))\b/i;
 
 const SIMPLE_PATTERNS = /^(hey|hi|hello|yo|sup|thanks|thx|ok|cool|nice|yes|no|sure|nah|yep|nope|good|great|awesome|lol|haha|😂|👍|🙏|what time|what's the time|how are you|good morning|good night|gm|gn|test|ping)\b/i;
+const ADMIN_CONFIRMATION_PATTERNS = /^(yes|yep|yeah|ok(?:ay)?|sure|do it|go ahead|proceed|handle it|run it|ship it|make it happen)$/i;
+const ADMIN_REPAIR_PATTERNS = /^(repair|fix|resolve|sort it|clean it up|handle it)$/i;
+const ADMIN_CONTINUATION_PATTERNS = /^(continue|again|retry|finish it|do the rest|keep going|carry on)$/i;
+const ADMIN_STATUS_PATTERNS = /^(check|status|results?\??|any update\??|did you do it\??|what happened\??|let me know)$/i;
+const ADMIN_REFERENTIAL_PATTERNS = /^(this|that|this one|that one|the last thing|what about that|same for this)$/i;
+const OPERATIONAL_CONTEXT_PATTERNS = /\b(error|errors|failed|failure|broken|issue|problem|repair|fix|deploy|restart|rebuild|container|docker|database|db|auth|ssl|nginx|traefik|logs?|server|push|commit|migrate|columns?|health check|unknownaction)\b/i;
+const CONFIRMATION_REQUEST_PATTERNS = /\b(want me to|do you want me to|should i|shall i|want me|rebuild|restart|deploy|repair|fix|run|create|set up|spin up|stop|push)\b/i;
+
+function classifyTextOnly(text, isAdmin) {
+  const normalized = (text || '').trim();
+  if (!normalized) return 'simple';
+  if (COMPLEX_PATTERNS.test(normalized)) return 'complex';
+  if (SIMPLE_PATTERNS.test(normalized)) return 'simple';
+  if (MEDIUM_PATTERNS.test(normalized)) return 'medium';
+  if (normalized.length > 200) return 'complex';
+  if (normalized.length < 40) return 'simple';
+  const sentences = (normalized.match(/[.!?]+/g) || []).length;
+  if (sentences > 3) return 'medium';
+  return isAdmin ? 'medium' : 'simple';
+}
+
+function getEntryText(entry) {
+  if (!entry || typeof entry.text !== 'string') return '';
+  return entry.text.trim();
+}
+
+function inferTaskTypeFromMessages(messages, isAdmin) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const text = getEntryText(messages[i]);
+    if (!text) continue;
+    const inferred = classifyTextOnly(text, isAdmin);
+    if (inferred !== 'simple') return inferred;
+  }
+  return isAdmin ? 'medium' : 'simple';
+}
+
+function resolveAdminShorthand(parsed, opts = {}) {
+  if (!opts.isAdmin || opts.isGroup) return null;
+
+  const text = (parsed.text || '').trim();
+  if (!text || parsed.hasMedia) return null;
+
+  const recentMessages = Array.isArray(opts.recentMessages) ? opts.recentMessages.slice(-12) : [];
+  const recentText = recentMessages.map(getEntryText).filter(Boolean).join('\n');
+  const lastBotMessage = [...recentMessages].reverse().find((m) => m?.role === 'bot' && getEntryText(m));
+  const lastBotText = getEntryText(lastBotMessage);
+  const inheritedTaskType = inferTaskTypeFromMessages(recentMessages, true);
+  const hasOperationalContext = OPERATIONAL_CONTEXT_PATTERNS.test(recentText);
+  const botAskedForConfirmation = !!lastBotText &&
+    CONFIRMATION_REQUEST_PATTERNS.test(lastBotText) &&
+    /[?]$/.test(lastBotText);
+
+  if (ADMIN_REPAIR_PATTERNS.test(text)) {
+    return {
+      taskType: hasOperationalContext ? 'complex' : 'medium',
+      classifiedBy: 'admin_shorthand_repair',
+    };
+  }
+
+  if (ADMIN_CONFIRMATION_PATTERNS.test(text) && botAskedForConfirmation) {
+    return {
+      taskType: hasOperationalContext ? 'complex' : inheritedTaskType,
+      classifiedBy: 'admin_shorthand_confirm',
+    };
+  }
+
+  if (ADMIN_CONTINUATION_PATTERNS.test(text)) {
+    return {
+      taskType: hasOperationalContext ? 'complex' : inheritedTaskType,
+      classifiedBy: 'admin_shorthand_continue',
+    };
+  }
+
+  if (ADMIN_STATUS_PATTERNS.test(text)) {
+    return {
+      taskType: hasOperationalContext ? 'complex' : 'medium',
+      classifiedBy: 'admin_shorthand_status',
+    };
+  }
+
+  if (ADMIN_REFERENTIAL_PATTERNS.test(text)) {
+    return {
+      taskType: hasOperationalContext ? 'complex' : 'medium',
+      classifiedBy: 'admin_shorthand_reference',
+    };
+  }
+
+  return null;
+}
 
 /**
  * Fast regex classifier (used as fallback and fast-path for obvious cases).
@@ -240,7 +329,7 @@ export function classifyTask(parsed, isAdmin) {
  * @param {boolean} isAdmin - Whether the sender is admin
  * @returns {Promise<'complex'|'medium'|'simple'>}
  */
-export async function classifyWithOpus(parsed, isAdmin) {
+export async function classifyWithOpus(parsed, isAdmin, recentMessages = []) {
   const text = (parsed.text || '').trim();
   const hasMedia = parsed.hasMedia;
 
@@ -249,19 +338,29 @@ export async function classifyWithOpus(parsed, isAdmin) {
   if (!text && hasMedia) return 'medium';
   if (SIMPLE_PATTERNS.test(text) && !hasMedia) return 'simple';
 
+  // Build recent context so follow-up messages aren't misclassified
+  const recentContext = recentMessages.slice(-6).map(m => {
+    const role = m?.role === 'bot' ? 'Bot' : 'User';
+    const t = (m?.text || '').trim().substring(0, 150);
+    return t ? `${role}: ${t}` : '';
+  }).filter(Boolean).join('\n');
+
   // Everything else: ask Opus to classify
   const classifyPrompt = `You are a message classifier for a WhatsApp AI assistant. Classify the following message into exactly one category:
 
 COMPLEX — Requires server access, code changes, Docker commands, debugging, deployments, multi-step tasks, or deep reasoning. Examples: "fix the nginx config", "deploy beastmode", "check why the API is down", "write a script to backup the database"
 
-MEDIUM — Requires research, analysis, explanation, comparison, or thoughtful response. Examples: "explain how kubernetes works", "what do you think about this approach", "summarize this article", "translate this to Spanish"
+MEDIUM — Requires research, analysis, explanation, comparison, or thoughtful response. Also includes follow-up instructions that reference prior conversation (e.g. "do it", "get what you need from it", "make it happen"). Examples: "explain how kubernetes works", "what do you think about this approach", "go ahead and set that up", "get as much as you need from it"
 
 SIMPLE — Casual conversation, greetings, acknowledgments, quick factual lookups, or brief responses. Examples: "hey", "thanks", "what time is it", "how are you", "cool"
 
+IMPORTANT: If the message references prior conversation context (e.g. "do it", "get that", "set it up", "go ahead"), classify based on what the PRIOR CONTEXT implies, not the message alone. A short follow-up to a complex discussion is NOT simple.
+${isAdmin ? 'Admin messages should lean toward MEDIUM or COMPLEX — never classify an admin instruction as SIMPLE.' : ''}
+
 ${hasMedia ? '[Message includes media attachment (image/video/audio/document)]' : ''}
 ${isAdmin ? '[Sender is admin with full server access]' : '[Sender is a regular user]'}
-
-Message: "${text.substring(0, 500)}"
+${recentContext ? `\nRecent conversation:\n${recentContext}\n` : ''}
+New message: "${text.substring(0, 500)}"
 
 Reply with ONLY one word: COMPLEX, MEDIUM, or SIMPLE`;
 
@@ -316,10 +415,12 @@ Reply with ONLY one word: COMPLEX, MEDIUM, or SIMPLE`;
 export async function routeMessage(parsed, opts = {}) {
   const mode = opts.mode || process.env.ROUTER_MODE || 'alpha';
   const { isAdmin, isPower } = opts;
+  const shorthand = resolveAdminShorthand(parsed, opts);
 
   // Power users always get Opus — they need full tool access for code edits
   if (isPower) {
-    const taskType = mode === 'alpha' ? classifyTask(parsed, isAdmin) : await classifyWithOpus(parsed, isAdmin);
+    const recentMessages = Array.isArray(opts.recentMessages) ? opts.recentMessages : [];
+    const taskType = shorthand?.taskType || (mode === 'alpha' ? classifyTask(parsed, isAdmin) : await classifyWithOpus(parsed, isAdmin, recentMessages));
     return {
       model: MODEL_REGISTRY.opus,
       tools: null,
@@ -327,20 +428,29 @@ export async function routeMessage(parsed, opts = {}) {
       taskType,
       via: 'claude-cli',
       escalatable: false,
-      classifiedBy: mode === 'alpha' ? 'regex' : 'opus',
+      classifiedBy: shorthand?.classifiedBy || (mode === 'alpha' ? 'regex' : 'opus'),
     };
   }
 
   // Alpha uses regex (Opus handles everything anyway — no routing decision needed)
   // Beta/Charlie use Opus-directed classification
+  const recentMessages = Array.isArray(opts.recentMessages) ? opts.recentMessages : [];
   let taskType;
   let classifiedBy;
-  if (mode === 'alpha') {
+  if (shorthand) {
+    taskType = shorthand.taskType;
+    classifiedBy = shorthand.classifiedBy;
+  } else if (mode === 'alpha') {
     taskType = classifyTask(parsed, isAdmin);
     classifiedBy = 'regex';
   } else {
-    taskType = await classifyWithOpus(parsed, isAdmin);
+    taskType = await classifyWithOpus(parsed, isAdmin, recentMessages);
     classifiedBy = 'opus';
+    // Admin DMs should never be classified as simple — minimum is medium
+    if (isAdmin && !opts.isGroup && taskType === 'simple') {
+      taskType = 'medium';
+      classifiedBy = 'opus+admin_floor';
+    }
   }
 
   // ========== ALPHA: Everything → Opus ==========

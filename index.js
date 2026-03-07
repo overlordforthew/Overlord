@@ -145,7 +145,7 @@ const CONFIG = {
   batchWindowMs: 2000,
 
   // Rolling context: how many recent messages to keep per chat
-  contextWindowSize: 20,
+  contextWindowSize: 30,
 
   // Typing indicator
   typingIndicator: true,
@@ -1075,9 +1075,13 @@ class ConversationContext {
     const messages = this.get(chatJid, limit);
     if (messages.length === 0) return '[No recent messages]';
 
+    const compactTime = (ts) => {
+      try { return new Date(ts).toISOString().substring(11, 16); } catch { return '??:??'; }
+    };
+
     return messages.map(m => {
-      let who = m.role === 'bot' ? `🤖 ${CONFIG.botName}` : (m.senderName || m.sender);
-      let line = `[${m.timestamp}] ${who}`;
+      let who = m.role === 'bot' ? CONFIG.botName : (m.senderName || m.sender);
+      let line = `[${compactTime(m.timestamp)}] ${who}`;
 
       switch (m.type) {
         case 'text':
@@ -1504,8 +1508,11 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
   const isAdminUser = profile.role === 'admin';
   const isPower = profile.role === 'power';
   const memory = await getMemory(chatJid);
-  const recentMessages = conversationContext.get(chatJid, 20);
-  const recentContext = conversationContext.format(chatJid, 30);
+  // Tiered context depth: admin DMs get full history for continuity; groups and
+  // regular DMs get a shallower window to keep token costs down.
+  const contextDepth = isAdminUser && !isGroup(chatJid) ? 20 : 8;
+  const recentMessages = conversationContext.get(chatJid, contextDepth);
+  const recentContext = conversationContext.format(chatJid, contextDepth);
   let sessionId = await getSessionId(chatJid);
 
   // Build comprehensive prompt
@@ -1588,6 +1595,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
   prompt.push(`- For voice notes: respond naturally to the transcribed text`);
   prompt.push(`- When creating files (charts, images, etc.), output the FULL ABSOLUTE PATH in your response. The bot auto-detects file paths and sends them as WhatsApp media.`);
   prompt.push(`- To screenshot a URL: node /app/scripts/screenshot.js <url> /tmp/screenshot.png`);
+  prompt.push(`- Short or ambiguous messages ("yes", "ok", "check", "it", "that", "do it", "again") are continuations — use [RECENT CONVERSATION] to understand what they refer to before responding`);
   if (isGroup(chatJid)) {
     prompt.push(`- Group chat: match the energy, don't over-explain, be a good participant`);
   }
@@ -1944,13 +1952,20 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
           return;
         }
 
-        if (!fallbackEscalatedToOpus && shouldEscalateAdminFallback(response, route)) {
+        // Escalate to Opus if smaller model gave empty or low-quality response
+        const shouldEscalateEmpty = !fallbackEscalatedToOpus &&
+          route?.escalatable &&
+          route?.model?.id !== MODEL_REGISTRY.opus.id &&
+          (!response || response.trim().length < 10);
+
+        if (shouldEscalateEmpty || (!fallbackEscalatedToOpus && shouldEscalateAdminFallback(response, route))) {
           fallbackEscalatedToOpus = true;
           logger.warn({
-            response: response.substring(0, 200),
+            response: (response || '').substring(0, 200),
             fromModel: route.model.id,
             taskType: route.taskType,
-          }, 'Admin DM fallback response from smaller model, escalating to Opus');
+            reason: shouldEscalateEmpty ? 'empty_or_too_short' : 'fallback_pattern',
+          }, 'Escalating to Opus — smaller model failed to produce useful response');
           switchRouteToOpus();
           resolve({ retry: true });
           return;
