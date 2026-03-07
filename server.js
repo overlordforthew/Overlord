@@ -394,12 +394,12 @@ export function startServer(sockRef, sendResponse) {
       await mcPool.query(`
         CREATE TABLE IF NOT EXISTS contact_submissions (
           id SERIAL PRIMARY KEY,
-          source VARCHAR(100),
+          source VARCHAR(255),
           name VARCHAR(255) NOT NULL,
           email VARCHAR(255) NOT NULL,
           subject VARCHAR(255),
           message TEXT NOT NULL,
-          plan VARCHAR(100),
+          plan VARCHAR(255),
           ip VARCHAR(45),
           created_at TIMESTAMP DEFAULT NOW()
         )
@@ -448,6 +448,15 @@ export function startServer(sockRef, sendResponse) {
 
   const MC_JWT_SECRET = process.env.MC_JWT_SECRET;
   if (!MC_JWT_SECRET) logger.warn('MC_JWT_SECRET not set — MasterCommander auth will fail');
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#x27;');
+  }
 
   // ---- Stripe billing (MasterCommander) ----
   const MC_PLANS = {
@@ -507,7 +516,7 @@ export function startServer(sockRef, sendResponse) {
   const authRateMap = new Map();
   function authRateLimit(max, windowMs) {
     return (req, res, next) => {
-      const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+      const ip = req.ip;
       const key = `${req.path}:${ip}`;
       const now = Date.now();
       let hits = authRateMap.get(key) || [];
@@ -543,6 +552,9 @@ export function startServer(sockRef, sendResponse) {
     }
     try {
       const decoded = jwt.verify(authHeader.slice(7), MC_JWT_SECRET);
+      if (decoded.type === 'gate') {
+        return res.status(401).json({ error: 'Invalid token type.' });
+      }
       req.mcUser = decoded;
       next();
     } catch {
@@ -594,7 +606,7 @@ export function startServer(sockRef, sendResponse) {
           from: `"Master&Commander" <${process.env.MC_SMTP_USER}>`,
           to: user.email,
           subject: 'Verify your Master&Commander email',
-          html: `<p>Hi ${name.trim()},</p><p>Welcome to Master&Commander! Please verify your email by clicking the link below:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>This link expires in 24 hours.</p>`,
+          html: `<p>Hi ${escapeHtml(name.trim())},</p><p>Welcome to Master&amp;Commander! Please verify your email by clicking the link below:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>This link expires in 24 hours.</p>`,
         }).catch(err => console.error('[mc-auth] Verify email send error:', err.message));
       } else {
         console.log(`[mc-auth] Verification link (no SMTP): ${verifyUrl}`);
@@ -664,7 +676,7 @@ export function startServer(sockRef, sendResponse) {
             from: `"Master&Commander" <${process.env.MC_SMTP_USER}>`,
             to: user.email,
             subject: 'Reset your Master&Commander password',
-            html: `<p>Hi ${user.name},</p><p>Click the link below to reset your password. This link expires in 15 minutes.</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you didn't request this, you can safely ignore this email.</p>`,
+            html: `<p>Hi ${escapeHtml(user.name)},</p><p>Click the link below to reset your password. This link expires in 15 minutes.</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you didn't request this, you can safely ignore this email.</p>`,
           });
         } else {
           console.log(`[mc-auth] Password reset link (no SMTP configured): ${resetUrl}`);
@@ -745,7 +757,7 @@ export function startServer(sockRef, sendResponse) {
           from: `"Master&Commander" <${process.env.MC_SMTP_USER}>`,
           to: user.email,
           subject: 'Verify your Master&Commander email',
-          html: `<p>Hi ${user.name},</p><p>Please verify your email by clicking the link below:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>This link expires in 24 hours.</p>`,
+          html: `<p>Hi ${escapeHtml(user.name)},</p><p>Please verify your email by clicking the link below:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>This link expires in 24 hours.</p>`,
         });
       }
       res.json({ message: 'Verification email sent.' });
@@ -1276,7 +1288,7 @@ export function startServer(sockRef, sendResponse) {
   // Gate rate limiter (reuses authRateMap)
   function gateRateLimit(max, windowMs) {
     return (req, res, next) => {
-      const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+      const ip = req.ip;
       const key = `gate:${req.path}:${ip}`;
       const now = Date.now();
       let hits = authRateMap.get(key) || [];
@@ -1326,7 +1338,7 @@ export function startServer(sockRef, sendResponse) {
       if (!GATE_SITES[site]) return res.status(400).json({ error: 'Unknown site.' });
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email address.' });
 
-      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const code = String(crypto.randomInt(100000, 1000000));
       const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
       // Upsert gate user
@@ -1337,7 +1349,7 @@ export function startServer(sockRef, sendResponse) {
           name = EXCLUDED.name,
           code = EXCLUDED.code,
           code_expires = EXCLUDED.code_expires,
-          code_attempts = 0
+          code_attempts = CASE WHEN gate_users.code_expires < NOW() THEN 0 ELSE gate_users.code_attempts END
       `, [email.toLowerCase(), name, code, expires]);
 
       // Send email
@@ -1434,7 +1446,7 @@ export function startServer(sockRef, sendResponse) {
       if (!site) return res.status(400).json({ error: 'Site is required.' });
       if (!GATE_SITES[site]) return res.status(400).json({ error: 'Unknown site.' });
 
-      const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+      const ip = req.ip;
       const userAgent = req.headers['user-agent'] || '';
 
       await mcPool.query(`
@@ -1492,7 +1504,7 @@ export function startServer(sockRef, sendResponse) {
   // Rate limiter: 10 messages per minute per IP
   const chatRateMap = new Map();
   function chatRateLimit(req, res, next) {
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+    const ip = req.ip;
     const now = Date.now();
     const window = 60_000;
     const max = 10;
@@ -1688,7 +1700,7 @@ BEHAVIOR:
       try {
         await mcPool.query(
           'INSERT INTO contact_submissions (source, name, email, subject, message, plan, ip) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-          [routing.label, name.trim(), email.trim(), (subject || '').trim(), message.trim(), (plan || '').trim() || null, ip]
+          [routing.label?.slice(0, 255), name.trim().slice(0, 255), email.trim().slice(0, 255), (subject || '').trim().slice(0, 255), message.trim(), (plan || '').trim().slice(0, 255) || null, ip]
         );
       } catch (dbErr) {
         console.error('[contact] DB save error:', dbErr.message);
@@ -1718,17 +1730,17 @@ BEHAVIOR:
       // Send email
       try {
         if (mcMailer) {
-          const planLine = plan ? `\n<p><strong>Plan:</strong> ${plan}</p>` : '';
+          const planLine = plan ? `\n<p><strong>Plan:</strong> ${escapeHtml(plan)}</p>` : '';
           await mcMailer.sendMail({
             from: `"${routing.label} Contact" <${process.env.MC_SMTP_USER}>`,
             to: routing.to,
             replyTo: email.trim(),
             subject: subject?.trim() || `New contact from ${name.trim()} — ${routing.label}`,
             html: `<h3>New Contact Form Submission</h3>
-<p><strong>From:</strong> ${name.trim()} &lt;${email.trim()}&gt;</p>
-<p><strong>Source:</strong> ${routing.label}</p>${planLine}
+<p><strong>From:</strong> ${escapeHtml(name.trim())} &lt;${escapeHtml(email.trim())}&gt;</p>
+<p><strong>Source:</strong> ${escapeHtml(routing.label)}</p>${planLine}
 <hr>
-<p>${message.trim().replace(/\n/g, '<br>')}</p>`,
+<p>${escapeHtml(message.trim()).replace(/\n/g, '<br>')}</p>`,
           });
         } else {
           console.log(`[contact] No SMTP — ${routing.label}: ${name} <${email}> — ${message.slice(0, 100)}`);
