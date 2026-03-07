@@ -235,12 +235,10 @@ function resolveAdminShorthand(parsed, opts = {}) {
   if (!text || parsed.hasMedia) return null;
 
   const recentMessages = Array.isArray(opts.recentMessages) ? opts.recentMessages.slice(-12) : [];
-  // Exclude the current inbound message so shorthand words like "fix" don't self-promote
-  const priorMessages = recentMessages.filter(m => getEntryText(m) !== text);
-  const recentText = priorMessages.map(getEntryText).filter(Boolean).join('\n');
+  const recentText = recentMessages.map(getEntryText).filter(Boolean).join('\n');
   const lastBotMessage = [...recentMessages].reverse().find((m) => m?.role === 'bot' && getEntryText(m));
   const lastBotText = getEntryText(lastBotMessage);
-  const inheritedTaskType = inferTaskTypeFromMessages(priorMessages, true);
+  const inheritedTaskType = inferTaskTypeFromMessages(recentMessages, true);
   const hasOperationalContext = OPERATIONAL_CONTEXT_PATTERNS.test(recentText);
   const botAskedForConfirmation = !!lastBotText &&
     CONFIRMATION_REQUEST_PATTERNS.test(lastBotText) &&
@@ -248,7 +246,7 @@ function resolveAdminShorthand(parsed, opts = {}) {
 
   if (ADMIN_REPAIR_PATTERNS.test(text)) {
     return {
-      taskType: hasOperationalContext ? 'complex' : 'medium',
+      taskType: 'complex',
       classifiedBy: 'admin_shorthand_repair',
     };
   }
