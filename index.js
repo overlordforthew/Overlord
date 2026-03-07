@@ -1952,8 +1952,9 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
           return;
         }
 
-        // Escalate to Opus if smaller model gave empty or low-quality response
+        // Escalate to Opus if smaller model gave empty or low-quality response (admin DMs only)
         const shouldEscalateEmpty = !fallbackEscalatedToOpus &&
+          isAdminUser && !inGroup &&
           route?.escalatable &&
           route?.model?.id !== MODEL_REGISTRY.opus.id &&
           (!response || response.trim().length < 10);

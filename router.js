@@ -235,10 +235,12 @@ function resolveAdminShorthand(parsed, opts = {}) {
   if (!text || parsed.hasMedia) return null;
 
   const recentMessages = Array.isArray(opts.recentMessages) ? opts.recentMessages.slice(-12) : [];
-  const recentText = recentMessages.map(getEntryText).filter(Boolean).join('\n');
+  // Exclude the current inbound message so shorthand words like "fix" don't self-promote
+  const priorMessages = recentMessages.filter(m => getEntryText(m) !== text);
+  const recentText = priorMessages.map(getEntryText).filter(Boolean).join('\n');
   const lastBotMessage = [...recentMessages].reverse().find((m) => m?.role === 'bot' && getEntryText(m));
   const lastBotText = getEntryText(lastBotMessage);
-  const inheritedTaskType = inferTaskTypeFromMessages(recentMessages, true);
+  const inheritedTaskType = inferTaskTypeFromMessages(priorMessages, true);
   const hasOperationalContext = OPERATIONAL_CONTEXT_PATTERNS.test(recentText);
   const botAskedForConfirmation = !!lastBotText &&
     CONFIRMATION_REQUEST_PATTERNS.test(lastBotText) &&
