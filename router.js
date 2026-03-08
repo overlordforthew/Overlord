@@ -412,10 +412,33 @@ Reply with ONLY one word: COMPLEX, MEDIUM, or SIMPLE`;
  * @param {object} opts - { isAdmin, isPower, triageReason, mode }
  * @returns {Promise<{ model: object, tools: string|null, maxTurns: number|null, taskType: string, via: string, escalatable: boolean, classifiedBy: string }>}
  */
+// Per-group model policies: non-admin/non-power users get downgraded to save tokens
+// Format: chatJid → { model, maxTurns, tools }
+const GROUP_MODEL_POLICY = {
+  '120363424015261408@g.us': { model: 'sonnet', maxTurns: 5, tools: 'Read,WebSearch,WebFetch' },
+};
+
 export async function routeMessage(parsed, opts = {}) {
   const mode = opts.mode || process.env.ROUTER_MODE || 'alpha';
   const { isAdmin, isPower } = opts;
   const shorthand = resolveAdminShorthand(parsed, opts);
+
+  // Per-group model policy: non-admin, non-power users get a cheaper model
+  if (opts.isGroup && !isAdmin && !isPower && opts.chatJid) {
+    const policy = GROUP_MODEL_POLICY[opts.chatJid];
+    if (policy) {
+      const taskType = classifyTask(parsed, false);
+      return {
+        model: MODEL_REGISTRY[policy.model],
+        tools: policy.tools || null,
+        maxTurns: policy.maxTurns || 5,
+        taskType,
+        via: MODEL_REGISTRY[policy.model].via,
+        escalatable: true,  // can still escalate to Opus if struggling
+        classifiedBy: 'group_policy',
+      };
+    }
+  }
 
   // Power users always get Opus — they need full tool access for code edits
   if (isPower) {

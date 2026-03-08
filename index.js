@@ -1742,6 +1742,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
     isAdmin: isAdminUser,
     isPower,
     isGroup: inGroup,
+    chatJid,
     triageReason,
     mode: CONFIG.routerMode,
     recentMessages,
