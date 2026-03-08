@@ -1264,10 +1264,21 @@ function parseMessage(msg) {
         contextInfo.quotedMessage?.[qType]?.caption ||
         `[${qType}]`;
     }
-    // Check if replying to the bot
-    parsed.replyingToBot = contextInfo.participant
-      ? senderNumber(contextInfo.participant) === CONFIG.adminNumber
-      : false;
+    // Check if replying to the bot (compare against bot's own JID/LID, not admin number)
+    if (contextInfo.participant) {
+      const quotedNumber = contextInfo.participant.replace(/:.*/, '').replace(/@.*/, '');
+      parsed.replyingToBot = botIdentity.numbers.has(quotedNumber);
+    } else {
+      parsed.replyingToBot = false;
+    }
+  }
+
+  // Check if bot was @-mentioned in the message (WhatsApp native mention)
+  if (contextInfo?.mentionedJid?.length) {
+    parsed.botMentioned = contextInfo.mentionedJid.some(jid => {
+      const num = jid.replace(/:.*/, '').replace(/@.*/, '');
+      return botIdentity.numbers.has(num);
+    });
   }
 
   switch (msgType) {
@@ -1366,10 +1377,24 @@ async function shouldRespondSmart(parsed, chatJid, senderJid) {
     return { shouldRespond: true, reason: 'direct_message' };
   }
 
-  // Direct mentions always trigger
+  // Direct mentions always trigger (word boundary match to avoid false positives like "ai" in "Ailie")
   const text = (parsed.text || '').toLowerCase();
-  if (CONFIG.groupTriggerWords.some(w => text.includes(w))) {
+  if (CONFIG.groupTriggerWords.some(w => {
+    const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\b${escaped}\\b`).test(text);
+  })) {
     return { shouldRespond: true, reason: 'mentioned_by_name' };
+  }
+
+  // WhatsApp native @-mention of the bot always triggers
+  if (parsed.botMentioned) {
+    return { shouldRespond: true, reason: 'at_mentioned' };
+  }
+
+  // Admin corrections/complaints about the bot always get a response
+  const profile = getUserProfile(senderJid);
+  if (profile.role === 'admin' && /\b(fix|wrong|broken|not acceptable|bad response|incorrect|you (just|already)?\s*(said|responded|replied)|stop|don'?t respond|quit)\b/i.test(parsed.text || '')) {
+    return { shouldRespond: true, reason: 'admin_correction' };
   }
 
   // Replies to bot's messages always trigger
@@ -1414,6 +1439,10 @@ RESPOND YES if:
 - Someone shares something interesting worth commenting on
 - The chat could use your knowledge or humor
 - Someone seems confused or needs help
+
+RESPOND YES ALWAYS if:
+- Someone is correcting you, complaining about your behavior, or telling you to fix something
+- The message is clearly directed at you (the bot), even without naming you
 
 RESPOND NO if:
 - People are having casual banter that doesn't need you
@@ -1975,7 +2004,11 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
         }
 
         // Long messages are auto-split by sendResponse() — no truncation needed
-        resolve({ retry: false, text: response || "🤔 Nothing came to mind. Try rephrasing?" });
+        if (!response && triageReason === 'admin_correction') {
+          resolve({ retry: false, text: "Got it, I hear you. Let me adjust." });
+        } else {
+          resolve({ retry: false, text: response || "🤔 Nothing came to mind. Try rephrasing?" });
+        }
       });
 
       proc.on('error', (err) => {
@@ -2870,6 +2903,9 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
 // ============================================================
 const contactNames = new Map();
 
+// Bot's own identity (populated on connection)
+const botIdentity = { jid: null, lid: null, numbers: new Set() };
+
 // ============================================================
 // TASK STATE MANAGEMENT
 // ============================================================
@@ -2996,9 +3032,18 @@ async function startBot() {
     }
 
     if (connection === 'open') {
+      // Capture bot's own identity for mention/reply detection
+      if (sock.user) {
+        botIdentity.jid = sock.user.id;
+        botIdentity.lid = sock.user.lid;
+        // Extract bare numbers for comparison (strip :device@suffix)
+        if (sock.user.id) botIdentity.numbers.add(sock.user.id.replace(/:.*/, ''));
+        if (sock.user.lid) botIdentity.numbers.add(sock.user.lid.replace(/:.*/, ''));
+        logger.info({ jid: sock.user.id, lid: sock.user.lid }, 'Bot identity captured');
+      }
       console.log('\n✅ Connected to WhatsApp!');
       console.log(`👤 Admin: ${CONFIG.adminNumber}`);
-      console.log(`🤖 Bot: ${CONFIG.botName}`);
+      console.log(`🤖 Bot: ${CONFIG.botName} (${botIdentity.jid || 'unknown'})`);
       console.log(`📡 Mode: ${CONFIG.responseMode} (threshold: ${CONFIG.chimeInThreshold})`);
       console.log('📨 Listening for messages...\n');
     }
