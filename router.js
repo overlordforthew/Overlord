@@ -315,6 +315,53 @@ export function classifyTask(parsed, isAdmin) {
 }
 
 // ============================================================
+// OPUS PLANNER (Delta mode)
+// ============================================================
+
+/**
+ * Have Opus generate a brief execution plan for a medium-complexity task.
+ * The plan is injected as context into Sonnet's system prompt.
+ * Fast and cheap — Opus writes 2-3 sentences max, no tools needed.
+ *
+ * @param {string} messageText - The user message to plan for
+ * @param {string[]} recentContext - Recent conversation lines
+ * @returns {Promise<string>} - A 2-3 sentence plan, or '' on failure
+ */
+export async function planWithOpus(messageText, recentContext = []) {
+  const contextStr = recentContext.length
+    ? `\nRecent conversation:\n${recentContext.join('\n')}\n`
+    : '';
+
+  const planPrompt = `You are a planning assistant. A medium-complexity WhatsApp message needs a response. Write a brief execution plan (2-3 sentences max) for how to answer it well. Focus on: what to look up, what to cover, what tone to use. Be specific and actionable. Do NOT write the actual response — just the plan.
+${contextStr}
+Message: "${messageText.substring(0, 500)}"
+
+Plan:`;
+
+  try {
+    const plan = await new Promise((resolve, reject) => {
+      let out = '';
+      const proc = spawn(process.env.CLAUDE_PATH || 'claude', [
+        '-p', '--output-format', 'text', '--max-turns', '1',
+        '--model', 'claude-opus-4-6',
+      ], { timeout: 12_000, env: { ...process.env, TERM: 'dumb' } });
+      proc.stdin.write(planPrompt);
+      proc.stdin.end();
+      proc.stdout.on('data', (d) => { out += d; });
+      proc.on('close', (code) => {
+        if (code === 0 && out.trim()) resolve(out.trim());
+        else reject(new Error(`Opus planner exited ${code}`));
+      });
+      proc.on('error', reject);
+    });
+    return plan;
+  } catch (err) {
+    console.warn(`[Router] Opus planning failed: ${err.message} — Sonnet will proceed without plan`);
+    return '';
+  }
+}
+
+// ============================================================
 // OPUS-DIRECTED CLASSIFICATION (Beta/Charlie)
 // ============================================================
 
@@ -526,6 +573,57 @@ export async function routeMessage(parsed, opts = {}) {
       via: 'claude-cli',
       escalatable: true,
       classifiedBy,
+    };
+  }
+
+  // ========== DELTA: Opus plans → Sonnet/Haiku executes ==========
+  if (mode === 'delta') {
+    // Complex → Opus handles it all (planning + execution)
+    if (taskType === 'complex') {
+      return {
+        model: MODEL_REGISTRY.opus,
+        tools: null,
+        maxTurns: null,
+        taskType,
+        via: 'claude-cli',
+        escalatable: false,
+        classifiedBy,
+        planContext: null,
+      };
+    }
+
+    // Medium → Opus plans, Sonnet executes
+    if (taskType === 'medium') {
+      const recentContext = Array.isArray(opts.recentMessages)
+        ? opts.recentMessages.slice(-4).map(m => {
+            const role = m?.role === 'bot' ? 'Bot' : 'User';
+            const t = (m?.text || '').trim().substring(0, 120);
+            return t ? `${role}: ${t}` : '';
+          }).filter(Boolean)
+        : [];
+      const planContext = await planWithOpus((parsed.text || '').trim(), recentContext);
+      return {
+        model: MODEL_REGISTRY.sonnet,
+        tools: isAdmin ? null : (isPower ? 'Read,Write,Edit,Bash,Glob,Grep,WebSearch,WebFetch' : 'Read,WebSearch,WebFetch'),
+        maxTurns: isAdmin ? 50 : 30,
+        taskType,
+        via: 'claude-cli',
+        escalatable: true,
+        classifiedBy,
+        planContext: planContext || null,
+      };
+    }
+
+    // Simple → Haiku (no planning needed)
+    return {
+      model: MODEL_REGISTRY.haiku,
+      tools: isAdmin ? 'Read,Glob,Grep,WebSearch,WebFetch' : 'Read,WebSearch,WebFetch',
+      maxTurns: 5,
+      taskType,
+      via: 'claude-cli',
+      escalatable: true,
+      classifiedBy,
+      planContext: null,
     };
   }
 
@@ -750,6 +848,7 @@ export function getRouterStatus() {
     alpha: 'Alpha (Opus only)',
     beta: 'Beta (Opus directs → Sonnet/Haiku)',
     charlie: 'Charlie (Opus directs → free/cheap models)',
+    delta: 'Delta (Opus plans → Sonnet executes)',
   };
 
   return {

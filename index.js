@@ -47,7 +47,7 @@ import {
   getFrictionReport, getTrendAnalysis,
 } from './meta-learning.js';
 import {
-  routeMessage, routeTriage, callOpenRouter, callGemini, callWithFallback,
+  routeMessage, routeTriage, planWithOpus, callOpenRouter, callGemini, callWithFallback,
   shouldEscalate, classifyTask, classifyWithOpus, getRouterStatus, MODEL_REGISTRY, FREE_FALLBACK_CHAINS,
 } from './router.js';
 import { registerSession, unregisterSession } from './session-guard.js';
@@ -1811,6 +1811,12 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       'NEVER read, display, or reference /root/.claude/.credentials.json or any credential/token files.',
     ].join(' ');
   }
+  // Inject Opus plan context (delta mode: Opus planned, Sonnet executes)
+  if (route.planContext) {
+    sysPrompt += ` EXECUTION PLAN (prepared by Opus): ${route.planContext}`;
+    logger.info('📋 Opus plan injected into Sonnet context');
+  }
+
   args.push('--append-system-prompt', sysPrompt);
 
   // ---- NON-CLAUDE PATH: Direct API call with fallback chain ----
