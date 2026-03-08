@@ -1950,11 +1950,16 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
 
         // Parse JSON response for session_id and result text
         let response = '';
+        let hitTurnLimit = false;
         const rawOutput = stdout.trim();
         try {
           const parsed = JSON.parse(rawOutput);
           if (parsed.session_id) await saveSessionId(chatJid, parsed.session_id);
           response = (parsed.result || '').trim();
+          // Detect if CLI hit the max-turns limit
+          if (parsed.num_turns != null && route.maxTurns != null && parsed.num_turns >= route.maxTurns) {
+            hitTurnLimit = true;
+          }
         } catch {
           // Fallback: if JSON parse fails, use raw output
           response = rawOutput;
@@ -2008,7 +2013,11 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
         if (!response && triageReason === 'admin_correction') {
           resolve({ retry: false, text: "Got it, I hear you. Let me adjust." });
         } else {
-          resolve({ retry: false, text: response || "🤔 Nothing came to mind. Try rephrasing?" });
+          let finalText = response || "🤔 Nothing came to mind. Try rephrasing?";
+          if (hitTurnLimit && response) {
+            finalText += `\n\n— Hit my ${route.maxTurns}-turn limit on this one. Tag Gil if you need a deeper answer.`;
+          }
+          resolve({ retry: false, text: finalText });
         }
       });
 
