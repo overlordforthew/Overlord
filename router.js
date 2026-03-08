@@ -536,48 +536,8 @@ export async function routeMessage(parsed, opts = {}) {
     };
   }
 
-  // ========== BETA: Opus directs → Anthropic Family ==========
+  // ========== BETA: Opus plans → Sonnet/Haiku executes (OpusPlan pattern) ==========
   if (mode === 'beta') {
-    // Complex → Opus (full tools)
-    if (taskType === 'complex') {
-      return {
-        model: MODEL_REGISTRY.opus,
-        tools: null,
-        maxTurns: null,
-        taskType,
-        via: 'claude-cli',
-        escalatable: false,
-        classifiedBy,
-      };
-    }
-
-    // Medium → Sonnet (scoped tools)
-    if (taskType === 'medium') {
-      return {
-        model: MODEL_REGISTRY.sonnet,
-        tools: isAdmin ? null : (isPower ? 'Read,Write,Edit,Bash,Glob,Grep,WebSearch,WebFetch' : 'Read,WebSearch,WebFetch'),
-        maxTurns: isAdmin ? 50 : 30,
-        taskType,
-        via: 'claude-cli',
-        escalatable: true,
-        classifiedBy,
-      };
-    }
-
-    // Simple → Haiku (minimal tools)
-    return {
-      model: MODEL_REGISTRY.haiku,
-      tools: isAdmin ? 'Read,Glob,Grep,WebSearch,WebFetch' : 'Read,WebSearch,WebFetch',
-      maxTurns: 5,
-      taskType,
-      via: 'claude-cli',
-      escalatable: true,
-      classifiedBy,
-    };
-  }
-
-  // ========== DELTA: Opus plans → Sonnet/Haiku executes ==========
-  if (mode === 'delta') {
     // Complex → Opus handles it all (planning + execution)
     if (taskType === 'complex') {
       return {
@@ -592,7 +552,7 @@ export async function routeMessage(parsed, opts = {}) {
       };
     }
 
-    // Medium → Opus plans, Sonnet executes
+    // Medium → Opus plans, Sonnet executes with that plan as context
     if (taskType === 'medium') {
       const recentContext = Array.isArray(opts.recentMessages)
         ? opts.recentMessages.slice(-4).map(m => {
@@ -846,9 +806,8 @@ export function getRouterStatus() {
   const mode = process.env.ROUTER_MODE || 'alpha';
   const modeNames = {
     alpha: 'Alpha (Opus only)',
-    beta: 'Beta (Opus directs → Sonnet/Haiku)',
+    beta: 'Beta (Opus plans → Sonnet/Haiku executes)',
     charlie: 'Charlie (Opus directs → free/cheap models)',
-    delta: 'Delta (Opus plans → Sonnet executes)',
   };
 
   return {
