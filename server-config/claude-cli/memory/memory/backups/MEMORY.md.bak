@@ -45,6 +45,21 @@ Coolify API
 - Token: COOLIFY_API_TOKEN in /root/overlord/.env  
 - Usage: curl -H "Authorization: Bearer $COOLIFY_API_TOKEN" $API/...  
 
-Shannon (AI Pentest Framework)  
-- Path: /root/projects/shannon/ | Model: Sonnet  
+Shannon (AI Pentest Framework)
+- Path: /root/projects/shannon/ | Model: Sonnet
 - Run: `./shannon start URL=<url> REPO=<name>`
+- Resume workspace: `./shannon start URL=<original-url> REPO=<name> WORKSPACE=<workspace-name>`
+- Worker must be running: `docker compose -f docker-compose.yml -f docker-compose.docker.yml up -d worker`
+- Audit logs: /root/projects/shannon/audit-logs/
+- Runs completed: Lumina, MasterCommander, NamiBarden, OnlyDrafting (Elmo), OnlyHulls, Overlord
+- Fixes applied: OnlyHulls (rate limiting, IDOR, open redirect, SSRF, enumeration, TOCTOU)
+- Fixes applied: Overlord/MasterCommander (see overlord-security.md)
+
+Overlord Security (post-audit fixes applied 2026-03-06)
+- MC_JWT_SECRET rotated — old secret was committed to git and is now dead
+- Rate limiters fixed: all now use req.ip (not attacker-controlled X-Forwarded-For)
+- Gate JWT type confusion fixed: requireMcAuth rejects tokens with type='gate'
+- Gate OTP now uses crypto.randomInt() instead of Math.random()
+- Gate OTP lockout bypass fixed: code_attempts no longer resets if code still active
+- HTML injection fixed: escapeHtml() applied to all user fields in outgoing emails
+- Pending: AUTH-VULN-05 token replay after password change (needs token_version DB column)

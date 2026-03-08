@@ -1,4 +1,5 @@
-Deploy Gotchas- `docker compose up -d --build` skips rebuild on restart
+Deploy Gotchas
+- `docker compose up -d --build` skips rebuild on restart
 - NamiBarden: manual deploy via `docker compose` or `/deploy` (no webhook)
 - MasterCommander: deploy via `docker cp` (no webhook)
 - Coolify env vars: set via API (encrypted only)
