@@ -1,5 +1,3 @@
-Here is the cleaned and simplified memory file:
-
 # Server Management AI Memory File
 
 ## Overlord

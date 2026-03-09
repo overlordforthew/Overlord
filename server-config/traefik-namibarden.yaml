@@ -175,13 +175,13 @@ http:
       rule: "Host(`onlyhulls.com`) || Host(`www.onlyhulls.com`)"
       middlewares:
         - redirect-to-https-file
-      service: https-0-qkggs84cs88o0gww4wc80gwo@docker
+      service: onlyhulls
 
     https-onlyhulls:
       entryPoints:
         - https
       rule: "Host(`onlyhulls.com`)"
-      service: https-0-qkggs84cs88o0gww4wc80gwo@docker
+      service: onlyhulls
       tls:
         certResolver: letsencrypt
 
@@ -191,7 +191,7 @@ http:
       rule: "Host(`www.onlyhulls.com`)"
       middlewares:
         - redirect-to-non-www
-      service: https-0-qkggs84cs88o0gww4wc80gwo@docker
+      service: onlyhulls
       tls:
         certResolver: letsencrypt
 
@@ -256,8 +256,10 @@ http:
         servers:
           - url: "http://mastercommander:80"
 
-    # OnlyHulls uses Coolify's auto-managed service (survives redeploys)
-    # No file-based service needed — routers reference the Docker-provider service directly
+    onlyhulls:
+      loadBalancer:
+        servers:
+          - url: "http://qkggs84cs88o0gww4wc80gwo-184905842428:80"
 
     overlord-api:
       loadBalancer:

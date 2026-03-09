@@ -1,4 +1,5 @@
 0 0 * * * /root/overlord/scripts/backup.sh >> /root/overlord/logs/backup.log 2>&1
+0 11 * * * /root/overlord/scripts/check-email.sh >> /var/log/overlord-email-check.log 2>&1
 0 3 * * * find /root/.claude/projects/ -name "*.jsonl" -mtime +5 -delete; find /root/.claude/debug/ -name "*.txt" -mtime +2 -delete
 0 4 1 1,4,7,10 * /root/overlord/scripts/rotate-cf-token.sh >> /var/log/cf-rotate.log 2>&1
 0 */6 * * * /root/overlord/scripts/health-check.sh > /dev/null 2>&1 && /root/overlord/scripts/update-status.sh > /dev/null 2>&1
