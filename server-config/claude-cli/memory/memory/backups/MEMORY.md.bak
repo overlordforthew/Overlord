@@ -23,9 +23,17 @@ Stripe (NamiBarden)
 - CLI: stripe-nb | Keys: /root/projects/NamiBarden/.env  
 - Webhook: https://namibarden.com/api/stripe/webhook  
 
-NamiBarden (Main Site + Newsletter)  
-- Stack: Node.js 20+Express+nginx | PG 17 (namibarden-db)  
-- DB: 6 tables | Admin: /admin/ | SMTP: overlord.gil.ai@gmail.com  
+NamiBarden (Main Site + Newsletter + Course Platform)
+- Stack: Node.js 20+Express+nginx | PG 17 (namibarden-db)
+- DB: 6 tables | Admin: /admin/ | SMTP: overlord.gil.ai@gmail.com
+- Courses: HLS video via R2 | 2 courses defined | Stripe checkout + access tokens
+- Video pipeline: /root/scripts/video-pipeline.sh (MP4 → HLS → R2)
+- Key WhatsApp JIDs:
+  - Nami: 84393251371@s.whatsapp.net
+  - Gil: 18587794588@s.whatsapp.net (LID: 109457291874478@lid)
+  - Emiel: 19195008873@s.whatsapp.net
+  - Bot (Sage): 13055601031@s.whatsapp.net
+  - SurfaBabe bot: 84392648332@s.whatsapp.net  
 
 SurfaBabe (Wellness WhatsApp AI)  
 - Node.js/Baileys/Claude CLI (Overlord fork) | Port: 3002  
@@ -52,8 +60,19 @@ Google Workspace CLI (gws v0.8.0) — OVERLORD'S ACCOUNT
   - Send emails, respond to contacts, manage calendar, store files — no permission needed
   - Daily email check via cron (part of heartbeat)
 
-Coolify API  
-- Token: COOLIFY_API_TOKEN in /root/overlord/.env  
+Cloudflare (Full API Access)
+- Global API Key + email auth (X-Auth-Key/X-Auth-Email headers)
+- All creds in /root/overlord/.env (CLOUDFLARE_GLOBAL_API_KEY, CLOUDFLARE_EMAIL, CLOUDFLARE_ACCOUNT_ID)
+- Zones: namibarden.com, onlydrafting.com, onlyhulls.com (all Free plan)
+- R2 bucket: `namibarden-courses` (EEUR) — for Nami's course videos
+- rclone configured: `/root/.config/rclone/rclone.conf` | Upload script: `/root/scripts/r2-upload.sh`
+- R2 S3 creds: R2_ACCESS_KEY + R2_SECRET_KEY in .env (secret = SHA-256 of token value)
+- Domains registered: namibarden (2029), onlyhulls (2029), onlydrafting (2027)
+- Tunnel: `elmoserver` (healthy) | NO Containers (killed OpenClaw — $58/mo memory cost)
+- Full skill docs: ~/.claude/learned/global/cloudflare-api.md
+
+Coolify API
+- Token: COOLIFY_API_TOKEN in /root/overlord/.env
 - Usage: curl -H "Authorization: Bearer $COOLIFY_API_TOKEN" $API/...  
 
 Shannon (AI Pentest Framework)

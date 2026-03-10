@@ -9,6 +9,8 @@ Created: 2026-02-21T16:21:47.501Z
 - Building "Commander" — AI boat monitor that connects marine electronics (SignalK) to WhatsApp
 - Runs on Mac Mini M4 aboard the vessel, local-first with Qwen 14B via Ollama
 - Project uses Node.js, Baileys (WhatsApp), WebSocket for SignalK
+- Laptop: Windows, NVIDIA GeForce MX 150 (2GB VRAM — inference only, not suitable for LLM training)
+- Elmo's server (onlydrafting.com): has a 6GB NVIDIA GPU — capable of LLM training runs (nanochat scale), suitable for autoresearch loop
 
 ## Preferences
 - Wants Overlord to auto-detect and fix errors from log alerts without being asked — proactive error resolution
@@ -60,5 +62,13 @@ Created: 2026-02-21T16:21:47.501Z
 - Domain: onlyhulls.com (DNS pending Cloudflare setup → 89.167.12.82)
 - Server IP: 89.167.12.82
 
-## Notes
-_Nothing yet._
+## Family / People
+- Seneca: Gil's son, 15-year-old YouTube influencer (@senecatheyoungest) — makes vlogs/YouTube content
+- Nami Barden: spiritual coaching creator, YouTube @namibarden — Gil manages her website and supports her content
+
+## Content Creation
+- Gil helps Seneca and Nami make YouTube videos
+- Exploring video editing tools/automation for their channels
+- Nami (ナミの瞑想 癒しの空間): Japanese sleep meditation channel — 6+ hour guided audio, ambient music beds, posts 2-3x/week. Channel ID: UCKkvy8wapsStrRPyaOrXeCQ
+- Seneca (@senecatheyoungest): Atlantic crossing vlogs, boat life, carnivore diet, self-improvement. Channel ID: UCzkXXlzke_IJVOsnS7DKlrw. Posts frequently during sailing trips (every 1-4 days). Mix of longer vlogs and Shorts.
+- Google API key (project 961837060087) = Gil's personal Google. YouTube Data API v3 enabled but key has API restrictions blocking YouTube — needs YouTube added to allowed APIs list.
