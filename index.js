@@ -52,6 +52,7 @@ import {
 } from './router.js';
 import { registerSession, unregisterSession } from './session-guard.js';
 import { getHeartbeatStatus } from './heartbeat.js';
+import { initConversationStore, logConversation, getConversationStats } from './conversation-store.js';
 import { getSessionGuardStatus } from './session-guard.js';
 import QRCode from 'qrcode';
 import sharp from 'sharp';
@@ -67,6 +68,12 @@ import {
   formatStandingOrders, formatStandingOrdersList,
 } from './state-store.js';
 import { executeTaskAutonomously, scheduleVerification } from './executor.js';
+import {
+  ensureSchema as ensureMemorySchema, retrieveMemories, formatMemoriesForPrompt,
+  seedFromLegacyFile, storeMemory, listMemories, deleteMemory, clearMemories,
+  getMemoryStats,
+} from './memory-store.js';
+import { extractAndStore, scoreRelevance } from './memory-curator.js';
 
 const execAsync = promisify(exec);
 const ADMIN_FALLBACK_ESCALATION_PATTERNS = [
@@ -1120,15 +1127,49 @@ const conversationContext = new ConversationContext();
 // MEMORY MANAGER
 // ============================================================
 
-async function getMemory(jid) {
+async function getMemory(jid, currentQuery = '') {
+  try {
+    // One-time seed from legacy memory.md if not yet done
+    const legacyPath = path.join(contactDir(jid), 'memory.md');
+    try {
+      const legacyContent = await fs.readFile(legacyPath, 'utf-8');
+      const seeded = await seedFromLegacyFile(jid, legacyContent);
+      if (seeded !== false && seeded > 0) {
+        logger.info({ jid: senderNumber(jid), count: seeded }, '[memory] Seeded from legacy file');
+      }
+    } catch { /* no legacy file, fine */ }
+
+    // Retrieve relevant memories from DB
+    const memories = await retrieveMemories(jid, { query: currentQuery, limit: 25 });
+    if (!memories.length) {
+      return `# Memory for ${senderNumber(jid)}\n\n_No memories stored yet._`;
+    }
+
+    // Score and rank by relevance if we have a query
+    const ranked = currentQuery
+      ? scoreRelevance(memories, currentQuery, 15)
+      : memories.slice(0, 15);
+
+    const formatted = formatMemoriesForPrompt(ranked);
+    return `# Memory for ${senderNumber(jid)}\n\n${formatted}`;
+  } catch (err) {
+    // Fallback to legacy flat file if DB fails
+    logger.error({ err }, '[memory] DB retrieval failed, falling back to flat file');
+    const memPath = path.join(contactDir(jid), 'memory.md');
+    try {
+      return await fs.readFile(memPath, 'utf-8');
+    } catch {
+      return `# Memory for ${senderNumber(jid)}\n\n_Memory unavailable._`;
+    }
+  }
+}
+
+// Legacy helper for backwards compatibility
+async function getLegacyMemory(jid) {
   const memPath = path.join(contactDir(jid), 'memory.md');
   try {
     return await fs.readFile(memPath, 'utf-8');
-  } catch {
-    const initial = `# Memory for ${senderNumber(jid)}\n\nCreated: ${now()}\n\n## Key Facts\n_Nothing yet._\n\n## Preferences\n_Nothing yet._\n\n## Notes\n_Nothing yet._\n`;
-    await fs.writeFile(memPath, initial);
-    return initial;
-  }
+  } catch { return ''; }
 }
 
 // ============================================================
@@ -1536,7 +1577,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
   const profile = getUserProfile(senderJid);
   const isAdminUser = profile.role === 'admin';
   const isPower = profile.role === 'power';
-  const memory = await getMemory(chatJid);
+  const memory = await getMemory(chatJid, parsed.text || '');
   // Tiered context depth: admin DMs get full history for continuity; groups and
   // regular DMs get a shallower window to keep token costs down.
   const contextDepth = isAdminUser && !isGroup(chatJid) ? 20 : 8;
@@ -1756,7 +1797,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
   let sysPrompt;
   if (isAdminUser) {
     sysPrompt = [
-      `You are ${agentName}, a WhatsApp AI. Personality: helpful, witty, concise.`,
+      `You are ${agentName} — the AI running Gil's entire digital operation from a Hetzner server at 89.167.12.82. You know every container, every project, every quirk of this stack. You're sharp, direct, and occasionally dry. Not a corporate assistant — more like a very capable first mate who happens to know Docker, Claude API, and Traefik cold. When something breaks you fix it without being asked. When Gil has a wild idea you assess it honestly, even if that means pushing back. You have opinions and you share them. You're concise by default but go deep when the task demands it. You don't hedge, you don't fluff, and you don't pretend everything is fine when it isn't. Humor is deadpan and earned, not performed.`,
       'Admin user — full server access.',
       `AUTONOMY RULES: 1) Act first, report after. Never ask "should I?" — just do it. 2) Stuck? Try 3 different approaches before escalating. 3) Only escalate when genuinely stuck after exhausting all options. 4) Report results, not plans. 5) Destructive/irreversible actions (deleting data, refunds, spending money, force-push) still need confirmation.`,
       `TASK CONTINUITY: If [ACTIVE TASK] is shown in context, you are mid-task. "yes/proceed/ok" = confirm and continue. "repair/fix" = resume from last result. "check/status" = report current task state. Say "Task complete: [summary]" when you fully finish a task.`,
@@ -1841,7 +1882,10 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
         // Fall through to Claude CLI path below with Opus
       } else {
         logger.info(`✅ Free model responded: ${modelUsed.id}`);
-        return { text: response || "🤔 Nothing came to mind. Try rephrasing?", modelId: modelUsed.id };
+        return {
+          text: response || "🤔 Nothing came to mind. Try rephrasing?", modelId: modelUsed.id,
+          _training: { sysPrompt, recentContext, memory, taskType: route.taskType, routeVia: route.via },
+        };
       }
     } catch (err) {
       logger.warn({ err: err.message }, 'All free models failed, falling back to Opus');
@@ -1957,11 +2001,13 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
         // Parse JSON response for session_id and result text
         let response = '';
         let hitTurnLimit = false;
+        let wasJsonParsed = false;
         const rawOutput = stdout.trim();
         try {
           const parsed = JSON.parse(rawOutput);
           if (parsed.session_id) await saveSessionId(chatJid, parsed.session_id);
           response = (parsed.result || '').trim();
+          wasJsonParsed = true;
           // Detect if CLI hit the max-turns limit
           if (parsed.num_turns != null && route.maxTurns != null && parsed.num_turns >= route.maxTurns) {
             hitTurnLimit = true;
@@ -1974,7 +2020,8 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
           if (match) await saveSessionId(chatJid, match[1]);
         }
 
-        // Detect Claude API errors forwarded as stdout
+        // Detect Claude API errors forwarded as stdout — only check raw (non-JSON) output.
+        // If CLI returned valid JSON, the response is Claude's actual answer, not an error signal.
         const API_ERROR_PATTERNS = [
           /credit balance is too low/i,
           /rate limit/i,
@@ -1984,7 +2031,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
           /authentication.*error/i,
           /invalid.*api.?key/i,
         ];
-        const isAPIError = API_ERROR_PATTERNS.some(p => p.test(response));
+        const isAPIError = !wasJsonParsed && API_ERROR_PATTERNS.some(p => p.test(response));
         if (isAPIError) {
           if (attempt < MAX_RETRIES) {
             logger.warn({ response: response.substring(0, 200), attempt }, 'Claude API error, retrying');
@@ -2039,7 +2086,11 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       });
     });
 
-    if (!result.retry) return { text: result.text, modelId: route.model?.id || 'unknown' };
+    if (!result.retry) return {
+      text: result.text, modelId: route.model?.id || 'unknown',
+      // Training metadata for conversation store
+      _training: { sysPrompt, recentContext, memory, taskType: route.taskType, routeVia: route.via },
+    };
 
     // Brief pause before retry (exponential backoff: 5s, 15s)
     const backoff = attempt * 5000;
@@ -2135,7 +2186,36 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
     } catch { return '⚠️ Could not fetch status.'; }
   }
 
-  if (cmd === '/memory') return `🧠 Memory:\n\n${await getMemory(chatJid)}`;
+  if (cmd === '/memory') {
+    const sub = args[0]?.toLowerCase();
+    if (sub === 'stats') {
+      const stats = await getMemoryStats(chatJid);
+      return `🧠 Memory Stats:\nTotal: ${stats.total} memories\nCritical: ${stats.critical}\nAuto-extracted: ${stats.auto_extracted}\nSeeded from legacy: ${stats.seeded}\nOldest: ${stats.oldest ? new Date(stats.oldest).toLocaleDateString() : 'N/A'}\nNewest: ${stats.newest ? new Date(stats.newest).toLocaleDateString() : 'N/A'}`;
+    }
+    if (sub === 'list') {
+      const tag = args[1] || undefined;
+      const mems = await listMemories(chatJid, { tag, limit: 20 });
+      if (!mems.length) return '🧠 No memories stored yet.';
+      return '🧠 Memories:\n\n' + mems.map(m =>
+        `[${m.id}] (${m.importance}/10) ${m.summary} [${m.tags?.join(',')}]`
+      ).join('\n');
+    }
+    if (sub === 'delete' && args[1]) {
+      await deleteMemory(parseInt(args[1]), chatJid);
+      return `🧠 Memory #${args[1]} deleted.`;
+    }
+    if (sub === 'add' && args.slice(1).join(' ').length > 5) {
+      const content = args.slice(1).join(' ');
+      await storeMemory({ jid: chatJid, content, summary: content.slice(0, 60), tags: ['manual'], importance: 7, source: 'manual' });
+      return `🧠 Memory stored: "${content}"`;
+    }
+    if (sub === 'clear' && isAdmin(senderJid)) {
+      await clearMemories(chatJid);
+      return '🧠 All memories cleared. Legacy file preserved as backup.';
+    }
+    // Default: show current memories
+    return `🧠 Memory:\n\n${await getMemory(chatJid)}`;
+  }
 
   if (cmd === '/clear') {
     try { await fs.unlink(path.join(contactDir(chatJid), 'session_id')); } catch { }
@@ -3008,6 +3088,17 @@ async function startBot() {
     if (cleared) logger.info({ cleared }, 'Cleared stale session files on startup');
   } catch {}
 
+  // Initialize conversation store (training data collection)
+  await initConversationStore();
+
+  // Initialize episodic memory schema (Memex)
+  try {
+    await ensureMemorySchema();
+    logger.info('[memory] Episodic memory schema ready');
+  } catch (err) {
+    logger.error({ err }, '[memory] Schema init failed — falling back to flat files');
+  }
+
   // Restore approved projects from disk
   await loadApprovedProjects();
 
@@ -3318,6 +3409,48 @@ async function startBot() {
             sender: "bot", senderName: CONFIG.botName, role: "bot", type: "text", text: finalResponse,
           });
           await logMessage(chatJid, senderJid, "bot", finalResponse);
+
+          // Log to conversation store (training data) — fire and forget
+          logConversation({
+            chatJid,
+            senderJid,
+            senderName,
+            chatType: isGroup(chatJid) ? 'group' : 'dm',
+            userMessage: last.parsed.text || `[${last.parsed.type}]`,
+            messageType: last.parsed.type,
+            quotedText: last.parsed.quotedText,
+            mediaPath: last.mediaResult?.filePath,
+            transcription: last.parsed.transcription,
+            systemPrompt: claudeResult._training?.sysPrompt,
+            conversationContext: claudeResult._training?.recentContext,
+            memorySnapshot: claudeResult._training?.memory,
+            assistantResponse: response,
+            modelId: routeModelId,
+            routerMode: CONFIG.routerMode,
+            taskType: claudeResult._training?.taskType,
+            routeVia: claudeResult._training?.routeVia,
+            responseTimeMs: _claudeDuration,
+          }).catch(() => {});
+
+          // ---- MEMEX: async memory extraction (non-blocking) ----
+          setImmediate(async () => {
+            try {
+              const userText = last.parsed.text || '';
+              if (userText.length > 15) {
+                const stored = await extractAndStore(chatJid, {
+                  userMessage: userText,
+                  assistantResponse: response,
+                  existingMemories: claudeResult._training?.memory || '',
+                });
+                if (stored > 0) {
+                  logger.info({ jid: senderNumber(chatJid), count: stored }, '[memex] Extracted new facts');
+                }
+              }
+            } catch (err) {
+              logger.error({ err: err.message }, '[memex] Post-response extraction failed');
+            }
+          });
+
           logger.info(`📤 → ${senderName}: ${finalResponse.substring(0, 100)}...`);
         });
 
