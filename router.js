@@ -1,3 +1,5 @@
+import { spawn } from 'child_process';
+
 /**
  * Model Router for Overlord
  *
@@ -331,21 +333,31 @@ export async function planWithOpus(messageText, recentContext = []) {
     ? `\nRecent conversation:\n${recentContext.join('\n')}\n`
     : '';
 
-  const userPrompt = `${contextStr}Message: "${messageText.substring(0, 500)}"
+  const planPrompt = `You are a planning assistant. A medium-complexity WhatsApp message needs a response. Write a brief execution plan (2-3 sentences max) for how to answer it well. Focus on: what to look up, what to cover, what tone to use. Be specific and actionable. Do NOT write the actual response — just the plan.
+${contextStr}
+Message: "${messageText.substring(0, 500)}"
 
 Plan:`;
 
   try {
-    const plan = await callOpenRouter(
-      MODEL_REGISTRY['step-flash'].id,
-      'You are a planning assistant. A medium-complexity WhatsApp message needs a response. Write a brief execution plan (2-3 sentences max) for how to answer it well. Focus on: what to look up, what to cover, what tone to use. Be specific and actionable. Do NOT write the actual response — just the plan.',
-      userPrompt,
-      200
-    );
-    if (!plan.trim()) throw new Error('empty response');
-    return plan.trim();
+    const plan = await new Promise((resolve, reject) => {
+      let out = '';
+      const proc = spawn(process.env.CLAUDE_PATH || 'claude', [
+        '-p', '--output-format', 'text', '--max-turns', '1',
+        '--model', 'claude-opus-4-6',
+      ], { timeout: 12_000, env: { ...process.env, TERM: 'dumb' } });
+      proc.stdin.write(planPrompt);
+      proc.stdin.end();
+      proc.stdout.on('data', (d) => { out += d; });
+      proc.on('close', (code) => {
+        if (code === 0 && out.trim()) resolve(out.trim());
+        else reject(new Error(`Opus planner exited ${code}`));
+      });
+      proc.on('error', reject);
+    });
+    return plan;
   } catch (err) {
-    console.warn(`[Router] Planning failed: ${err.message} — Sonnet will proceed without plan`);
+    console.warn(`[Router] Opus planning failed: ${err.message} — Sonnet will proceed without plan`);
     return '';
   }
 }
