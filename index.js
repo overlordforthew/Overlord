@@ -604,6 +604,84 @@ async function notifyAdmin(sockRef, message) {
   }
 }
 
+// ============================================================
+// POWER USER → OVERLORD ESCALATION
+// ============================================================
+
+/**
+ * Detect "Overlord, [request]" in a power user message or Ai Chan response.
+ * Returns the extracted request text, or null.
+ */
+function extractOverlordRequest(text) {
+  if (!text) return null;
+  // Incoming: message starts with "Overlord, ..."
+  const incomingMatch = text.trim().match(/^overlord[,:\s]+(.{10,})/is);
+  if (incomingMatch) return incomingMatch[1].trim();
+  // Outgoing: Ai Chan response contains "Overlord, [request]"
+  const outgoingMatch = text.match(/\bOverlord[,:\s]+([A-Z].{15,300}?)(?:\n|$)/);
+  if (outgoingMatch) return outgoingMatch[1].trim();
+  return null;
+}
+
+/**
+ * Run an escalated request from a power user with full admin permissions.
+ * Spawns Opus with no tool restrictions, notifies Gil, replies to power user chat.
+ */
+async function runOverlordEscalation(requestText, powerProfile, chatJid, sock) {
+  const adminJid = `${CONFIG.adminNumber}@s.whatsapp.net`;
+  logger.info(`🔼 Overlord escalation from ${powerProfile.name}: "${requestText.substring(0, 100)}"`);
+
+  await sendResponse(sock, adminJid,
+    `🔼 Ai Chan escalation from ${powerProfile.name}:\n"${requestText.substring(0, 300)}"`
+  ).catch(() => {});
+
+  const sysPrompt = [
+    `You are Overlord — Gil's AI running the entire server infrastructure.`,
+    `You have been escalated a request from Ai Chan (${powerProfile.name}'s AI agent).`,
+    `Ai Chan operates with scoped permissions and cannot do server-level tasks herself.`,
+    `Execute with FULL admin access: all projects, Docker, R2 (rclone), databases, Traefik, env vars — everything.`,
+    `Be concise — your response goes to ${powerProfile.name}'s WhatsApp chat.`,
+    `Report what you actually did. Never expose credential files.`,
+  ].join(' ');
+
+  const args = [
+    '-p', '--output-format', 'json', '--max-turns', '50',
+    '--model', 'claude-opus-4-6',
+    '--append-system-prompt', sysPrompt,
+  ];
+
+  try {
+    const resultText = await new Promise((resolve, reject) => {
+      let stdout = '';
+      const proc = spawn(CONFIG.claudePath, args, {
+        cwd: '/projects',
+        timeout: CONFIG.maxResponseTime,
+        env: { ...process.env, TERM: 'dumb', NODE_OPTIONS: '--max-old-space-size=1024' },
+      });
+      proc.stdin.write(`Escalated from Ai Chan on behalf of ${powerProfile.name}:\n\n${requestText}`);
+      proc.stdin.end();
+      proc.stdout.on('data', d => { stdout += d.toString(); });
+      proc.on('close', code => {
+        if (code !== 0 && !stdout) { reject(new Error(`Escalation exited ${code}`)); return; }
+        try { resolve((JSON.parse(stdout.trim()).result || '').trim()); }
+        catch { resolve(stdout.trim()); }
+      });
+      proc.on('error', reject);
+    });
+
+    const reply = resultText || 'Done.';
+    await sendResponse(sock, chatJid, `✅ Overlord:\n\n${reply}`).catch(() => {});
+    await sendResponse(sock, adminJid, `✅ Escalation done:\n${reply.substring(0, 500)}`).catch(() => {});
+    return reply;
+  } catch (err) {
+    logger.error({ err }, 'Overlord escalation failed');
+    await sendResponse(sock, chatJid, `⚠️ Overlord escalation failed: ${err.message}`).catch(() => {});
+    await sendResponse(sock, adminJid, `⚠️ Escalation failed: ${err.message}`).catch(() => {});
+    return null;
+  }
+}
+
+
 async function triggerDeploy(projectName) {
   const key = projectName.toLowerCase();
   const projectPath = PROJECT_PATHS[key];
@@ -3349,6 +3427,18 @@ async function startBot() {
             }
           }
 
+          // Overlord escalation: power user explicitly addressed Overlord
+          const _escProfile = getUserProfile(last.senderJid);
+          if (_escProfile.role === 'power') {
+            const _escRequest = extractOverlordRequest(last.parsed.text);
+            if (_escRequest) {
+              await currentSock.sendPresenceUpdate('paused', chatJid).catch(() => {});
+              await currentSock.sendMessage(chatJid, { text: '🔧 On it — running as Overlord...' }).catch(() => {});
+              await runOverlordEscalation(_escRequest, _escProfile, chatJid, currentSock);
+              return; // skip Ai Chan handling
+            }
+          }
+
           // Ask Claude (with friction tracking)
           const _claudeStart = Date.now();
           const claudeResult = await askClaude(chatJid, last.senderJid, last.parsed, last.mediaResult, triage.reason);
@@ -3396,8 +3486,18 @@ async function startBot() {
             updateAdminTaskState(chatJid, last.parsed.text || '', finalResponse).catch(() => {});
           }
 
-          // Auto-deploy: if power user edited project files, commit + deploy automatically
+          // Outgoing escalation: Ai Chan's response contains "Overlord, [request]"
           const senderProfile = getUserProfile(last.senderJid);
+          if (senderProfile.role === 'power') {
+            const _outEscRequest = extractOverlordRequest(finalResponse);
+            if (_outEscRequest) {
+              runOverlordEscalation(_outEscRequest, senderProfile, chatJid, currentSock).catch(err =>
+                logger.error({ err }, 'Outgoing Overlord escalation failed')
+              );
+            }
+          }
+
+          // Auto-deploy: if power user edited project files, commit + deploy automatically
           if (senderProfile.role === 'power' && senderProfile.projects?.length) {
             await autoDeployIfChanged(senderProfile, chatJid, currentSock).catch(err =>
               logger.error({ err }, 'Auto-deploy hook error')
