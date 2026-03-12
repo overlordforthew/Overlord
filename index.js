@@ -236,7 +236,9 @@ DEBUGGING APPROACH:
 3. To verify what's actually live vs what's in the repo: use docker exec inspection commands above.
 4. After deploying, use WebFetch to verify the live site reflects your changes.
 5. If the live site confirms the change is there but a device still shows old content — it's browser cache, not a broken deploy.
-6. For things outside your scope (backend config changes, server issues, DNS, SSL, env vars, new features requiring server changes): message Overlord directly by telling Nami to forward your request to Overlord, OR simply describe what you need changed and Overlord will see it in the chat and handle it. Example: "Overlord, can you change the notification email to X?" — Overlord monitors all chats and will pick it up. Do NOT tell Nami to "ask Gil" — go through Overlord instead.`,
+6. For things outside your scope (backend config changes, server issues, DNS, SSL, env vars, container rebuilds): escalate to Overlord by including this exact phrase in your response: "Overlord, [describe what you need]". Overlord monitors all chats and will execute it automatically — you do NOT need to tell Nami to forward anything. Example: "Overlord, please rebuild the namibarden container" or "Overlord, please update the SMTP email to X in the env." Do NOT tell Nami to "ask Gil" — escalate through Overlord directly.
+
+IMPORTANT: server.js changes require a full container rebuild (docker compose up -d --build). When you edit server.js, the system will automatically detect this and trigger a rebuild — you do NOT need to ask Overlord for a rebuild. Just edit the file and wait for the rebuild confirmation.`,
     lid: ['13135550002', '84267677782098'],
   },
   '18587794462': {
@@ -618,7 +620,7 @@ function extractOverlordRequest(text) {
   const incomingMatch = text.trim().match(/^overlord[,:\s]+(.{10,})/is);
   if (incomingMatch) return incomingMatch[1].trim();
   // Outgoing: Ai Chan response contains "Overlord, [request]"
-  const outgoingMatch = text.match(/\bOverlord[,:\s]+([A-Z].{15,300}?)(?:\n|$)/);
+  const outgoingMatch = text.match(/\bOverlord[,:\s]+([^\n]{15,})/i);
   if (outgoingMatch) return outgoingMatch[1].trim();
   return null;
 }
@@ -748,8 +750,30 @@ async function autoDeployIfChanged(profile, chatJid, sock) {
         { timeout: 15000 }
       );
 
-      const result = await triggerDeploy(projName);
       const deployUrl = projName.toLowerCase() === 'namibarden' ? 'namibarden.com' : `${projName.toLowerCase()}.namibarden.com`;
+
+      // NamiBarden: server.js changes require a full container rebuild, not just docker cp
+      const needsFullRebuild = projName.toLowerCase() === 'namibarden' &&
+        status.trim().split('\n').some(l => /\bserver\.js$/.test(l.trim()));
+
+      if (needsFullRebuild) {
+        logger.info(`🔨 Full container rebuild triggered for ${projName} (server.js changed)`);
+        await sock.sendMessage(chatJid, { text: `🔨 server.js changed — rebuilding NamiBarden container (~1-2 min)...` });
+        try {
+          await execAsync(
+            `cd "${projPath}" && docker compose up -d --build 2>&1`,
+            { timeout: 300000 }
+          );
+          logger.info(`🚀 Full rebuild complete for ${projName}: ${commitMsg}`);
+          await sock.sendMessage(chatJid, { text: `✅ NamiBarden rebuilt and live! server.js changes are now active.` });
+        } catch (rebuildErr) {
+          logger.error({ err: rebuildErr }, `Full rebuild failed for ${projName}`);
+          await sock.sendMessage(chatJid, { text: `⚠️ Container rebuild failed: ${rebuildErr.message.substring(0, 200)}` });
+        }
+        continue;
+      }
+
+      const result = await triggerDeploy(projName);
 
       if (result.success) {
         logger.info(`🚀 Auto-deployed ${projName} for ${profile.name}: ${commitMsg}`);
@@ -1910,9 +1934,9 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       `- Use Bash for rm -rf, chmod, chown, kill, or any destructive system operations`,
       `If asked to do something outside your allowed projects, politely decline and explain your scope is limited to: ${projectList}.`,
       profile.dockerInspect
-        ? `INFRASTRUCTURE RULE: For 502/503 errors, container crashes, SSL errors, DNS failures, Coolify issues, or anything outside your project files — request help from Overlord. Say: "Overlord, [describe the issue and what you need]". Overlord monitors this chat and will handle server-side fixes. Do NOT tell ${profile.name} to ask Gil — Overlord is your escalation path. EXCEPTION: You CAN diagnose and fix nginx routing/config issues (wrong page served, URL not found) by editing nginx.conf — auto-deploy reloads nginx automatically. Use docker exec inspection to verify what's actually running if needed.`
-        : `INFRASTRUCTURE HARD RULE: If you encounter server errors (502, 503, SSL errors, container down, wrong domain, DNS failures), request help from Overlord by saying: "Overlord, [describe the issue]". Overlord monitors this chat and will fix it. Do NOT tell ${profile.name} to ask Gil. Do not investigate server issues yourself, do not run commands, do not guess.`,
-      `DEPLOYMENT: When you edit project files, changes are AUTOMATICALLY committed to git and deployed live after you finish. You do NOT need to run git commands, docker commands, or /deploy. Just edit the files and the system handles the rest. Tell ${profile.name} their changes will go live automatically. Use WebFetch to verify the live site after deploying if needed.`,
+        ? `INFRASTRUCTURE RULE: For 502/503 errors, container crashes, SSL errors, DNS failures, Coolify issues, or anything outside your project files — escalate to Overlord by writing "Overlord, [describe what you need]" in your response. Do NOT tell ${profile.name} to ask Gil or forward anything — Overlord monitors this chat and acts automatically. EXCEPTION: You CAN diagnose and fix nginx routing/config issues by editing nginx.conf — auto-deploy reloads nginx automatically. Use docker exec inspection to verify what's running.`
+        : `INFRASTRUCTURE HARD RULE: If you encounter server errors (502, 503, SSL errors, container down, wrong domain, DNS failures), escalate by writing "Overlord, [describe the issue]" in your response. Do NOT tell ${profile.name} to ask Gil. Overlord monitors this chat and acts automatically.`,
+      `DEPLOYMENT: When you edit project files, changes are AUTOMATICALLY committed to git and deployed live after you finish. server.js changes trigger a full container rebuild automatically — you do NOT need to ask Overlord for a rebuild. Just edit the file and the system detects and rebuilds it (~1-2 min). Tell ${profile.name} their changes will go live automatically. Use WebFetch to verify the live site after deploying if needed.`,
       profile.projects.length === 0 ? `You currently have no projects. ${profile.name} can request a new project with /newproject <name> — Gil will approve it.` : '',
       `AUTONOMY RULES: 1) Act first, report after. Never ask "should I?" — just do it. 2) Stuck? Try 3 different approaches before escalating. Use web search, read docs, test alternatives creatively. 3) Only escalate when genuinely stuck after exhausting options. 4) Report results, not plans: "I tried X, Y, Z — here's what worked." 5) Exception: destructive/irreversible actions still need confirmation (deleting data, refunds, spending money, force-push).`,
       'Keep responses WhatsApp-length. Use @ to read media files when referenced.',
