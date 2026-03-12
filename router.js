@@ -402,7 +402,7 @@ Reply with ONLY one word: COMPLEX, MEDIUM, or SIMPLE`;
 
   try {
     const classification = await callOpenRouter(
-      MODEL_REGISTRY['qwen-4b'].id,
+      MODEL_REGISTRY['step-flash'].id,
       'You are a message classifier. Reply with ONLY one word: COMPLEX, MEDIUM, or SIMPLE.',
       classifyPrompt,
       10
