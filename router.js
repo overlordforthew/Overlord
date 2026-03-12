@@ -12,7 +12,6 @@
  * Switch with ROUTER_MODE=alpha|beta|charlie in .env
  */
 
-import { spawn } from 'child_process';
 
 // ============================================================
 // MODEL REGISTRY
@@ -332,31 +331,21 @@ export async function planWithOpus(messageText, recentContext = []) {
     ? `\nRecent conversation:\n${recentContext.join('\n')}\n`
     : '';
 
-  const planPrompt = `You are a planning assistant. A medium-complexity WhatsApp message needs a response. Write a brief execution plan (2-3 sentences max) for how to answer it well. Focus on: what to look up, what to cover, what tone to use. Be specific and actionable. Do NOT write the actual response — just the plan.
-${contextStr}
-Message: "${messageText.substring(0, 500)}"
+  const userPrompt = `${contextStr}Message: "${messageText.substring(0, 500)}"
 
 Plan:`;
 
   try {
-    const plan = await new Promise((resolve, reject) => {
-      let out = '';
-      const proc = spawn(process.env.CLAUDE_PATH || 'claude', [
-        '-p', '--output-format', 'text', '--max-turns', '1',
-        '--model', 'claude-opus-4-6',
-      ], { timeout: 12_000, env: { ...process.env, TERM: 'dumb' } });
-      proc.stdin.write(planPrompt);
-      proc.stdin.end();
-      proc.stdout.on('data', (d) => { out += d; });
-      proc.on('close', (code) => {
-        if (code === 0 && out.trim()) resolve(out.trim());
-        else reject(new Error(`Opus planner exited ${code}`));
-      });
-      proc.on('error', reject);
-    });
-    return plan;
+    const plan = await callOpenRouter(
+      MODEL_REGISTRY['step-flash'].id,
+      'You are a planning assistant. A medium-complexity WhatsApp message needs a response. Write a brief execution plan (2-3 sentences max) for how to answer it well. Focus on: what to look up, what to cover, what tone to use. Be specific and actionable. Do NOT write the actual response — just the plan.',
+      userPrompt,
+      200
+    );
+    if (!plan.trim()) throw new Error('empty response');
+    return plan.trim();
   } catch (err) {
-    console.warn(`[Router] Opus planning failed: ${err.message} — Sonnet will proceed without plan`);
+    console.warn(`[Router] Planning failed: ${err.message} — Sonnet will proceed without plan`);
     return '';
   }
 }
@@ -412,34 +401,25 @@ New message: "${text.substring(0, 500)}"
 Reply with ONLY one word: COMPLEX, MEDIUM, or SIMPLE`;
 
   try {
-    const classification = await new Promise((resolve, reject) => {
-      let out = '';
-      const proc = spawn(process.env.CLAUDE_PATH || 'claude', [
-        '-p', '--output-format', 'text', '--max-turns', '1',
-        '--model', 'claude-opus-4-6',
-      ], { timeout: 15_000, env: { ...process.env, TERM: 'dumb' } });
-      proc.stdin.write(classifyPrompt);
-      proc.stdin.end();
-      proc.stdout.on('data', (d) => { out += d; });
-      proc.on('close', (code) => {
-        if (code === 0) resolve(out.trim());
-        else reject(new Error(`Opus classify exited ${code}`));
-      });
-      proc.on('error', reject);
-    });
+    const classification = await callOpenRouter(
+      MODEL_REGISTRY['qwen-4b'].id,
+      'You are a message classifier. Reply with ONLY one word: COMPLEX, MEDIUM, or SIMPLE.',
+      classifyPrompt,
+      10
+    );
 
-    // Parse Opus response — extract the classification word
+    // Parse response — extract the classification word
     const cleaned = classification.toUpperCase().trim();
     if (cleaned.includes('COMPLEX')) return 'complex';
     if (cleaned.includes('MEDIUM')) return 'medium';
     if (cleaned.includes('SIMPLE')) return 'simple';
 
-    // Opus gave an unexpected response — fall back to regex
-    console.warn(`[Router] Opus classification unclear: "${classification.substring(0, 100)}" — falling back to regex`);
+    // Unclear response — fall back to regex
+    console.warn(`[Router] Classification unclear: "${classification.substring(0, 100)}" — falling back to regex`);
     return classifyTask(parsed, isAdmin);
   } catch (err) {
-    // Opus call failed — fall back to regex classifier
-    console.warn(`[Router] Opus classification failed: ${err.message} — falling back to regex`);
+    // API call failed — fall back to regex classifier
+    console.warn(`[Router] Classification failed: ${err.message} — falling back to regex`);
     return classifyTask(parsed, isAdmin);
   }
 }
