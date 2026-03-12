@@ -16,3 +16,4 @@
 # Daily token aggregation (before 3am cleanup)
 # Rotate Cloudflare API token every 90 days (1st of Jan/Apr/Jul/Oct at 4am)
 # Weekly token dashboard (Sunday 8am)
+0 */2 * * * bash /root/.claude/enforce-effort.sh >> /var/log/claude-effort.log 2>&1

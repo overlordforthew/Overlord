@@ -23,16 +23,16 @@ Stripe (NamiBarden)
 - CLI: stripe-nb | Keys: /root/projects/NamiBarden/.env  
 - Webhook: https://namibarden.com/api/stripe/webhook  
 
-NamiBarden (Main Site + Newsletter + Course Platform)
-- Stack: Node.js 20+Express+nginx | PG 17 (namibarden-db)
-- DB: 6 tables | Admin: /admin/ | SMTP: overlord.gil.ai@gmail.com
-- Courses: HLS video via R2 | 2 courses defined | Stripe checkout + access tokens
-- Video pipeline: /root/scripts/video-pipeline.sh (MP4 → HLS → R2)
-- Key WhatsApp JIDs:
-  - Nami: 84393251371@s.whatsapp.net
-  - Gil: 18587794588@s.whatsapp.net (LID: 109457291874478@lid)
-  - Emiel: 19195008873@s.whatsapp.net
-  - Bot (Sage): 13055601031@s.whatsapp.net
+NamiBarden (Main Site + Newsletter + Course Platform)  
+- Stack: Node.js 20+Express+nginx | PG 17 (namibarden-db)  
+- DB: 6 tables | Admin: /admin/ | SMTP: overlord.gil.ai@gmail.com  
+- Courses: HLS video via R2 | 2 courses defined | Stripe checkout + access tokens  
+- Video pipeline: /root/scripts/video-pipeline.sh (MP4 → HLS → R2)  
+- Key WhatsApp JIDs:  
+  - Nami: 84393251371@s.whatsapp.net  
+  - Gil: 18587794588@s.whatsapp.net (LID: 109457291874478@lid)  
+  - Emiel: 19195008873@s.whatsapp.net  
+  - Bot (Sage): 13055601031@s.whatsapp.net  
   - SurfaBabe bot: 84392648332@s.whatsapp.net  
 
 SurfaBabe (Wellness WhatsApp AI)  
@@ -49,63 +49,63 @@ Elmo (OnlyDrafting)
 Portable Agents  
 - Path: /root/agents/ | Agents: AI Chan, Britt, Dex  
 
-Google Workspace CLI (gws v0.8.0) — OVERLORD'S ACCOUNT
-- Email: overlord.gil.ai@gmail.com — this is Overlord's own account, full autonomy
-- Installed globally via npm | Auth: OAuth2 | GCP project: overlord-488220
-- Credentials: /root/.config/gws/credentials.json (chmod 600)
-- Scopes: Drive, Sheets, Gmail, Calendar, Docs, Tasks
-- Usage: `gws gmail users messages list --params '{"userId":"me"}'`
-- Refresh token expires in ~7 days — re-auth with `gws auth login` if needed
-- Authority: Overlord may use Gmail, Calendar, Drive, Sheets, Docs autonomously
-  - Send emails, respond to contacts, manage calendar, store files — no permission needed
-  - Daily email check via cron (part of heartbeat)
+Google Workspace CLI (gws v0.8.0) — OVERLORD'S ACCOUNT  
+- Email: overlord.gil.ai@gmail.com — this is Overlord's own account, full autonomy  
+- Installed globally via npm | Auth: OAuth2 | GCP project: overlord-488220  
+- Credentials: /root/.config/gws/credentials.json (chmod 600)  
+- Scopes: Drive, Sheets, Gmail, Calendar, Docs, Tasks  
+- Usage: `gws gmail users messages list --params '{"userId":"me"}'`  
+- Refresh token expires in ~7 days — re-auth with `gws auth login` if needed  
+- Authority: Overlord may use Gmail, Calendar, Drive, Sheets, Docs autonomously  
+  - Send emails, respond to contacts, manage calendar, store files — no permission needed  
+  - Daily email check via cron (part of heartbeat)  
 
-Cloudflare (Full API Access)
-- Global API Key + email auth (X-Auth-Key/X-Auth-Email headers)
-- All creds in /root/overlord/.env (CLOUDFLARE_GLOBAL_API_KEY, CLOUDFLARE_EMAIL, CLOUDFLARE_ACCOUNT_ID)
-- Zones: namibarden.com, onlydrafting.com, onlyhulls.com (all Free plan)
-- R2 bucket: `namibarden-courses` (EEUR) — for Nami's course videos
-- rclone configured: `/root/.config/rclone/rclone.conf` | Upload script: `/root/scripts/r2-upload.sh`
-- R2 S3 creds: R2_ACCESS_KEY + R2_SECRET_KEY in .env (secret = SHA-256 of token value)
-- Domains registered: namibarden (2029), onlyhulls (2029), onlydrafting (2027)
-- Tunnel: `elmoserver` (healthy) | NO Containers (killed OpenClaw — $58/mo memory cost)
-- Full skill docs: ~/.claude/learned/global/cloudflare-api.md
+Cloudflare (Full API Access)  
+- Global API Key + email auth (X-Auth-Key/X-Auth-Email headers)  
+- All creds in /root/overlord/.env (CLOUDFLARE_GLOBAL_API_KEY, CLOUDFLARE_EMAIL, CLOUDFLARE_ACCOUNT_ID)  
+- Zones: namibarden.com, onlydrafting.com, onlyhulls.com (all Free plan)  
+- R2 bucket: `namibarden-courses` (EEUR) — for Nami's course videos  
+- rclone configured: `/root/.config/rclone/rclone.conf` | Upload script: `/root/scripts/r2-upload.sh`  
+- R2 S3 creds: R2_ACCESS_KEY + R2_SECRET_KEY in .env (secret = SHA-256 of token value)  
+- Domains registered: namibarden (2029), onlyhulls (2029), onlydrafting (2027)  
+- Tunnel: `elmoserver` (healthy) | NO Containers (killed OpenClaw — $58/mo memory cost)  
+- Full skill docs: ~/.claude/learned/global/cloudflare-api.md  
 
-Coolify API
-- Token: COOLIFY_API_TOKEN in /root/overlord/.env
+Coolify API  
+- Token: COOLIFY_API_TOKEN in /root/overlord/.env  
 - Usage: curl -H "Authorization: Bearer $COOLIFY_API_TOKEN" $API/...  
 
-Shannon (AI Pentest Framework)
-- Path: /root/projects/shannon/ | Model: Sonnet
-- Run: `./shannon start URL=<url> REPO=<name>`
-- Resume workspace: `./shannon start URL=<original-url> REPO=<name> WORKSPACE=<workspace-name>`
-- Worker: `docker compose -f docker-compose.yml -f docker-compose.docker.yml up -d worker`
-- Audit logs: /root/projects/shannon/audit-logs/
-- ALL PROJECTS AUDITED — Shannon is shut down (restart when needed)
-- Runs completed: Lumina, MasterCommander, NamiBarden, OnlyDrafting (Elmo), OnlyHulls, Overlord
+Shannon (AI Pentest Framework)  
+- Path: /root/projects/shannon/ | Model: Sonnet  
+- Run: `./shannon start URL=<url> REPO=<name>`  
+- Resume workspace: `./shannon start URL=<original-url> REPO=<name> WORKSPACE=<workspace-name>`  
+- Worker: `docker compose -f docker-compose.yml -f docker-compose.docker.yml up -d worker`  
+- Audit logs: /root/projects/shannon/audit-logs/  
+- ALL PROJECTS AUDITED — Shannon is shut down (restart when needed)  
+- Runs completed: Lumina, MasterCommander, NamiBarden, OnlyDrafting (Elmo), OnlyHulls, Overlord  
 
-/learn Command (Instinct System)
-- `/learn` — extracts reusable patterns from sessions into ~/.claude/learned/
-- Structure: ~/.claude/learned/{global,overlord,namibarden,...}/<pattern>.md
-- INDEX at ~/.claude/learned/INDEX.md — check before creating duplicates
-- Each instinct: problem, root cause, solution, evidence, confidence score
-- Project-scoped by default; promote to global when seen in 2+ projects
+/learn Command (Instinct System)  
+- `/learn` — extracts reusable patterns from sessions into ~/.claude/learned/  
+- Structure: ~/.claude/learned/{global,overlord,namibarden,...}/<pattern>.md  
+- INDEX at ~/.claude/learned/INDEX.md — check before creating duplicates  
+- Each instinct: problem, root cause, solution, evidence, confidence score  
+- Project-scoped by default; promote to global when seen in 2+ projects  
 
-Discord Integration
-- Bot app ID: 1479963348228636894 | Token in /root/.claude.json (mcpServers.discord.env)
-- Discrawl: /root/projects/discrawl/ | Go binary built | Needs bot invited to servers first
-- Discord MCP: `mcp-discord` installed globally (npm) | Config in /root/.claude.json
-  - Tools: list servers, read/send/delete messages, search, manage channels, forums, webhooks, reactions
-  - Available in new Claude Code sessions (loads at startup)
-- Bot invite (admin): https://discord.com/oauth2/authorize?client_id=1479963348228636894&scope=bot&permissions=8
-- Bot invite (minimal): https://discord.com/oauth2/authorize?client_id=1479963348228636894&scope=bot&permissions=66560
-- Status: Bot token works, MCP configured. Bot not yet invited to any servers.
+Discord Integration  
+- Bot app ID: 1479963348228636894 | Token in /root/.claude.json (mcpServers.discord.env)  
+- Discrawl: /root/projects/discrawl/ | Go binary built | Needs bot invited to servers first  
+- Discord MCP: `mcp-discord` installed globally (npm) | Config in /root/.claude.json  
+  - Tools: list servers, read/send/delete messages, search, manage channels, forums, webhooks, reactions  
+  - Available in new Claude Code sessions (loads at startup)  
+- Bot invite (admin): https://discord.com/oauth2/authorize?client_id=1479963348228636894&scope=bot&permissions=8  
+- Bot invite (minimal): https://discord.com/oauth2/authorize?client_id=1479963348228636894&scope=bot&permissions=66560  
+- Status: Bot token works, MCP configured. Bot not yet invited to any servers.  
 
-Overlord Security (all fixes applied 2026-03-07)
-- MC_JWT_SECRET rotated — old secret was committed to git and is now dead
-- Rate limiters fixed: all now use req.ip (not attacker-controlled X-Forwarded-For)
-- Gate JWT type confusion fixed: requireMcAuth rejects tokens with type='gate'
-- Gate OTP now uses crypto.randomInt() instead of Math.random()
-- Gate OTP lockout bypass fixed: code_attempts no longer resets if code still active
-- HTML injection fixed: escapeHtml() applied to all user fields in outgoing emails
+Overlord Security (all fixes applied 2026-03-07)  
+- MC_JWT_SECRET rotated — old secret was committed to git and is now dead  
+- Rate limiters fixed: all now use req.ip (not attacker-controlled X-Forwarded-For)  
+- Gate JWT type confusion fixed: requireMcAuth rejects tokens with type='gate'  
+- Gate OTP now uses crypto.randomInt() instead of Math.random()  
+- Gate OTP lockout bypass fixed: code_attempts no longer resets if code still active  
+- HTML injection fixed: escapeHtml() applied to all user fields in outgoing emails  
 - AUTH-VULN-05 fixed: token_version column in users table; requireMcAuth verifies tv claim; password change increments token_version (invalidates old JWTs immediately)

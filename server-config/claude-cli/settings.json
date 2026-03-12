@@ -1,4 +1,9 @@
 {
+  "env": {
+    "CLAUDE_CODE_ATTRIBUTION_HEADER": "0",
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "0",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
+  },
   "permissions": {
     "allow": [
       "Bash(*)",
@@ -24,6 +29,7 @@
     "defaultMode": "dontAsk"
   },
   "model": "opusplan",
+  "effortLevel": "high",
   "statusLine": {
     "type": "command",
     "command": "bash /root/.claude/statusline-command.sh"
