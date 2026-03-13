@@ -1,10 +1,12 @@
+
+
 Container Inventory  
 20 containers  
-Project | App Container | DB Container | Network | Port  
+Project |App Container | DB Container | Network | Port  
 Overlord | overlord | mastercommander-db | coolify | 127.0.0.1:3001  
 SurfaBabe | surfababe | surfababe-db | coolify | 127.0.0.1:3002  
 MasterCommander | mastercommander | mastercommander-db | coolify | 127.0.0.1:3010  
-NamiBarden | namibarden | namibarden-db | coolify | 80 internal  
+NamiBarden | namibarden | namibarden-db | coolify | 127.0.0.1:3010  
 Lumina | lumina-app | lumina-db | okw0cwwgskcow8k8o08gsok0 | 3456 internal  
 OnlyHulls | coolify | onlyhulls-db | coolify | 127.0.0.1:5433/7701/6380  
 Elmo | coolify | None | coolify | 80 internal  

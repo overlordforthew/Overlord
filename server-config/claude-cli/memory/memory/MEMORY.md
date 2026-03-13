@@ -1,111 +1,93 @@
-User Accounts  
-- **root**: primary workspace /root/overlord/, cron jobs, Coolify, Docker daemon  
-- **gil** (UID 1000): SSH via Tailscale, passwordless sudo, Claude CLI/git credentials  
-- **Cron**: health-check 6h, backup midnight, morning-brief 6am, Claude auth refresh 6h, auto-journal 11:55pm  
-- **File upload**: `cb up` → SCP clipboard to /tmp/clipboard.png; `claude up folder` → SCP to /home/gil/claude-up/  
 
-Overlord (WhatsApp AI Bot)  
-- Node.js/Baileys/Claude CLI | Container: coolify network  
-- Per-chat memory: /root/overlord/data/<chat_id>/memory.md  
-- Session rotation: 6h auto-expire CLI sessions  
-- Web chat: POST /api/web-chat → MC widget (gpt-4.1-nano)  
 
-Lumina (Auth/Account System)  
-- Coolify: okw0cwwgskcow8k8o08gsok0 | Port: 3456  
-- Stack: Node.js+Express+React, PG 17, JWT | .env source of truth  
+root: /root/overlord/  
+gil (UID 1000): Tailscale SSH, passwordless sudo, Claude CLI/git creds  
+Cron: health-check 6h, backup midnight, morning-brief 6am, Claude auth refresh 6h, auto-journal 11:55pm  
+File upload: `cb up` → SCP /tmp/clipboard.png; `claude up folder` → SCP /home/gil/claude-up/  
 
-MasterCommander (AI Boat Monitor)  
-- Stack: Static HTML/CSS/JS + JWT/PG/Nodemailer | nginx:alpine  
-- Auth backend: Overlord server.js | PG tables (users/boats/gate_users/boat_logs)  
+Overlord (WhatsApp AI Bot): Node.js/Baileys/Claude CLI | Container: coolify network  
+Per-chat memory: /root/overlord/data/<chat_id>/memory.md  
+Session rotation: 6h auto-expire CLI sessions  
+Web chat: POST /api/web-chat → MC widget (gpt-4.1-nano)  
 
-Stripe (NamiBarden)  
-- Account: Gilbert Barden (gilbarden@gmail.com) | US  
-- CLI: stripe-nb | Keys: /root/projects/NamiBarden/.env  
-- Webhook: https://namibarden.com/api/stripe/webhook  
+Lumina (Auth/Account System): Coolify token okw0cwwgskcow8k8o08gsok0 | Port: 3456  
+Stack: Node.js+Express+React, PG 17, JWT | .env source of truth  
 
-NamiBarden (Main Site + Newsletter + Course Platform)  
-- Stack: Node.js 20+Express+nginx | PG 17 (namibarden-db)  
-- DB: 6 tables | Admin: /admin/ | SMTP: overlord.gil.ai@gmail.com  
-- Courses: HLS video via R2 | 2 courses defined | Stripe checkout + access tokens  
-- Video pipeline: /root/scripts/video-pipeline.sh (MP4 → HLS → R2)  
-- Key WhatsApp JIDs:  
-  - Nami: 84393251371@s.whatsapp.net  
-  - Gil: 18587794588@s.whatsapp.net (LID: 109457291874478@lid)  
-  - Emiel: 19195008873@s.whatsapp.net  
-  - Bot (Sage): 13055601031@s.whatsapp.net  
-  - SurfaBabe bot: 84392648332@s.whatsapp.net  
+MasterCommander (AI Boat Monitor): Static HTML/CSS/JS + JWT/PG/Nodemailer | nginx:alpine  
+Auth backend: Overlord server.js | PG tables (users/boats/gate_users/boat_logs)  
 
-SurfaBabe (Wellness WhatsApp AI)  
-- Node.js/Baileys/Claude CLI (Overlord fork) | Port: 3002  
-- Models: Opus 4.6 (Ailie), Sonnet 4.6 (customers) | DB: PG 17 (surfababe-db)  
+Stripe (NamiBarden): gilbarden@gmail.com | US  
+CLI: stripe-nb | Keys: /root/projects/NamiBarden/.env  
+Webhook: https://namibarden.com/api/stripe/webhook  
 
-OnlyHulls (AI Boat Matchmaking)  
-- Coolify: qkggs84cs88o0gww4wc80gwo | Stack: Next.js 16/PG 17  
-- DB: onlyhulls (10 tables) | Status: Phase 1a (needs API keys)  
+NamiBarden (Main Site + Newsletter + Course Platform): Node.js 20+Express+nginx | PG 17 (namibarden-db)  
+DB: 6 tables | Admin: /admin/ | SMTP: overlord.gil.ai@gmail.com  
+Courses: HLS video via R2 | 2 courses | Stripe checkout + access tokens  
+Video pipeline: /root/scripts/video-pipeline.sh (MP4 → HLS → R2)  
+Key WhatsApp JIDs:  
+- Nami: 84393251371@s.whatsapp.net  
+- Gil: 18587794588@s.whatsapp.net (LID: 109457291874478@lid)  
+- Emiel: 19195008873@s.whatsapp.net  
+- Bot (Sage): 13055601031@s.whatsapp.net  
+- SurfaBabe bot: 84392648332@s.whatsapp.net  
 
-Elmo (OnlyDrafting)  
-- Coolify: zkk0k8gcgcss4osggs4k0kw4 | Domain: onlydrafting.com  
+SurfaBabe (Wellness WhatsApp AI): Node.js/Baileys/Claude CLI (Overlord fork) | Port: 3002  
+Models: Opus 4.6 (Ailie), Sonnet 4.6 (customers) | DB: PG 17 (surfababe-db)  
 
-Portable Agents  
-- Path: /root/agents/ | Agents: AI Chan, Britt, Dex  
+OnlyHulls (AI Boat Matchmaking): Coolify token qkggs84cs88o0gww4wc80gwo | Stack: Next.js 16/PG 17  
+DB: onlyhulls (10 tables) | Status: Phase 1a (needs API keys)  
 
-Google Workspace CLI (gws v0.8.0) — OVERLORD'S ACCOUNT  
-- Email: overlord.gil.ai@gmail.com — this is Overlord's own account, full autonomy  
-- Installed globally via npm | Auth: OAuth2 | GCP project: overlord-488220  
-- Credentials: /root/.config/gws/credentials.json (chmod 600)  
-- Scopes: Drive, Sheets, Gmail, Calendar, Docs, Tasks  
-- Usage: `gws gmail users messages list --params '{"userId":"me"}'`  
-- Refresh token expires in ~7 days — re-auth with `gws auth login` if needed  
-- Authority: Overlord may use Gmail, Calendar, Drive, Sheets, Docs autonomously  
-  - Send emails, respond to contacts, manage calendar, store files — no permission needed  
-  - Daily email check via cron (part of heartbeat)  
+Elmo (OnlyDrafting): Coolify token zkk0k8gcgcss4osggs4k0kw4 | Domain: onlydrafting.com  
 
-Cloudflare (Full API Access)  
-- Global API Key + email auth (X-Auth-Key/X-Auth-Email headers)  
-- All creds in /root/overlord/.env (CLOUDFLARE_GLOBAL_API_KEY, CLOUDFLARE_EMAIL, CLOUDFLARE_ACCOUNT_ID)  
-- Zones: namibarden.com, onlydrafting.com, onlyhulls.com (all Free plan)  
-- R2 bucket: `namibarden-courses` (EEUR) — for Nami's course videos  
-- rclone configured: `/root/.config/rclone/rclone.conf` | Upload script: `/root/scripts/r2-upload.sh`  
-- R2 S3 creds: R2_ACCESS_KEY + R2_SECRET_KEY in .env (secret = SHA-256 of token value)  
-- Domains registered: namibarden (2029), onlyhulls (2029), onlydrafting (2027)  
-- Tunnel: `elmoserver` (healthy) | NO Containers (killed OpenClaw — $58/mo memory cost)  
-- Full skill docs: ~/.claude/learned/global/cloudflare-api.md  
+Portable Agents: /root/agents/ | Agents: AI Chan, Britt, Dex  
 
-Coolify API  
-- Token: COOLIFY_API_TOKEN in /root/overlord/.env  
-- Usage: curl -H "Authorization: Bearer $COOLIFY_API_TOKEN" $API/...  
+Google Workspace CLI (gws v0.8.0): overlord.gil.ai@gmail.com | GCP project: overlord-488220  
+Credentials: /root/.config/gws/credentials.json (chmod 600)  
+Scopes: Drive, Sheets, Gmail, Calendar, Docs, Tasks  
+Usage: `gws gmail users messages list --params '{"userId":"me"}'`  
+Refresh token expires ~7 days — re-auth with `gws auth login` if needed  
+Authority: Overlord may use Gmail, Calendar, Drive, Sheets, Docs autonomously  
+Daily email check via cron (heartbeat)  
 
-Shannon (AI Pentest Framework)  
-- Path: /root/projects/shannon/ | Model: Sonnet  
-- Run: `./shannon start URL=<url> REPO=<name>`  
-- Resume workspace: `./shannon start URL=<original-url> REPO=<name> WORKSPACE=<workspace-name>`  
-- Worker: `docker compose -f docker-compose.yml -f docker-compose.docker.yml up -d worker`  
-- Audit logs: /root/projects/shannon/audit-logs/  
-- ALL PROJECTS AUDITED — Shannon is shut down (restart when needed)  
-- Runs completed: Lumina, MasterCommander, NamiBarden, OnlyDrafting (Elmo), OnlyHulls, Overlord  
+Cloudflare (Full API Access): Global API Key + email auth (X-Auth-Key/X-Auth-Email)  
+All creds in /root/overlord/.env (CLOUDFLARE_GLOBAL_API_KEY, CLOUDFLARE_EMAIL, CLOUDFLARE_ACCOUNT_ID)  
+Zones: namibarden.com, onlydrafting.com, onlyhulls.com (Free plan)  
+R2 bucket: `namibarden-courses` (EEUR)  
+rclone configured: `/root/.config/rclone/rclone.conf` | Upload script: `/root/scripts/r2-upload.sh`  
+R2 S3 creds: R2_ACCESS_KEY + R2_SECRET_KEY in .env (secret = SHA-256 of token value)  
+Domains registered: namibarden (2029), onlyhulls (2029), onlydrafting (2027)  
+Tunnel: `elmoserver` (healthy) | NO Containers (OpenClaw killed)  
+Full skill docs: ~/.claude/learned/global/cloudflare-api.md  
 
-/learn Command (Instinct System)  
-- `/learn` — extracts reusable patterns from sessions into ~/.claude/learned/  
-- Structure: ~/.claude/learned/{global,overlord,namibarden,...}/<pattern>.md  
-- INDEX at ~/.claude/learned/INDEX.md — check before creating duplicates  
-- Each instinct: problem, root cause, solution, evidence, confidence score  
-- Project-scoped by default; promote to global when seen in 2+ projects  
+Coolify API: Token COOLIFY_API_TOKEN in /root/overlord/.env  
+Usage: curl -H "Authorization: Bearer $COOLIFY_API_TOKEN" $API/...  
 
-Discord Integration  
-- Bot app ID: 1479963348228636894 | Token in /root/.claude.json (mcpServers.discord.env)  
-- Discrawl: /root/projects/discrawl/ | Go binary built | Needs bot invited to servers first  
-- Discord MCP: `mcp-discord` installed globally (npm) | Config in /root/.claude.json  
-  - Tools: list servers, read/send/delete messages, search, manage channels, forums, webhooks, reactions  
-  - Available in new Claude Code sessions (loads at startup)  
-- Bot invite (admin): https://discord.com/oauth2/authorize?client_id=1479963348228636894&scope=bot&permissions=8  
-- Bot invite (minimal): https://discord.com/oauth2/authorize?client_id=1479963348228636894&scope=bot&permissions=66560  
-- Status: Bot token works, MCP configured. Bot not yet invited to any servers.  
+Shannon (AI Pentest Framework): Path: /root/projects/shannon/ | Model: Sonnet  
+Run: `./shannon start URL=<url> REPO=<name>`  
+Resume: `./shannon start URL=<original-url> REPO=<name> WORKSPACE=<workspace-name>`  
+Worker: `docker compose -f docker-compose.yml -f docker-compose.docker.yml up -d worker`  
+Audit logs: /root/projects/shannon/audit-logs/  
+ALL PROJECTS AUDITED — Shannon shut down (restart when needed)  
 
-Overlord Security (all fixes applied 2026-03-07)  
-- MC_JWT_SECRET rotated — old secret was committed to git and is now dead  
-- Rate limiters fixed: all now use req.ip (not attacker-controlled X-Forwarded-For)  
-- Gate JWT type confusion fixed: requireMcAuth rejects tokens with type='gate'  
-- Gate OTP now uses crypto.randomInt() instead of Math.random()  
-- Gate OTP lockout bypass fixed: code_attempts no longer resets if code still active  
-- HTML injection fixed: escapeHtml() applied to all user fields in outgoing emails  
-- AUTH-VULN-05 fixed: token_version column in users table; requireMcAuth verifies tv claim; password change increments token_version (invalidates old JWTs immediately)
+/learn Command: Extracts patterns from sessions into ~/.claude/learned/  
+Structure: ~/.claude/learned/{global,overlord,namibarden,...}/<pattern>.md  
+INDEX at ~/.claude/learned/INDEX.md — check before creating duplicates  
+Each instinct: problem, root cause, solution, evidence, confidence score  
+Project-scoped by default; promote to global when seen in 2+ projects  
+
+Discord Integration: Bot app ID 1479963348228636894 | Token in /root/.claude.json (mcpServers.discord.env)  
+Discrawl: /root/projects/discrawl/ | Go binary built | Needs bot invited to servers first  
+Discord MCP: `mcp-discord` installed globally (npm) | Config in /root/.claude.json  
+Tools: list servers, read/send/delete messages, search, manage channels, forums, webhooks, reactions  
+Available in new Claude Code sessions (loads at startup)  
+Bot invite (admin): https://discord.com/oauth2/authorize?client_id=1479963348228636894&scope=bot&permissions=8  
+Bot invite (minimal): https://discord.com/oauth2/authorize?client_id=1479963348228636894&scope=bot&permissions=66560  
+
+Overlord Security (all fixes applied 2026-03-07):  
+- MC_JWT_SECRET rotated — old secret committed to git and dead  
+- Rate limiters fixed: use req.ip (not X-Forwarded-For)  
+- Gate JWT type confusion fixed: requireMcAuth rejects type='gate'  
+- Gate OTP uses crypto.randomInt() instead of Math.random()  
+- Gate OTP lockout bypass fixed: code_attempts no longer resets if code active  
+- HTML injection fixed: escapeHtml() applied to user fields in outgoing emails  
+- AUTH-VULN-05 fixed: token_version column in users table; requireMcAuth verifies tv claim; password change increments tv (invalidates old JWTs)

@@ -14,6 +14,7 @@ Created: 2026-02-21T16:21:47.501Z
 
 ## Preferences
 - Wants Overlord to auto-detect and fix errors from log alerts without being asked — proactive error resolution
+- STANDING ORDER: When Ai Chan (NamiBarden bot) escalates requests (e.g., rebuild namibarden container), Overlord should execute them autonomously without waiting for Gil's approval. Gil said: "You don't need me, you do what AI Chan asks"
 - Log alerts: pre-analyze before sending. Suppress one-off errors if service is currently working. Only send alerts for real, ongoing problems.
 - Starlink goes off by 9pm — all nightly scheduled tasks must run before 8:30pm
 - Contact: Emiel (+19195008873) — Dutch friend, potential CTO for MasterCommander
