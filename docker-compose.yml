@@ -6,6 +6,9 @@ services:
     init: true
     mem_limit: 2g
     memswap_limit: 3g
+    depends_on:
+      overlord-db:
+        condition: service_healthy
     ports:
       - "127.0.0.1:3001:3001"
     env_file:
@@ -37,6 +40,40 @@ services:
       - /root/overlord:/projects/Overlord
     networks:
       - coolify
+
+  lightpanda:
+    image: lightpanda/browser:nightly
+    container_name: lightpanda
+    restart: unless-stopped
+    entrypoint: ["/usr/bin/lightpanda"]
+    command: ["serve", "--host", "0.0.0.0", "--port", "9222"]
+    ports:
+      - "127.0.0.1:9222:9222"
+    environment:
+      LIGHTPANDA_DISABLE_TELEMETRY: "true"
+    networks:
+      - coolify
+
+  overlord-db:
+    image: postgres:17-alpine
+    container_name: overlord-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: overlord
+      POSTGRES_USER: overlord
+      POSTGRES_PASSWORD: ${CONV_DB_PASS}
+    volumes:
+      - overlord_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U overlord"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - coolify
+
+volumes:
+  overlord_pgdata:
 
 networks:
   coolify:
