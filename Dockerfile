@@ -24,8 +24,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get update \
-    && apt-get install -y --no-install-recommends chromium \
+    && apt-get install -y --no-install-recommends chromium ffmpeg \
     && rm -rf /var/lib/apt/lists/*
+
+# Install yt-dlp (latest from GitHub releases — much newer than pip)
+RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
+    && chmod a+rx /usr/local/bin/yt-dlp
 
 # Install Python packages for skills (scraping, APIs, data analysis)
 # Plus llm CLI (universal LLM interface) with provider plugins

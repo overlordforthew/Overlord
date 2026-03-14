@@ -665,5 +665,18 @@ export async function startScheduler(sockRef) {
   });
   console.log('🛡️ Session guard scheduled (every 1 min)');
 
+  // 9. Weekly AI repo intelligence — Friday 10am AST (= 2pm UTC)
+  cron.schedule('0 14 * * 5', async () => {
+    try {
+      const { generateReport } = await import('./scripts/github-trending.js');
+      const report = await generateReport();
+      await sockRef.sock.sendMessage(ADMIN_JID, { text: report });
+      console.log('📊 Sent weekly AI repo intelligence report');
+    } catch (err) {
+      console.error('Weekly AI report error:', err.message);
+    }
+  });
+  console.log('📊 Weekly AI repo intelligence scheduled (Friday 10:00 AM AST / 14:00 UTC)');
+
   console.log('⏰ Scheduler ready');
 }

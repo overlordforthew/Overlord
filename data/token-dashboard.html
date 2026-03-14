@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Token Usage Dashboard — 2026-03-04</title>
+<title>Token Usage Dashboard — 2026-03-08</title>
 <style>
   :root { --bg: #0d1117; --card: #161b22; --border: #30363d; --text: #c9d1d9;
            --accent: #58a6ff; --green: #3fb950; --yellow: #d29922; --red: #f85149; }
@@ -48,57 +48,57 @@
 </head>
 <body>
   <h1>Token Usage Dashboard</h1>
-  <p class="subtitle">Week of 2026-02-25 to 2026-03-04 &middot; 1 days of data</p>
+  <p class="subtitle">Week of 2026-03-01 to 2026-03-08 &middot; 5 days of data</p>
 
   <div class="grid">
     <div class="stat">
       <div class="label">Total Calls</div>
-      <div class="value">1,055</div>
-      <div class="detail">~1,055/day</div>
+      <div class="value">1,956</div>
+      <div class="detail">~391/day</div>
     </div>
     <div class="stat">
       <div class="label">Output Tokens</div>
-      <div class="value">177.7K</div>
-      <div class="detail">~177.7K/day</div>
+      <div class="value">321.5K</div>
+      <div class="detail">~64.3K/day</div>
     </div>
     <div class="stat">
       <div class="label">Input Tokens</div>
-      <div class="value">20.6K</div>
-      <div class="detail">incl. 67.4M cached</div>
+      <div class="value">22.1K</div>
+      <div class="detail">incl. 133.6M cached</div>
     </div>
     <div class="stat">
       <div class="label">Cache Hit Rate</div>
-      <div class="value">95%</div>
+      <div class="value">94%</div>
       <div class="detail">
         <div class="cache-bar">
-          <div class="read" style="width:94.68727135880339%"></div>
-          <div class="create" style="width:5.312728641196614%"></div>
+          <div class="read" style="width:94.4227823339276%"></div>
+          <div class="create" style="width:5.5772176660724%"></div>
         </div>
         read vs create
       </div>
     </div>
     <div class="stat">
       <div class="label">Context Boot</div>
-      <div class="value">~14.1K</div>
-      <div class="detail">55KB loaded per session</div>
+      <div class="value">~10.4K</div>
+      <div class="detail">40KB loaded per session</div>
     </div>
     <div class="stat">
       <div class="label">OpenRouter (Free)</div>
-      <div class="value">6</div>
-      <div class="detail">15.5K tokens (free)</div>
+      <div class="value">12</div>
+      <div class="detail">24.2K tokens (free)</div>
     </div>
   </div>
 
   <section>
     <h2>Daily Activity</h2>
-    <div class="chart"><div class="bar-wrap"><div class="bar" style="height:100.0%"></div><span>03-04</span></div></div>
+    <div class="chart"><div class="bar-wrap"><div class="bar" style="height:100.0%"></div><span>03-04</span></div><div class="bar-wrap"><div class="bar" style="height:52.322274881516584%"></div><span>03-05</span></div><div class="bar-wrap"><div class="bar" style="height:0.0%"></div><span>03-06</span></div><div class="bar-wrap"><div class="bar" style="height:22.085308056872037%"></div><span>03-07</span></div><div class="bar-wrap"><div class="bar" style="height:10.995260663507109%"></div><span>03-08</span></div></div>
   </section>
 
   <section>
     <h2>Per-Model Usage</h2>
     <table>
       <tr><th>Model</th><th>Calls</th><th>Input</th><th>Output</th><th>Cache Read</th><th>Cache Create</th></tr>
-      <tr><td>Opus 4.6</td><td>561</td><td>7.0K</td><td>99.1K</td><td>41.8M</td><td>1.5M</td></tr><tr><td>Haiku 4.5</td><td>332</td><td>13.5K</td><td>44.0K</td><td>16.2M</td><td>1.6M</td></tr><tr><td>Sonnet 4.6</td><td>162</td><td>206</td><td>34.6K</td><td>9.5M</td><td>692.1K</td></tr>
+      <tr><td>Opus 4.6</td><td>991</td><td>7.6K</td><td>153.4K</td><td>82.8M</td><td>3.3M</td></tr><tr><td>Haiku 4.5</td><td>546</td><td>14.0K</td><td>74.7K</td><td>27.7M</td><td>2.9M</td></tr><tr><td>Sonnet 4.6</td><td>419</td><td>531</td><td>93.4K</td><td>23.2M</td><td>1.7M</td></tr>
     </table>
   </section>
 
@@ -106,7 +106,7 @@
     <h2>Per-Source Usage</h2>
     <table>
       <tr><th>Source</th><th>Calls</th><th>Input</th><th>Output</th></tr>
-      <tr><td>CLI Sessions</td><td>1,024</td><td>20.6K</td><td>177.5K</td></tr><tr><td>WhatsApp Bot</td><td>17</td><td>51</td><td>85</td></tr><tr><td>Lumina</td><td>10</td><td>27</td><td>98</td></tr><tr><td>Temp/shannon</td><td>4</td><td>12</td><td>4</td></tr>
+      <tr><td>CLI Sessions</td><td>1,915</td><td>22.0K</td><td>321.2K</td></tr><tr><td>WhatsApp Bot</td><td>27</td><td>81</td><td>141</td></tr><tr><td>Lumina</td><td>10</td><td>27</td><td>98</td></tr><tr><td>Temp/shannon</td><td>4</td><td>12</td><td>4</td></tr>
     </table>
   </section>
 
@@ -114,14 +114,14 @@
     <h2>Daily Breakdown</h2>
     <table>
       <tr><th>Date</th><th>Calls</th><th>Input</th><th>Output</th><th>Cache Read</th><th>Cache Create</th></tr>
-      <tr><td>2026-03-04</td><td>1,055</td><td>20.6K</td><td>177.7K</td><td>67.4M</td><td>3.8M</td></tr>
+      <tr><td>2026-03-04</td><td>1,055</td><td>20.6K</td><td>177.7K</td><td>67.4M</td><td>3.8M</td></tr><tr><td>2026-03-05</td><td>552</td><td>936</td><td>81.1K</td><td>41.3M</td><td>2.4M</td></tr><tr><td>2026-03-06</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr><tr><td>2026-03-07</td><td>233</td><td>378</td><td>42.1K</td><td>10.0M</td><td>749.9K</td></tr><tr><td>2026-03-08</td><td>116</td><td>155</td><td>20.5K</td><td>14.9M</td><td>1.0M</td></tr>
     </table>
   </section>
 
   <section>
     <h2>Context Files (Loaded Per Session)</h2>
     <p style="color:#8b949e;font-size:13px;margin-bottom:12px;">
-      Total: 55.2KB / ~14,125 tokens &middot; estimated at 4 bytes/token
+      Total: 40.5KB / ~10,368 tokens &middot; estimated at 4 bytes/token
     </p>
     
         <details>
@@ -134,10 +134,10 @@
           </table>
         </details>
         <details>
-          <summary>Overlord <span class="badge">16.8KB / ~4,308 tok</span></summary>
+          <summary>Overlord <span class="badge">2.2KB / ~574 tok</span></summary>
           <table class="files">
             <tr><th>File</th><th>Size</th><th>Lines</th><th>Est. Tokens</th></tr>
-            <tr><td class="path">overlord/CLAUDE.md</td><td>16.8KB</td><td>338</td><td>~4,308</td></tr>
+            <tr><td class="path">overlord/CLAUDE.md</td><td>2.2KB</td><td>55</td><td>~574</td></tr>
           </table>
         </details>
         <details>
@@ -190,26 +190,26 @@
           </table>
         </details>
         <details>
-          <summary>Shared Memory <span class="badge">11.7KB / ~3,009 tok</span></summary>
+          <summary>Shared Memory <span class="badge">11.6KB / ~2,986 tok</span></summary>
           <table class="files">
             <tr><th>File</th><th>Size</th><th>Lines</th><th>Est. Tokens</th></tr>
-            <tr><td class="path">.claude/projects/-root/memory/MEMORY.md</td><td>4.0KB</td><td>74</td><td>~1,033</td></tr>
-<tr><td class="path">.claude/projects/-root/memory/infrastructure.md</td><td>2.2KB</td><td>36</td><td>~573</td></tr>
-<tr><td class="path">.claude/projects/-root/memory/cloudflare.md</td><td>2.2KB</td><td>48</td><td>~567</td></tr>
-<tr><td class="path">.claude/projects/-root/memory/projects.md</td><td>1.6KB</td><td>39</td><td>~421</td></tr>
-<tr><td class="path">.claude/projects/-root/memory/work-log.md</td><td>0.9KB</td><td>23</td><td>~225</td></tr>
-<tr><td class="path">.claude/projects/-root/memory/mastercommander-plans.md</td><td>0.7KB</td><td>13</td><td>~190</td></tr>
+            <tr><td class="path">.claude/projects/-root/memory/MEMORY.md</td><td>5.0KB</td><td>92</td><td>~1,280</td></tr>
+<tr><td class="path">.claude/projects/-root/memory/projects.md</td><td>1.7KB</td><td>39</td><td>~426</td></tr>
+<tr><td class="path">.claude/projects/-root/memory/cloudflare.md</td><td>1.4KB</td><td>30</td><td>~371</td></tr>
+<tr><td class="path">.claude/projects/-root/memory/ecc-patterns.md</td><td>1.3KB</td><td>26</td><td>~326</td></tr>
+<tr><td class="path">.claude/projects/-root/memory/infrastructure.md</td><td>1.1KB</td><td>24</td><td>~273</td></tr>
+<tr><td class="path">.claude/projects/-root/memory/work-log.md</td><td>0.8KB</td><td>22</td><td>~217</td></tr>
+<tr><td class="path">.claude/projects/-root/memory/mastercommander-plans.md</td><td>0.4KB</td><td>7</td><td>~93</td></tr>
           </table>
         </details>
   </section>
 
   <section>
     <h2>Optimization Recommendations</h2>
-    <div class="opt"><ul><li>LARGE FILE: overlord/CLAUDE.md (16.8KB / ~4,308 tokens) — consider condensing</li>
-<li>GOOD CACHE HIT RATE: 95% — sessions reusing cached context efficiently</li>
-<li>HIGH SESSION VOLUME: ~1055 calls/day — consider consolidating tasks into fewer sessions</li></ul></div>
+    <div class="opt"><ul><li>GOOD CACHE HIT RATE: 94% — sessions reusing cached context efficiently</li>
+<li>HIGH SESSION VOLUME: ~391 calls/day — consider consolidating tasks into fewer sessions</li></ul></div>
   </section>
 
-  <footer>Generated 2026-03-04 10:57 &middot; Overlord Token Dashboard</footer>
+  <footer>Generated 2026-03-08 08:00 &middot; Overlord Token Dashboard</footer>
 </body>
 </html>

@@ -15,3 +15,5 @@ data/*/context.json
 
 # Keep per-chat memories in git (they're the learned knowledge)
 !data/*/memory.md
+skills/prompt-guard/prompt_guard/__pycache__/
+.overlord-db-pass

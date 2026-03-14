@@ -55,6 +55,86 @@
       "memoryUsagePct": 25.2,
       "containersRunning": 20,
       "frictionEvents": 6
+    },
+    {
+      "date": "2026-03-05",
+      "timestamp": "2026-03-05T00:15:00.780Z",
+      "diskUsagePct": 46,
+      "memoryUsagePct": 24.5,
+      "containersRunning": 22,
+      "frictionEvents": 10
+    },
+    {
+      "date": "2026-03-06",
+      "timestamp": "2026-03-06T00:15:00.629Z",
+      "diskUsagePct": 48,
+      "memoryUsagePct": 25.4,
+      "containersRunning": 22,
+      "frictionEvents": 8
+    },
+    {
+      "date": "2026-03-07",
+      "timestamp": "2026-03-07T00:15:00.109Z",
+      "diskUsagePct": 48,
+      "memoryUsagePct": 27,
+      "containersRunning": 22,
+      "frictionEvents": 2
+    },
+    {
+      "date": "2026-03-08",
+      "timestamp": "2026-03-08T00:15:00.388Z",
+      "diskUsagePct": 46,
+      "memoryUsagePct": 26.6,
+      "containersRunning": 20,
+      "frictionEvents": 4
+    },
+    {
+      "date": "2026-03-09",
+      "timestamp": "2026-03-09T00:15:00.887Z",
+      "diskUsagePct": 52,
+      "memoryUsagePct": 26.7,
+      "containersRunning": 20,
+      "frictionEvents": 2
+    },
+    {
+      "date": "2026-03-10",
+      "timestamp": "2026-03-10T00:15:00.225Z",
+      "diskUsagePct": 65,
+      "memoryUsagePct": 30.7,
+      "containersRunning": 21,
+      "frictionEvents": 15
+    },
+    {
+      "date": "2026-03-11",
+      "timestamp": "2026-03-11T00:15:00.690Z",
+      "diskUsagePct": 47,
+      "memoryUsagePct": 34.8,
+      "containersRunning": 21,
+      "frictionEvents": 6
+    },
+    {
+      "date": "2026-03-12",
+      "timestamp": "2026-03-12T00:15:01.044Z",
+      "diskUsagePct": 45,
+      "memoryUsagePct": 32.9,
+      "containersRunning": 21,
+      "frictionEvents": 18
+    },
+    {
+      "date": "2026-03-13",
+      "timestamp": "2026-03-13T00:15:00.156Z",
+      "diskUsagePct": 46,
+      "memoryUsagePct": 36.6,
+      "containersRunning": 21,
+      "frictionEvents": 14
+    },
+    {
+      "date": "2026-03-14",
+      "timestamp": "2026-03-14T00:15:00.745Z",
+      "diskUsagePct": 49,
+      "memoryUsagePct": 27.9,
+      "containersRunning": 21,
+      "frictionEvents": 23
     }
   ]
 }

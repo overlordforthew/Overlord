@@ -130,7 +130,7 @@ const CONFIG = {
   claudeModel: process.env.CLAUDE_MODEL || '',
   routerMode: process.env.ROUTER_MODE || 'alpha',
   maxResponseTime: 900_000,  // 15 min for complex tasks (page creation, multi-file edits)
-  chatResponseTimeout: 300_000, // 5 min for normal chat responses (prevents stuck CLI hanging forever)
+  chatResponseTimeout: 600_000, // 10 min for normal chat responses (Opus + tool use regularly exceeds 5 min)
 
   // ---- RESPONSE BEHAVIOR ----
   // Mode: 'all' = respond to every message

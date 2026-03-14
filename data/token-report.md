@@ -1,26 +1,26 @@
-# Token Usage Report — 2026-03-04
-Week: 2026-02-25 to 2026-03-04 (1 days)
+# Token Usage Report — 2026-03-08
+Week: 2026-03-01 to 2026-03-08 (5 days)
 
 ## Weekly Totals
-- **Total calls:** 1,055
-- **Input tokens:** 20,644
-- **Output tokens:** 177,680
-- **Cache read:** 67,388,076
-- **Cache create:** 3,781,021
-- **OpenRouter calls:** 6 (free)
+- **Total calls:** 1,956
+- **Input tokens:** 22,113
+- **Output tokens:** 321,457
+- **Cache read:** 133,618,903
+- **Cache create:** 7,892,393
+- **OpenRouter calls:** 12 (free)
 
 ## Per-Model Breakdown
 | Model | Calls | Input | Output | Cache Read | Cache Create |
 |-------|-------|-------|--------|------------|--------------|
-| Opus 4.6 | 561 | 7.0K | 99.1K | 41.8M | 1.5M |
-| Haiku 4.5 | 332 | 13.5K | 44.0K | 16.2M | 1.6M |
-| Sonnet 4.6 | 162 | 206 | 34.6K | 9.5M | 692.1K |
+| Opus 4.6 | 991 | 7.6K | 153.4K | 82.8M | 3.3M |
+| Haiku 4.5 | 546 | 14.0K | 74.7K | 27.7M | 2.9M |
+| Sonnet 4.6 | 419 | 531 | 93.4K | 23.2M | 1.7M |
 
 ## Per-Source Breakdown
 | Source | Calls | Input | Output |
 |--------|-------|-------|--------|
-| CLI Sessions | 1,024 | 20.6K | 177.5K |
-| WhatsApp Bot | 17 | 51 | 85 |
+| CLI Sessions | 1,915 | 22.0K | 321.2K |
+| WhatsApp Bot | 27 | 81 | 141 |
 | Lumina | 10 | 27 | 98 |
 | Temp/shannon | 4 | 12 | 4 |
 
@@ -28,17 +28,21 @@ Week: 2026-02-25 to 2026-03-04 (1 days)
 | Date | Calls | Input | Output | Cache Read | Cache Create |
 |------|-------|-------|--------|------------|--------------|
 | 2026-03-04 | 1,055 | 20.6K | 177.7K | 67.4M | 3.8M |
+| 2026-03-05 | 552 | 936 | 81.1K | 41.3M | 2.4M |
+| 2026-03-06 | 0 | 0 | 0 | 0 | 0 |
+| 2026-03-07 | 233 | 378 | 42.1K | 10.0M | 749.9K |
+| 2026-03-08 | 116 | 155 | 20.5K | 14.9M | 1.0M |
 
 ## Context Files
-**Total:** 55.2KB / ~14,125 estimated tokens per session
+**Total:** 40.5KB / ~10,368 estimated tokens per session
 
 ### Always Loaded (5.6KB / ~1,432 tokens)
 - `CLAUDE.md` — 3,205 bytes, 57 lines, ~802 tokens
 - `.claude/rules/security.md` — 1,385 bytes, 29 lines, ~347 tokens
 - `.claude/rules/deploy.md` — 1,132 bytes, 28 lines, ~283 tokens
 
-### Overlord (16.8KB / ~4,308 tokens)
-- `overlord/CLAUDE.md` — 17,232 bytes, 338 lines, ~4,308 tokens
+### Overlord (2.2KB / ~574 tokens)
+- `overlord/CLAUDE.md` — 2,294 bytes, 55 lines, ~574 tokens
 
 ### Project: Elmo (1.2KB / ~318 tokens)
 - `projects/Elmo/CLAUDE.md` — 1,271 bytes, 36 lines, ~318 tokens
@@ -61,17 +65,17 @@ Week: 2026-02-25 to 2026-03-04 (1 days)
 ### Project: shannon (9.6KB / ~2,462 tokens)
 - `projects/shannon/CLAUDE.md` — 9,847 bytes, 159 lines, ~2,462 tokens
 
-### Shared Memory (11.7KB / ~3,009 tokens)
-- `.claude/projects/-root/memory/MEMORY.md` — 4,130 bytes, 74 lines, ~1,033 tokens
-- `.claude/projects/-root/memory/infrastructure.md` — 2,290 bytes, 36 lines, ~573 tokens
-- `.claude/projects/-root/memory/cloudflare.md` — 2,266 bytes, 48 lines, ~567 tokens
-- `.claude/projects/-root/memory/projects.md` — 1,683 bytes, 39 lines, ~421 tokens
-- `.claude/projects/-root/memory/work-log.md` — 900 bytes, 23 lines, ~225 tokens
-- `.claude/projects/-root/memory/mastercommander-plans.md` — 759 bytes, 13 lines, ~190 tokens
+### Shared Memory (11.6KB / ~2,986 tokens)
+- `.claude/projects/-root/memory/MEMORY.md` — 5,118 bytes, 92 lines, ~1,280 tokens
+- `.claude/projects/-root/memory/projects.md` — 1,703 bytes, 39 lines, ~426 tokens
+- `.claude/projects/-root/memory/cloudflare.md` — 1,482 bytes, 30 lines, ~371 tokens
+- `.claude/projects/-root/memory/ecc-patterns.md` — 1,302 bytes, 26 lines, ~326 tokens
+- `.claude/projects/-root/memory/infrastructure.md` — 1,089 bytes, 24 lines, ~273 tokens
+- `.claude/projects/-root/memory/work-log.md` — 865 bytes, 22 lines, ~217 tokens
+- `.claude/projects/-root/memory/mastercommander-plans.md` — 369 bytes, 7 lines, ~93 tokens
 
 ## Optimizations
-- LARGE FILE: overlord/CLAUDE.md (16.8KB / ~4,308 tokens) — consider condensing
-- GOOD CACHE HIT RATE: 95% — sessions reusing cached context efficiently
-- HIGH SESSION VOLUME: ~1055 calls/day — consider consolidating tasks into fewer sessions
+- GOOD CACHE HIT RATE: 94% — sessions reusing cached context efficiently
+- HIGH SESSION VOLUME: ~391 calls/day — consider consolidating tasks into fewer sessions
 
-*Generated 2026-03-04 10:57*
+*Generated 2026-03-08 08:00*

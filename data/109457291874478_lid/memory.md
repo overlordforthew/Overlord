@@ -11,6 +11,7 @@ Created: 2026-02-21T16:21:47.501Z
 - Project uses Node.js, Baileys (WhatsApp), WebSocket for SignalK
 - Laptop: Windows, NVIDIA GeForce MX 150 (2GB VRAM — inference only, not suitable for LLM training)
 - Elmo's server (onlydrafting.com): has a 6GB NVIDIA GPU — capable of LLM training runs (nanochat scale), suitable for autoresearch loop
+- autoresearch (Karpathy) already running on Elmo's server
 
 ## Preferences
 - Wants Overlord to auto-detect and fix errors from log alerts without being asked — proactive error resolution
@@ -20,6 +21,7 @@ Created: 2026-02-21T16:21:47.501Z
 - Contact: Emiel (+19195008873) — Dutch friend, potential CTO for MasterCommander
 - PERMANENT: After EVERY DM response to Gil, ALWAYS append which model was used at the end of the message (e.g., "Used: claude-opus-4-6"). This applies in ALL router modes (Alpha, Beta, Charlie). ONLY show this to Gil in DMs, never in group chats or to other users. This is a permanent standing order — never remove.
 - Multi-model router active (Alpha/Beta/Charlie modes)
+- STANDING ORDER: Every Friday, deliver a tech intelligence report — top tools, fastest-growing self-hosted/AI/infra projects, and recommendations for what to add to the server stack. Covers self-hosted tools, AI/LLM developments, DevOps trends, and anything relevant to Gil's projects.
 - NEVER respond with "Nothing came to mind" or any empty/dismissive fallback. Always attempt to help, even if context is limited. This is a hard rule across all models.
 
 ## NamiBarden.com (namibarden.com)

@@ -1,0 +1,15 @@
+{
+  "date": "2026-03-13",
+  "generatedAt": "2026-03-13T00:00:00.292Z",
+  "regressions": {
+    "count": 0,
+    "categories": [],
+    "items": []
+  },
+  "friction": {
+    "totalEvents": 0,
+    "byType": {},
+    "topIssue": "none"
+  },
+  "insights": []
+}
