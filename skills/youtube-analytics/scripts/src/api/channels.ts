@@ -70,16 +70,16 @@ export async function getChannel(channelId: string, options: ChannelOptions = {}
     id: item.id || channelId,
     title: item.snippet?.title || '',
     description: item.snippet?.description || '',
-    customUrl: item.snippet?.customUrl,
+    customUrl: item.snippet?.customUrl ?? undefined,
     publishedAt: item.snippet?.publishedAt || '',
-    country: item.snippet?.country,
+    country: item.snippet?.country ?? undefined,
     thumbnails: item.snippet?.thumbnails as ChannelResponse['thumbnails'],
     statistics: {
       viewCount: item.statistics?.viewCount || '0',
       subscriberCount: item.statistics?.subscriberCount || '0',
       videoCount: item.statistics?.videoCount || '0',
     },
-    uploadsPlaylistId: item.contentDetails?.relatedPlaylists?.uploads,
+    uploadsPlaylistId: item.contentDetails?.relatedPlaylists?.uploads ?? undefined,
   };
 
   if (save) {
@@ -126,16 +126,16 @@ export async function getMultipleChannels(channelIds: string[], options: Channel
     id: item.id || '',
     title: item.snippet?.title || '',
     description: item.snippet?.description || '',
-    customUrl: item.snippet?.customUrl,
+    customUrl: item.snippet?.customUrl ?? undefined,
     publishedAt: item.snippet?.publishedAt || '',
-    country: item.snippet?.country,
+    country: item.snippet?.country ?? undefined,
     thumbnails: item.snippet?.thumbnails as ChannelResponse['thumbnails'],
     statistics: {
       viewCount: item.statistics?.viewCount || '0',
       subscriberCount: item.statistics?.subscriberCount || '0',
       videoCount: item.statistics?.videoCount || '0',
     },
-    uploadsPlaylistId: item.contentDetails?.relatedPlaylists?.uploads,
+    uploadsPlaylistId: item.contentDetails?.relatedPlaylists?.uploads ?? undefined,
   }));
 
   if (save) {

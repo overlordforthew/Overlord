@@ -83,14 +83,14 @@ export async function getVideo(videoId: string, options: VideoOptions = {}): Pro
     publishedAt: item.snippet?.publishedAt || '',
     channelId: item.snippet?.channelId || '',
     channelTitle: item.snippet?.channelTitle || '',
-    tags: item.snippet?.tags,
+    tags: item.snippet?.tags ?? undefined,
     thumbnails: item.snippet?.thumbnails as VideoResponse['thumbnails'],
     statistics: {
       viewCount: item.statistics?.viewCount || '0',
       likeCount: item.statistics?.likeCount || '0',
       commentCount: item.statistics?.commentCount || '0',
     },
-    duration: item.contentDetails?.duration,
+    duration: item.contentDetails?.duration ?? undefined,
   };
 
   if (save) {
@@ -140,14 +140,14 @@ export async function getMultipleVideos(videoIds: string[], options: VideoOption
     publishedAt: item.snippet?.publishedAt || '',
     channelId: item.snippet?.channelId || '',
     channelTitle: item.snippet?.channelTitle || '',
-    tags: item.snippet?.tags,
+    tags: item.snippet?.tags ?? undefined,
     thumbnails: item.snippet?.thumbnails as VideoResponse['thumbnails'],
     statistics: {
       viewCount: item.statistics?.viewCount || '0',
       likeCount: item.statistics?.likeCount || '0',
       commentCount: item.statistics?.commentCount || '0',
     },
-    duration: item.contentDetails?.duration,
+    duration: item.contentDetails?.duration ?? undefined,
   }));
 
   if (save) {

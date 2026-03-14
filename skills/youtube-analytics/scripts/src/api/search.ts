@@ -87,9 +87,9 @@ export async function searchVideos(query: string, options: SearchOptions = {}): 
     items: (response.data.items || []).map(item => ({
       id: {
         kind: item.id?.kind || '',
-        videoId: item.id?.videoId,
-        channelId: item.id?.channelId,
-        playlistId: item.id?.playlistId,
+        videoId: item.id?.videoId ?? undefined,
+        channelId: item.id?.channelId ?? undefined,
+        playlistId: item.id?.playlistId ?? undefined,
       },
       snippet: {
         title: item.snippet?.title || '',
@@ -142,9 +142,9 @@ export async function searchChannels(query: string, options: SearchOptions = {})
     items: (response.data.items || []).map(item => ({
       id: {
         kind: item.id?.kind || '',
-        videoId: item.id?.videoId,
-        channelId: item.id?.channelId,
-        playlistId: item.id?.playlistId,
+        videoId: item.id?.videoId ?? undefined,
+        channelId: item.id?.channelId ?? undefined,
+        playlistId: item.id?.playlistId ?? undefined,
       },
       snippet: {
         title: item.snippet?.title || '',
