@@ -2387,6 +2387,7 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
     if (sub === 'run' && taskId) {
       const t = await getTask(taskId);
       if (!t) return `❌ Task ${taskId} not found.`;
+      await setChatState(chatJid, { activeTaskId: taskId, awaitingConfirmation: false });
       executeTaskAutonomously(t, sockRef).catch(() => {});
       return `🔧 Running task [${taskId}] autonomously: ${t.title}`;
     }
