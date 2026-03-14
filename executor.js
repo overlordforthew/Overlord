@@ -15,6 +15,7 @@ import {
   updateTask, addTaskEvent, closeTask, getTask, TaskStatus,
 } from './task-store.js';
 import { setChatState, clearChatState } from './state-store.js';
+import { logRegression } from './meta-learning.js';
 
 const ADMIN_JID = `${process.env.ADMIN_NUMBER}@s.whatsapp.net`;
 const CLAUDE_PATH = process.env.CLAUDE_PATH || 'claude';
@@ -195,6 +196,12 @@ export async function executeTaskAutonomously(task, sockRef) {
       }
 
       await closeTask(task.id, TaskStatus.BLOCKED, `Claude failed: ${err.message}`);
+      logRegression(
+        'claude_error',
+        `Task "${task.title}": ${err.message.substring(0, 150)}`,
+        'Task abandoned after retry budget exhausted',
+        `If Claude spawn fails for "${task.kind}" tasks: check server memory, session state, or simplify the task prompt`
+      ).catch(() => {});
       await safeSend(sockRef, chatJid,
         `❌ Task failed (Claude error): *${task.title}*\n\n${err.message}`
       );
@@ -225,10 +232,15 @@ export async function executeTaskAutonomously(task, sockRef) {
           awaitingConfirmation: true,
           lastQuestion: responseText.substring(0, 300),
         });
+        await safeSend(sockRef, chatJid,
+          `⏳ *Task paused — needs your input:*\n\n${task.title}\n\n${responseText.substring(0, 500)}`
+        );
+      } else {
+        // Another task owns the active slot — notify with manual resume hint so this task isn't lost
+        await safeSend(sockRef, chatJid,
+          `⏳ *Task waiting for approval (background):*\n\n${task.title}\n\n${responseText.substring(0, 400)}\n\n_Reply \`/task run ${task.id}\` when ready to resume._`
+        );
       }
-      await safeSend(sockRef, chatJid,
-        `⏳ *Task paused — needs your input:*\n\n${task.title}\n\n${responseText.substring(0, 500)}`
-      );
       return { status: 'waiting', result: responseText };
     }
 
@@ -238,6 +250,12 @@ export async function executeTaskAutonomously(task, sockRef) {
         blockedReason: responseText.substring(0, 300),
         lastResult: responseText.substring(0, 300),
       });
+      logRegression(
+        'task_blocked',
+        `Task "${task.title}" (${task.kind}): ${responseText.substring(0, 150)}`,
+        'Task marked blocked, needs manual intervention or clearer context',
+        `For "${task.kind}" tasks that block: provide more specific success criteria or break into smaller steps`
+      ).catch(() => {});
       await safeSend(sockRef, chatJid,
         `🚫 *Task blocked:* ${task.title}\n\n${responseText.substring(0, 400)}`
       );
@@ -275,6 +293,12 @@ export async function executeTaskAutonomously(task, sockRef) {
         await closeTask(task.id, TaskStatus.BLOCKED,
           `Verification failed after ${retryCount} attempts: ${verified.error}`
         );
+        logRegression(
+          'deploy_verify',
+          `Task "${task.title}": ${task.verificationUrl} → ${verified.error} (after ${retryCount} attempts)`,
+          'Task exhausted retry budget without successful URL verification',
+          `After deploy of "${task.title}" fails verification: check container startup time, port binding, or Traefik routing before retrying`
+        ).catch(() => {});
         await safeSend(sockRef, chatJid,
           `❌ *Task failed:* ${task.title}\n\nVerification: ${task.verificationUrl} → ${verified.error}\nAfter ${retryCount} attempts.`
         );

@@ -337,3 +337,31 @@ function formatTrendSummary(analysis) {
   }
   return lines.join('\n');
 }
+
+/**
+ * Load yesterday's synthesis and return a compact string for system prompt injection.
+ * Returns empty string if no synthesis available or nothing noteworthy.
+ */
+export async function getYesterdaySynthesisContext() {
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  const file = path.join(SYNTHESIS_DIR, `${yesterday}.json`);
+  try {
+    const synthesis = await readJSON(file, null);
+    if (!synthesis) return '';
+
+    const lines = [];
+    if (synthesis.insights?.length > 0) {
+      lines.push('[YESTERDAY\'S LEARNINGS]');
+      for (const insight of synthesis.insights) lines.push(`• ${insight}`);
+    }
+    if (synthesis.regressions?.items?.length > 0) {
+      if (lines.length === 0) lines.push('[YESTERDAY\'S LEARNINGS]');
+      for (const item of synthesis.regressions.items) {
+        lines.push(`• Avoid [${item.category}]: ${item.avoidance}`);
+      }
+    }
+    return lines.length > 0 ? lines.join(' ') : '';
+  } catch {
+    return '';
+  }
+}
