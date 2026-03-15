@@ -135,6 +135,14 @@
       "memoryUsagePct": 27.9,
       "containersRunning": 21,
       "frictionEvents": 23
+    },
+    {
+      "date": "2026-03-15",
+      "timestamp": "2026-03-15T00:15:00.403Z",
+      "diskUsagePct": 51,
+      "memoryUsagePct": 41.4,
+      "containersRunning": 24,
+      "frictionEvents": 3
     }
   ]
 }
