@@ -698,5 +698,21 @@ export async function startScheduler(sockRef) {
   }, { timezone: 'America/Puerto_Rico' });
   console.log('🔬 Self-improvement protocol scheduled (8:30 PM AST / 00:30 UTC)');
 
+  // 11. File-based outbox — send messages queued by external scripts
+  const outboxPath = '/tmp/wa-outbox.json';
+  cron.schedule('*/10 * * * * *', async () => {
+    try {
+      const { readFileSync, unlinkSync, existsSync } = await import('fs');
+      if (!existsSync(outboxPath)) return;
+      const raw = readFileSync(outboxPath, 'utf-8');
+      unlinkSync(outboxPath);
+      const msg = JSON.parse(raw);
+      if (msg.jid && msg.text && (Date.now() - msg.ts) < 300000) {
+        await sockRef.sock.sendMessage(msg.jid, { text: msg.text.substring(0, 3900) });
+        console.log(`📤 Outbox: sent ${msg.text.length} chars to ${msg.jid}`);
+      }
+    } catch { /* ignore */ }
+  });
+
   console.log('⏰ Scheduler ready');
 }
