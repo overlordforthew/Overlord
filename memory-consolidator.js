@@ -82,7 +82,7 @@ async function autoAssociate() {
     FROM semantic_memories a, semantic_memories b
     WHERE a.is_active = TRUE AND b.is_active = TRUE
       AND a.id < b.id
-      AND array_length(a.tags & b.tags, 1) >= 2
+      AND (SELECT COUNT(*) FROM unnest(a.tags) t1 JOIN unnest(b.tags) t2 ON t1 = t2) >= 2
       AND NOT EXISTS (
         SELECT 1 FROM memory_associations
         WHERE source_type = 'semantic' AND source_id = a.id
