@@ -1790,8 +1790,6 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
   const isAdminUser = profile.role === 'admin';
   const isPower = profile.role === 'power';
   const memory = await getMemory(chatJid, parsed.text || '');
-  // Ensure context is loaded from DB if local file is empty (e.g. after restart)
-  await conversationContext.ensureContext(chatJid);
   // Tiered context depth: admin DMs get full history for continuity; groups and
   // regular DMs get a shallower window to keep token costs down.
   const contextDepth = isAdminUser && !isGroup(chatJid) ? 20 : 8;
@@ -3542,6 +3540,9 @@ async function startBot() {
             logger.info(`🎤 Transcribed: "${transcription.substring(0, 100)}..."`);
           }
         }
+
+        // Restore context from DB if empty (e.g. after restart) — must run BEFORE adding new message
+        await conversationContext.ensureContext(chatJid);
 
         // Add ALL messages to context (even ones we won't respond to)
         conversationContext.add(chatJid, {
