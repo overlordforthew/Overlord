@@ -45,6 +45,9 @@ const GH_SEARCH_CATEGORIES = [
   { label: 'Web Scraping & Data', queries: ['web scraper ai', 'data extraction tool', 'headless browser automation'] },
   { label: 'Content & Marketing', queries: ['ai content creator', 'seo tool ai', 'social media automation'] },
   { label: 'Marine & Boat Tech', queries: ['signalk plugin', 'marine iot', 'boat monitoring system', 'nmea 2000'] },
+  { label: 'AI Agent Security', queries: ['prompt injection defense', 'llm security tool', 'ai agent guardrails', 'prompt firewall'] },
+  { label: 'Container & Server Security', queries: ['docker security scanner', 'container vulnerability', 'self-hosted security audit', 'server hardening tool'] },
+  { label: 'API & Supply Chain Security', queries: ['api security tool', 'dependency vulnerability scanner', 'supply chain security', 'secrets detection tool'] },
 ];
 
 const STACK_KEYWORDS = [
@@ -53,6 +56,8 @@ const STACK_KEYWORDS = [
   'bot', 'webhook', 'skill', 'agent', 'scraping', 'browser', 'chromium',
   'stripe', 'payment', 'boat', 'marine', 'signalk', 'sailing', 'yacht',
   'seo', 'newsletter', 'email', 'calendar', 'video', 'tts', 'transcription',
+  'security', 'injection', 'vulnerability', 'firewall', 'guardrail', 'scanner',
+  'audit', 'hardening', 'secrets', 'cve', 'sbom', 'supply-chain',
 ];
 
 const WEEK_MS = 7 * 86400000;

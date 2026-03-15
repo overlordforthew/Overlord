@@ -12,6 +12,7 @@ Quick reference of all available skills and their tools. Read the SKILL.md in ea
 | **API Integrations** | `skills/api-integrations/` | `crypto.py`, `weather.py`, `news.py`, `exchange.py` | Live crypto prices, weather, news headlines, currency conversion |
 | **Data Analysis** | `skills/data-analysis/` | `analyze.py`, `chart.py` | Process CSV/JSON, statistics, filtering, chart generation |
 | **X Trends** | `skills/x-trends/` | `xtrends.py` | X/Twitter trending topics, tweet search, user profiles |
+| **Database Admin** | `skills/database-admin/` | `db-admin.sh` | Unified PostgreSQL management — health, sizes, queries, backups, slow query analysis |
 
 ## Skills with Instructions Only
 
@@ -48,6 +49,12 @@ Installed via `llm` CLI + `llm-openrouter` plugin. One API key, hundreds of mode
 
 ## Quick Examples
 ```bash
+# Database health across all containers
+/app/skills/database-admin/scripts/db-admin.sh health
+
+# Table sizes in overlord
+/app/skills/database-admin/scripts/db-admin.sh sizes overlord-db overlord
+
 # Check if all services are running
 /app/skills/monitoring/service-check.sh --brief
 
