@@ -59,22 +59,39 @@ export async function ensureSemanticSchema() {
       )
     `);
 
-    // Add search_vector column if missing (generated column)
+    // Add search_vector column if missing (maintained via trigger — array_to_string not immutable)
     const { rows: svCol } = await client.query(`
       SELECT 1 FROM information_schema.columns
       WHERE table_name = 'semantic_memories' AND column_name = 'search_vector'
     `);
     if (!svCol.length) {
-      await client.query(`
-        ALTER TABLE semantic_memories ADD COLUMN search_vector TSVECTOR
-        GENERATED ALWAYS AS (
-          setweight(to_tsvector('english', coalesce(topic, '')), 'A') ||
-          setweight(to_tsvector('english', coalesce(summary, '')), 'B') ||
-          setweight(to_tsvector('english', coalesce(content, '')), 'C') ||
-          setweight(to_tsvector('english', coalesce(array_to_string(tags, ' '), '')), 'B')
-        ) STORED
-      `);
+      await client.query(`ALTER TABLE semantic_memories ADD COLUMN search_vector TSVECTOR`);
     }
+
+    // Create trigger function to maintain search_vector
+    await client.query(`
+      CREATE OR REPLACE FUNCTION semantic_search_vector_update() RETURNS trigger AS $$
+      BEGIN
+        NEW.search_vector :=
+          setweight(to_tsvector('english', coalesce(NEW.topic, '')), 'A') ||
+          setweight(to_tsvector('english', coalesce(NEW.summary, '')), 'B') ||
+          setweight(to_tsvector('english', coalesce(NEW.content, '')), 'C') ||
+          setweight(to_tsvector('english', coalesce(array_to_string(NEW.tags, ' '), '')), 'B');
+        RETURN NEW;
+      END
+      $$ LANGUAGE plpgsql
+    `);
+    await client.query(`
+      DROP TRIGGER IF EXISTS semantic_search_vector_trigger ON semantic_memories
+    `);
+    await client.query(`
+      CREATE TRIGGER semantic_search_vector_trigger
+      BEFORE INSERT OR UPDATE ON semantic_memories
+      FOR EACH ROW EXECUTE FUNCTION semantic_search_vector_update()
+    `);
+
+    // Backfill search_vector for existing rows (fires the trigger)
+    await client.query(`UPDATE semantic_memories SET updated_at = updated_at WHERE search_vector IS NULL`);
 
     await client.query(`CREATE INDEX IF NOT EXISTS idx_semantic_category ON semantic_memories(category)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_semantic_topic ON semantic_memories(topic)`);
@@ -105,14 +122,31 @@ export async function ensureSemanticSchema() {
       WHERE table_name = 'procedural_memories' AND column_name = 'search_vector'
     `);
     if (!pvCol.length) {
-      await client.query(`
-        ALTER TABLE procedural_memories ADD COLUMN search_vector TSVECTOR
-        GENERATED ALWAYS AS (
-          setweight(to_tsvector('english', coalesce(trigger_pattern, '')), 'A') ||
-          setweight(to_tsvector('english', coalesce(procedure, '')), 'C')
-        ) STORED
-      `);
+      await client.query(`ALTER TABLE procedural_memories ADD COLUMN search_vector TSVECTOR`);
     }
+
+    // Create trigger function for procedural search_vector
+    await client.query(`
+      CREATE OR REPLACE FUNCTION procedural_search_vector_update() RETURNS trigger AS $$
+      BEGIN
+        NEW.search_vector :=
+          setweight(to_tsvector('english', coalesce(NEW.trigger_pattern, '')), 'A') ||
+          setweight(to_tsvector('english', coalesce(NEW.procedure, '')), 'C');
+        RETURN NEW;
+      END
+      $$ LANGUAGE plpgsql
+    `);
+    await client.query(`
+      DROP TRIGGER IF EXISTS procedural_search_vector_trigger ON procedural_memories
+    `);
+    await client.query(`
+      CREATE TRIGGER procedural_search_vector_trigger
+      BEFORE INSERT OR UPDATE ON procedural_memories
+      FOR EACH ROW EXECUTE FUNCTION procedural_search_vector_update()
+    `);
+
+    // Backfill search_vector for existing rows (fires the trigger)
+    await client.query(`UPDATE procedural_memories SET updated_at = updated_at WHERE search_vector IS NULL`);
 
     await client.query(`CREATE INDEX IF NOT EXISTS idx_procedural_category ON procedural_memories(category)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_procedural_fts ON procedural_memories USING gin(search_vector)`);
