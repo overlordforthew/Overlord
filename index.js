@@ -89,6 +89,73 @@ const ADMIN_FALLBACK_ESCALATION_PATTERNS = [
 // Matches messages about operational/infrastructure topics (used for task auto-creation)
 const OPERATIONAL_CONTEXT_PATTERNS = /\b(error|errors|failed|failure|broken|issue|problem|repair|fix|deploy|restart|rebuild|container|docker|database|db|auth|ssl|nginx|traefik|logs?|server|push|commit|migrate|health check)\b/i;
 
+// ============================================================
+// SANITIZED SUBPROCESS ENVIRONMENT (OpenCrow pattern)
+// Only pass safe env vars — never leak API keys to child processes
+// ============================================================
+const SAFE_ENV_KEYS = new Set([
+  'HOME', 'USER', 'PATH', 'SHELL', 'TERM', 'LANG', 'LC_ALL', 'TMPDIR', 'TMP',
+  'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME', 'XDG_RUNTIME_DIR',
+  'HOSTNAME', 'PWD', 'LOGNAME',
+  // Claude CLI needs these
+  'CLAUDE_CODE_MAX_OUTPUT_TOKENS', 'NODE_OPTIONS',
+]);
+
+function buildSafeEnv() {
+  const safe = {};
+  for (const key of SAFE_ENV_KEYS) {
+    if (process.env[key]) safe[key] = process.env[key];
+  }
+  // Required overrides
+  safe.TERM = 'dumb';
+  safe.NODE_OPTIONS = '--max-old-space-size=1024';
+  safe.CLAUDE_CODE_MAX_OUTPUT_TOKENS = '16000';
+  // Claude CLI needs HOME for config/auth
+  safe.HOME = process.env.HOME || '/root';
+  safe.PATH = process.env.PATH || '/usr/local/bin:/usr/bin:/bin';
+  return safe;
+}
+
+// ============================================================
+// LOOP DETECTION (OpenCrow pattern)
+// Detect stuck Claude sessions by tracking repeated outputs
+// ============================================================
+const loopDetector = {
+  sessions: new Map(), // chatJid -> { hashes: string[], warned: boolean }
+
+  hash(text) {
+    return crypto.createHash('md5').update(text || '').digest('hex').slice(0, 8);
+  },
+
+  track(chatJid, responseText) {
+    if (!responseText) return { looping: false };
+    const h = this.hash(responseText);
+    if (!this.sessions.has(chatJid)) {
+      this.sessions.set(chatJid, { hashes: [], warned: false });
+    }
+    const session = this.sessions.get(chatJid);
+    session.hashes.push(h);
+    // Keep sliding window of last 10
+    if (session.hashes.length > 10) session.hashes.shift();
+
+    // Count identical hashes in window
+    const count = session.hashes.filter(x => x === h).length;
+    if (count >= 5) {
+      session.hashes = [];
+      return { looping: true, action: 'break', reason: `Same response repeated ${count}x` };
+    }
+    if (count >= 3 && !session.warned) {
+      session.warned = true;
+      return { looping: true, action: 'warn', reason: `Response repeated ${count}x` };
+    }
+    return { looping: false };
+  },
+
+  reset(chatJid) {
+    this.sessions.delete(chatJid);
+  },
+};
+
 /** Shell-free HTTPS JSON request helper */
 function httpJson(url, { method = 'GET', headers = {}, body = null, timeout = 10000 } = {}) {
   return new Promise((resolve, reject) => {
@@ -1878,6 +1945,8 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
   // Three-tier access: admin (all tools), power (scoped tools), user (read-only)
   let workDir;
   if (isAdminUser) {
+    // Admin: bypass all permission prompts (OpenCrow pattern — admin only, never for other users)
+    args.push('--dangerously-skip-permissions');
     // Admin: no --allowedTools (full access), run from /projects
     workDir = '/projects';
     args.push('--add-dir', cDir);
@@ -2082,7 +2151,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
         cwd: workDir,
         timeout: route.taskType === 'complex' ? CONFIG.maxResponseTime : CONFIG.chatResponseTimeout,
         killSignal: 'SIGKILL',
-        env: { ...process.env, TERM: 'dumb', NODE_OPTIONS: '--max-old-space-size=1024', CLAUDE_CODE_MAX_OUTPUT_TOKENS: '16000' },
+        env: buildSafeEnv(),
         maxBuffer: 10 * 1024 * 1024,
       });
 
@@ -2219,11 +2288,26 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       });
     });
 
-    if (!result.retry) return {
-      text: result.text, modelId: route.model?.id || 'unknown',
-      // Training metadata for conversation store
-      _training: { sysPrompt, recentContext, memory, taskType: route.taskType, routeVia: route.via },
-    };
+    if (!result.retry) {
+      // Loop detection: track response patterns per chat
+      const loop = loopDetector.track(chatJid, result.text);
+      if (loop.looping && loop.action === 'break') {
+        logger.warn({ chatJid, reason: loop.reason }, 'Loop detected — breaking stuck session');
+        loopDetector.reset(chatJid);
+        return {
+          text: '⚠️ I seem to be stuck in a loop. Let me reset — try rephrasing your request.',
+          modelId: route.model?.id || 'unknown',
+        };
+      }
+      if (loop.looping && loop.action === 'warn') {
+        logger.warn({ chatJid, reason: loop.reason }, 'Possible loop detected');
+      }
+      return {
+        text: result.text, modelId: route.model?.id || 'unknown',
+        // Training metadata for conversation store
+        _training: { sysPrompt, recentContext, memory, taskType: route.taskType, routeVia: route.via },
+      };
+    }
 
     // Brief pause before retry (exponential backoff: 5s, 15s)
     const backoff = attempt * 5000;
