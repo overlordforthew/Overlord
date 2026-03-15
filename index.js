@@ -2293,14 +2293,22 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
         ? 'Read,Write,Edit,Bash,Glob,Grep,WebSearch,WebFetch,Agent,NotebookEdit,TodoRead,TodoWrite,TaskCreate,TaskUpdate'
         : isPower ? 'Read,Write,Edit,Bash,Glob,Grep,WebSearch,WebFetch' : 'Read,WebSearch,WebFetch');
 
+      // Build additionalDirs — must include all project dirs for power users
+      const sdkAdditionalDirs = [cDir];
+      if (isPower && profile.projects?.length > 0) {
+        for (const proj of profile.projects) {
+          sdkAdditionalDirs.push(`/projects/${proj}`);
+        }
+      }
+
       const sdkResult = await askClaudeSDK({
         prompt: fullPrompt,
         systemPrompt: sysPrompt,
         model: route.model.id,
         allowedTools: toolsList,
-        maxTurns: route.maxTurns || 100,
+        maxTurns: route.maxTurns || (isPower ? 60 : 100),
         cwd: workDir,
-        additionalDirs: [cDir],
+        additionalDirs: sdkAdditionalDirs,
         chatJid,
         timeoutMs: route.taskType === 'complex' ? CONFIG.maxResponseTime : CONFIG.chatResponseTimeout,
       });

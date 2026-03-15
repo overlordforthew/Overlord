@@ -3,7 +3,12 @@
 # Each cron job writes its timestamp to /root/overlord/data/cron-heartbeats/<job-name>
 # This script checks each against expected intervals (with 50% grace)
 
-HEARTBEAT_DIR="/root/overlord/data/cron-heartbeats"
+# Use /app/data inside container, /root/overlord/data on host
+if [ -d "/app/data" ]; then
+  HEARTBEAT_DIR="/app/data/cron-heartbeats"
+else
+  HEARTBEAT_DIR="/root/overlord/data/cron-heartbeats"
+fi
 NOW=$(date +%s)
 STALE_JOBS=""
 

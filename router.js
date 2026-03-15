@@ -414,9 +414,10 @@ Reply with ONLY one word: COMPLEX, MEDIUM, or SIMPLE`;
 
   try {
     // Use Haiku via Claude CLI for faster, more reliable classification (5s timeout)
+    const claudePath = process.env.CLAUDE_PATH || 'claude';
     const classification = await new Promise((resolve, reject) => {
       let stdout = '';
-      const proc = spawn('claude', [
+      const proc = spawn(claudePath, [
         '-p', '--model', 'claude-haiku-4-5', '--max-turns', '1', '--output-format', 'text',
       ], { timeout: 5000, env: { ...process.env, TERM: 'dumb' } });
       proc.stdin.write(classifyPrompt);
