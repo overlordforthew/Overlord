@@ -1945,9 +1945,9 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
   // Three-tier access: admin (all tools), power (scoped tools), user (read-only)
   let workDir;
   if (isAdminUser) {
-    // Admin: bypass all permission prompts (OpenCrow pattern — admin only, never for other users)
-    args.push('--dangerously-skip-permissions');
-    // Admin: no --allowedTools (full access), run from /projects
+    // Admin: all tools auto-approved (Claude CLI blocks --dangerously-skip-permissions for root)
+    args.push('--allowedTools', 'Read,Write,Edit,Bash,Glob,Grep,WebSearch,WebFetch,Agent,NotebookEdit,TodoRead,TodoWrite,TaskCreate,TaskUpdate');
+    // Admin: full tool access, run from /projects
     workDir = '/projects';
     args.push('--add-dir', cDir);
   } else if (isPower) {
