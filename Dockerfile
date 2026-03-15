@@ -60,7 +60,7 @@ COPY package.json ./
 RUN npm install
 
 # Copy app files
-COPY index.js server.js scheduler.js meta-learning.js router.js session-guard.js heartbeat.js CLAUDE.md traefik-watcher.sh task-store.js state-store.js executor.js policy.js conversation-store.js memory-store.js memory-curator.js semantic-store.js memory-consolidator.js ./
+COPY index.js server.js scheduler.js meta-learning.js router.js session-guard.js heartbeat.js CLAUDE.md traefik-watcher.sh task-store.js state-store.js executor.js policy.js conversation-store.js memory-store.js memory-curator.js semantic-store.js memory-consolidator.js work-queue.js ssrf-guard.js ./
 
 # Copy skills and scripts into container
 COPY skills/ ./skills/
