@@ -44,7 +44,7 @@ PCT=$((USED_MB * 100 / LIMIT_MB))
 if [ "$PCT" -ge "$THRESHOLD_PCT" ]; then
   echo "[memory-monitor] WARNING: $CONTAINER at ${PCT}% memory (${USED_MB}MB / ${LIMIT_MB}MB)"
   # Send alert via Overlord API
-  WEBHOOK_TOKEN=$(grep '^WEBHOOK_TOKEN=' /root/overlord/.env 2>/dev/null | cut -d= -f2 | tr -d "'\"")
+  WEBHOOK_TOKEN=$(grep '^WEBHOOK_TOKEN=' /root/overlord/.env 2>/dev/null | cut -d= -f2 | tr -d "'\"" || true)
   if [ -n "$WEBHOOK_TOKEN" ]; then
     curl -sS -X POST http://localhost:3001/api/send \
       -H "Authorization: Bearer $WEBHOOK_TOKEN" \

@@ -213,8 +213,8 @@ const CONFIG = {
   claudePath: process.env.CLAUDE_PATH || 'claude',
   claudeModel: process.env.CLAUDE_MODEL || '',
   routerMode: process.env.ROUTER_MODE || 'alpha',
-  maxResponseTime: 900_000,  // 15 min for complex tasks (page creation, multi-file edits)
-  chatResponseTimeout: 900_000, // 15 min — matched to maxResponseTime; short continuation messages ("Yes") often trigger complex work
+  maxResponseTime: 300_000,  // 5 min — matches session guard timeout; longer tasks should be done from Claude Code
+  chatResponseTimeout: 300_000, // 5 min — matched to maxResponseTime
 
   // ---- RESPONSE BEHAVIOR ----
   // Mode: 'all' = respond to every message
