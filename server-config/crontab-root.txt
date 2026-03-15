@@ -17,3 +17,6 @@
 # Rotate Cloudflare API token every 90 days (1st of Jan/Apr/Jul/Oct at 4am)
 # Weekly token dashboard (Sunday 8am)
 0 */2 * * * bash /root/.claude/enforce-effort.sh >> /var/log/claude-effort.log 2>&1
+
+# Clean Overlord container Claude CLI session caches every 12 hours
+17 */12 * * * docker exec overlord find /root/.claude/projects/ -maxdepth 1 -type d \! -name 'projects' -exec rm -rf {} + 2>/dev/null

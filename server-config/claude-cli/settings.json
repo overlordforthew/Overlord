@@ -28,15 +28,7 @@
     "deny": [],
     "defaultMode": "dontAsk"
   },
-  "model": "opusplan",
-  "effortLevel": "high",
-  "statusLine": {
-    "type": "command",
-    "command": "bash /root/.claude/statusline-command.sh"
-  },
-  "enabledPlugins": {
-    "frontend-design@claude-plugins-official": true
-  },
+  "model": "claude-opus-4-6",
   "hooks": {
     "PostToolUse": [
       {
@@ -49,5 +41,13 @@
         ]
       }
     ]
-  }
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash /root/.claude/statusline-command.sh"
+  },
+  "enabledPlugins": {
+    "frontend-design@claude-plugins-official": true
+  },
+  "effortLevel": "high"
 }
