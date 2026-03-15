@@ -8,6 +8,7 @@ import pg from 'pg';
 import fs from 'fs/promises';
 import { readFileSync } from 'fs';
 import path from 'path';
+import { ensureSemanticSchema } from './semantic-store.js';
 
 // Read DB password: env var first, fallback to mounted secret file
 let _dbPass = process.env.CONV_DB_PASS || process.env.MEMORY_DB_PASS;
@@ -70,6 +71,9 @@ export async function ensureSchema() {
   } finally {
     client.release();
   }
+
+  // Create semantic + procedural + association tables
+  await ensureSemanticSchema();
 }
 
 // ── STORE ─────────────────────────────────────────────────────────────────────

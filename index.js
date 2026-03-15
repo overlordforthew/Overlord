@@ -74,6 +74,7 @@ import {
   getMemoryStats,
 } from './memory-store.js';
 import { extractAndStore, scoreRelevance } from './memory-curator.js';
+import { getSemanticContext } from './semantic-store.js';
 
 const execAsync = promisify(exec);
 const ADMIN_FALLBACK_ESCALATION_PATTERNS = [
@@ -130,7 +131,7 @@ const CONFIG = {
   claudeModel: process.env.CLAUDE_MODEL || '',
   routerMode: process.env.ROUTER_MODE || 'alpha',
   maxResponseTime: 900_000,  // 15 min for complex tasks (page creation, multi-file edits)
-  chatResponseTimeout: 600_000, // 10 min for normal chat responses (Opus + tool use regularly exceeds 5 min)
+  chatResponseTimeout: 900_000, // 15 min — matched to maxResponseTime; short continuation messages ("Yes") often trigger complex work
 
   // ---- RESPONSE BEHAVIOR ----
   // Mode: 'all' = respond to every message
@@ -1712,6 +1713,18 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
   prompt.push(`[MEMORY]`);
   prompt.push(memory);
   prompt.push('');
+
+  // Inject semantic system knowledge relevant to the current message
+  try {
+    const semanticCtx = await getSemanticContext(parsed.text || '');
+    if (semanticCtx) {
+      prompt.push(`[SYSTEM KNOWLEDGE]`);
+      prompt.push(semanticCtx);
+      prompt.push('');
+    }
+  } catch (err) {
+    logger.warn({ err: err.message }, '[semantic] Context injection failed');
+  }
 
   prompt.push(`[RECENT CONVERSATION]`);
   prompt.push(recentContext);
