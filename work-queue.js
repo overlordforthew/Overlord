@@ -21,13 +21,13 @@ const MEMORY_LIMITS = {
   complex: 1200,  // 1.2 GB — still leaves headroom for bot + OS
 };
 
-// Check if systemd-run is available (for cgroup limits)
+// Check if systemd-run can actually create scopes (not just if binary exists)
 let hasSystemdRun = false;
 try {
-  execSync('which systemd-run', { stdio: 'pipe' });
+  execSync('systemd-run --scope --quiet -p MemoryMax=100M true', { stdio: 'pipe', timeout: 5000 });
   hasSystemdRun = true;
 } catch {
-  // Not available (e.g., inside Docker without systemd)
+  // Not available (e.g., inside Docker without systemd as init)
 }
 
 // ============================================================
