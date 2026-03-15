@@ -3643,6 +3643,43 @@ async function startBot() {
           // Typing indicator
           if (CONFIG.typingIndicator) await currentSock.sendPresenceUpdate('composing', chatJid).catch(() => {});
 
+          // ---- ADMIN REPAIR INTERCEPT ----
+          // When Gil says "repair"/"fix" (short trigger), spawn an autonomous repair task
+          // instead of going through conversational Claude (which just talks about fixing)
+          if (isAdmin(last.senderJid) && !isGroup(chatJid)) {
+            const repairTrigger = /^(repair|fix|fix it|fix this|repair this)\.?$/i;
+            const msgText = (last.parsed.text || '').trim();
+            if (repairTrigger.test(msgText)) {
+              const errorContext = last.parsed.quotedText || '';
+              const taskTitle = errorContext
+                ? `Repair: ${errorContext.substring(0, 80)}`
+                : 'Repair: investigate and fix latest errors';
+              const task = await createTask({
+                title: taskTitle,
+                kind: 'repair',
+                chatJid,
+                owner: 'Gil',
+                priority: 'high',
+                riskLevel: 'low',
+                successCriteria: 'Error resolved, service healthy, no new errors in logs',
+                nextAction: errorContext
+                  ? `Error forwarded by Gil: "${errorContext.substring(0, 500)}"\n\nInvestigate this specific error. Check container logs, identify root cause, fix it, verify recovery.`
+                  : 'Check all container logs for recent errors. Identify root cause, fix it, verify recovery.',
+                source: 'user',
+              }).catch(e => { logger.error({ err: e.message }, 'Failed to create repair task'); return null; });
+
+              if (task) {
+                await currentSock.sendMessage(chatJid, { text: `🔧 Auto-repairing: ${taskTitle}` }).catch(() => {});
+                executeTaskAutonomously(task, sockRef).catch(err => {
+                  logger.error({ taskId: task.id, err: err.message }, 'Repair task failed');
+                });
+                await logMessage(chatJid, senderJid, 'bot', `🔧 Auto-repairing: ${taskTitle}`);
+                if (CONFIG.typingIndicator) await currentSock.sendPresenceUpdate('paused', chatJid).catch(() => {});
+                return; // skip conversational Claude
+              }
+            }
+          }
+
           // Send "working on it" ack for complex power user tasks (page creation, multi-file edits)
           // This prevents the user thinking the bot is dead during long-running operations
           const senderProfileForAck = getUserProfile(last.senderJid);
