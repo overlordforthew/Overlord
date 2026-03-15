@@ -7,7 +7,7 @@
 0 */6 * * * /root/projects/shannon/scripts/refresh-token.sh
 0 */6 * * * /usr/bin/claude auth status > /dev/null 2>&1
 0 8 * * 0 /root/overlord/scripts/token-dashboard.sh >> /root/overlord/logs/token-dashboard.log 2>&1
-30 3 * * * /root/overlord/scripts/memory-cleanup.sh >> /root/overlord/logs/memory-cleanup.log 2>&1
+30 3 * * * cd /root/overlord && node memory-consolidator.js >> /root/overlord/logs/memory-consolidate.log 2>&1
 55 23 * * * /root/overlord/scripts/auto-journal.sh >> /root/overlord/logs/journal.log 2>&1
 55 2 * * * /root/overlord/scripts/token-aggregate.sh >> /root/overlord/logs/token-aggregate.log 2>&1
 5 */6 * * * /root/projects/shannon/sync-oauth.sh > /dev/null 2>&1
@@ -20,3 +20,5 @@
 
 # Clean Overlord container Claude CLI session caches every 12 hours
 17 */12 * * * docker exec overlord find /root/.claude/projects/ -maxdepth 1 -type d \! -name 'projects' -exec rm -rf {} + 2>/dev/null
+# Ai Chan self-healing health check — every 30 min
+*/30 * * * * docker exec overlord bash /app/scripts/test-aichan.sh --heal >> /var/log/aichan-health.log 2>&1
