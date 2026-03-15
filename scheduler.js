@@ -678,5 +678,25 @@ export async function startScheduler(sockRef) {
   });
   console.log('📊 Weekly AI repo intelligence scheduled (Friday 10:00 AM AST / 14:00 UTC)');
 
+  // 10. Nightly Self-Improvement Protocol — 8:30pm AST (= 00:30 UTC)
+  // Runs after daily synthesis (8pm), before Gil's Starlink goes off at 9pm
+  cron.schedule('30 0 * * *', async () => {
+    try {
+      const { execSync } = await import('child_process');
+      const report = execSync('node /app/scripts/self-improve.mjs', {
+        timeout: 120000,
+        encoding: 'utf-8',
+        env: { ...process.env },
+      }).trim();
+      if (report && report.length > 50) {
+        await sockRef.sock.sendMessage(ADMIN_JID, { text: report });
+        console.log('🔬 Sent nightly self-improvement report');
+      }
+    } catch (err) {
+      console.error('Self-improvement report error:', err.message);
+    }
+  }, { timezone: 'America/Puerto_Rico' });
+  console.log('🔬 Self-improvement protocol scheduled (8:30 PM AST / 00:30 UTC)');
+
   console.log('⏰ Scheduler ready');
 }
