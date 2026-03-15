@@ -76,12 +76,25 @@ import {
 import { extractAndStore, scoreRelevance } from './memory-curator.js';
 import { getSemanticContext } from './semantic-store.js';
 import { heavyQueue, spawnWithMemoryLimit, getMemoryLimit, shouldQueue, getMemoryPressure } from './work-queue.js';
+import { initUsageTracker, logUsage, getTodayUsage, getWeekUsage, getCostTrend, formatCostReport } from './usage-tracker.js';
+import { askClaudeSDK, isSDKEnabled, loadSDK } from './claude-sdk.js';
 
 const execAsync = promisify(exec);
 
 // ---- MESSAGE DEDUP: Prevent processing same message twice (Baileys reconnect duplicates) ----
 const PROCESSED_MSG_IDS = new Set();
 const DEDUP_MAX_SIZE = 500;
+const DEDUP_PERSIST_FILE = './data/last-processed-ids.json';
+const BOOT_TIMESTAMP = Date.now();
+
+// Load persisted message IDs from previous session to seed dedup set
+try {
+  const persisted = JSON.parse(readFileSync(DEDUP_PERSIST_FILE, 'utf-8'));
+  if (Array.isArray(persisted)) {
+    for (const id of persisted.slice(-100)) PROCESSED_MSG_IDS.add(id);
+  }
+} catch { /* no persisted IDs or file missing */ }
+
 function isDuplicateMessage(msgId) {
   if (PROCESSED_MSG_IDS.has(msgId)) return true;
   PROCESSED_MSG_IDS.add(msgId);
@@ -171,6 +184,45 @@ const loopDetector = {
     this.sessions.delete(chatJid);
   },
 };
+
+// ============================================================
+// PROGRESS INDICATOR (A1) — sends composing + "Working on it..." for long responses
+// ============================================================
+class ProgressTimer {
+  constructor(sock, chatJid) {
+    this.sock = sock;
+    this.chatJid = chatJid;
+    this.timers = [];
+    this.stopped = false;
+  }
+
+  start() {
+    if (!CONFIG.typingIndicator) return;
+    // At 15s: send "Working on it..." text
+    this.timers.push(setTimeout(() => {
+      if (this.stopped) return;
+      this.sock.sendMessage(this.chatJid, { text: '⏳ Working on it...' }).catch(() => {});
+    }, 15000));
+    // At 30s: send "Still working on this..."
+    this.timers.push(setTimeout(() => {
+      if (this.stopped) return;
+      this.sock.sendMessage(this.chatJid, { text: '⏳ Still working on this...' }).catch(() => {});
+    }, 30000));
+    // Refresh composing indicator every 20s (WhatsApp auto-expires at ~25s)
+    const refreshComposing = () => {
+      if (this.stopped) return;
+      this.sock.sendPresenceUpdate('composing', this.chatJid).catch(() => {});
+      this.timers.push(setTimeout(refreshComposing, 20000));
+    };
+    refreshComposing();
+  }
+
+  stop() {
+    this.stopped = true;
+    for (const t of this.timers) clearTimeout(t);
+    this.timers = [];
+  }
+}
 
 /** Shell-free HTTPS JSON request helper */
 function httpJson(url, { method = 'GET', headers = {}, body = null, timeout = 10000 } = {}) {
@@ -808,7 +860,20 @@ async function triggerDeploy(projectName) {
       }
     }
 
-    return { success: true, output: output.substring(0, 700) };
+    // Run smoke tests after deploy
+    try {
+      const { stdout: smokeResult } = await execAsync(
+        `bash /app/scripts/smoke-tests.sh "${key}"`,
+        { timeout: 30000 }
+      );
+      output += `\n\n${smokeResult.trim()}`;
+    } catch (smokeErr) {
+      // Smoke test exit 1 = some failures, but stdout still has results
+      if (smokeErr.stdout) output += `\n\n${smokeErr.stdout.trim()}`;
+      else output += `\n\n⚠️ Smoke tests failed to run: ${smokeErr.message.substring(0, 100)}`;
+    }
+
+    return { success: true, output: output.substring(0, 900) };
   } catch (err) {
     return { success: false, error: err.message.substring(0, 300) };
   }
@@ -1235,10 +1300,17 @@ function sanitizeFilePath(filePath) {
 class ConversationContext {
   constructor() {
     this.contexts = new Map();
+    this.summaries = new Map();
+    this._evictionBuffers = new Map(); // chatJid -> evicted messages pending summarization
+    this._summarizing = new Set(); // chatJids currently being summarized (debounce)
   }
 
   _contextFile(chatJid) {
     return path.join(contactDir(chatJid), 'context.json');
+  }
+
+  _summaryFile(chatJid) {
+    return path.join(contactDir(chatJid), 'context-summary.txt');
   }
 
   _load(chatJid) {
@@ -1248,6 +1320,11 @@ class ConversationContext {
       const parsed = JSON.parse(data);
       if (parsed.length > 0) {
         this.contexts.set(chatJid, parsed);
+        // Load summary too
+        try {
+          const summary = readFileSync(this._summaryFile(chatJid), 'utf-8');
+          if (summary.trim()) this.summaries.set(chatJid, summary.trim());
+        } catch { /* no summary yet */ }
         return;
       }
     } catch { /* file missing or corrupt */ }
@@ -1281,8 +1358,68 @@ class ConversationContext {
     this._load(chatJid);
     const ctx = this.contexts.get(chatJid);
     ctx.push({ timestamp: now(), ...entry });
-    while (ctx.length > CONFIG.contextWindowSize) ctx.shift();
+    // Collect evicted messages for summarization
+    const evicted = [];
+    while (ctx.length > CONFIG.contextWindowSize) {
+      evicted.push(ctx.shift());
+    }
+    if (evicted.length > 0) {
+      const buf = this._evictionBuffers.get(chatJid) || [];
+      buf.push(...evicted);
+      this._evictionBuffers.set(chatJid, buf);
+      // Trigger async summarization after 10+ evictions
+      if (buf.length >= 10 && !this._summarizing.has(chatJid)) {
+        this._triggerSummarization(chatJid);
+      }
+    }
     this._save(chatJid);
+  }
+
+  _triggerSummarization(chatJid) {
+    this._summarizing.add(chatJid);
+    const buf = this._evictionBuffers.get(chatJid) || [];
+    this._evictionBuffers.set(chatJid, []); // clear buffer
+
+    // Format evicted messages for summarization
+    const formatted = buf.map(m => {
+      const who = m.role === 'bot' ? CONFIG.botName : (m.senderName || m.sender || 'User');
+      return `${who}: ${m.text || `[${m.type}]`}`;
+    }).join('\n').substring(0, 3000);
+
+    // Use Step Flash (free) for summarization
+    setImmediate(async () => {
+      try {
+        const summary = await callOpenRouter(
+          MODEL_REGISTRY['step-flash'].id,
+          'You summarize conversations. Be concise — 3-5 bullet points max.',
+          `Summarize this conversation segment in 3-5 bullets. Focus on: key topics discussed, decisions made, action items, and important facts about people.\n\n${formatted}`,
+          300
+        );
+        if (summary && summary.length > 20) {
+          const existing = this.summaries.get(chatJid) || '';
+          // Keep the latest 2 summaries (combine old + new, truncate)
+          const combined = existing
+            ? `${summary.trim()}\n\n(Earlier) ${existing}`.substring(0, 1500)
+            : summary.trim();
+          this.summaries.set(chatJid, combined);
+          // Persist to file
+          try {
+            ensureDir(contactDir(chatJid));
+            writeFileSync(this._summaryFile(chatJid), combined);
+          } catch { /* best effort */ }
+          logger.info({ chatJid, summaryLen: combined.length }, 'Summarized evicted context');
+        }
+      } catch (err) {
+        logger.warn({ err: err.message, chatJid }, 'Context summarization failed');
+      } finally {
+        this._summarizing.delete(chatJid);
+      }
+    });
+  }
+
+  getSummary(chatJid) {
+    this._load(chatJid);
+    return this.summaries.get(chatJid) || '';
   }
 
   get(chatJid, limit = CONFIG.contextWindowSize) {
@@ -1827,6 +1964,14 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
     logger.warn({ err: err.message }, '[semantic] Context injection failed');
   }
 
+  // Inject summary of evicted context (older messages that were summarized)
+  const contextSummary = conversationContext.getSummary(chatJid);
+  if (contextSummary) {
+    prompt.push(`[CONVERSATION SUMMARY — older messages]`);
+    prompt.push(contextSummary);
+    prompt.push('');
+  }
+
   prompt.push(`[RECENT CONVERSATION]`);
   prompt.push(recentContext);
   prompt.push('');
@@ -2138,6 +2283,39 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       args.splice(resumeIdx, 2); // remove --resume and its value
       sessionId = null;
       logger.info('🔄 Cleared stale session for Opus fallback (fresh session)');
+    }
+  }
+
+  // ---- SDK PATH (feature-flagged) ----
+  if (isSDKEnabled() && route.via === 'claude-cli') {
+    try {
+      const toolsList = route.tools || (isAdminUser
+        ? 'Read,Write,Edit,Bash,Glob,Grep,WebSearch,WebFetch,Agent,NotebookEdit,TodoRead,TodoWrite,TaskCreate,TaskUpdate'
+        : isPower ? 'Read,Write,Edit,Bash,Glob,Grep,WebSearch,WebFetch' : 'Read,WebSearch,WebFetch');
+
+      const sdkResult = await askClaudeSDK({
+        prompt: fullPrompt,
+        systemPrompt: sysPrompt,
+        model: route.model.id,
+        allowedTools: toolsList,
+        maxTurns: route.maxTurns || 100,
+        cwd: workDir,
+        additionalDirs: [cDir],
+        chatJid,
+        timeoutMs: route.taskType === 'complex' ? CONFIG.maxResponseTime : CONFIG.chatResponseTimeout,
+      });
+
+      // Save session for resume
+      if (sdkResult.sessionId) await saveSessionId(chatJid, sdkResult.sessionId);
+
+      return {
+        text: sdkResult.text || "🤔 Nothing came to mind. Try rephrasing?",
+        modelId: sdkResult.modelId || route.model.id,
+        _training: { sysPrompt, recentContext, memory, taskType: route.taskType, routeVia: 'claude-sdk' },
+      };
+    } catch (err) {
+      logger.warn({ err: err.message }, 'SDK path failed, falling back to CLI');
+      // Fall through to CLI path
     }
   }
 
@@ -2798,7 +2976,15 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
       return `❌ You don't have access to deploy ${project}.`;
     }
     const result = await triggerDeploy(project);
-    if (result.success) return `🚀 Deploy triggered for ${project}\n\n${result.output}`;
+    if (result.success) {
+      // For Coolify auto-deploy projects, schedule a verification check after rebuild
+      const COOLIFY_PROJECTS = { beastmode: 'https://beastmode.namibarden.com', lumina: 'https://lumina.namibarden.com', elmo: 'https://onlydrafting.com', onlyhulls: 'https://onlyhulls.com' };
+      const verifyUrl = COOLIFY_PROJECTS[project.toLowerCase()];
+      if (verifyUrl) {
+        scheduleVerification(verifyUrl, null, project, chatJid, sockRef, 90000);
+      }
+      return `🚀 Deploy triggered for ${project}\n\n${result.output}`;
+    }
     return `❌ Deploy failed: ${result.error}`;
   }
 
@@ -3157,6 +3343,16 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
     }
   }
 
+  // ---- COST DASHBOARD (Admin) ----
+  if (cmd === '/cost' && isAdmin(senderJid)) {
+    try {
+      const [today, week, trend] = await Promise.all([getTodayUsage(), getWeekUsage(), getCostTrend()]);
+      return formatCostReport(today, week, trend);
+    } catch (err) {
+      return `❌ Cost report failed: ${err.message}`;
+    }
+  }
+
   // ---- HELP ----
   if (cmd === '/help') {
     const profile = getUserProfile(senderJid);
@@ -3218,6 +3414,7 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
         '/guard — Prompt Guard status',
         '/stripe — Stripe payments',
         '/cf — Cloudflare DNS & cache',
+        '/cost — Usage & cost dashboard',
         '',
         '📋 Project Management:',
         '/approve <name> — Approve project request',
@@ -3386,6 +3583,9 @@ async function startBot() {
   // Initialize conversation store (training data collection)
   await initConversationStore();
 
+  // Initialize usage tracker (cost dashboard)
+  await initUsageTracker();
+
   // Initialize episodic memory schema (Memex)
   try {
     await ensureMemorySchema();
@@ -3475,10 +3675,13 @@ async function startBot() {
 
         const chatJid = msg.key.remoteJid;
 
-        // Skip stale messages (older than 60 seconds) — prevents processing old messages after reconnect/restart
+        // Skip stale messages — during first 60s after boot, accept messages up to 5 min old
+        // to catch messages received during container restart. After boot window, normal 60s limit.
         const messageAge = Math.floor(Date.now() / 1000) - (msg.messageTimestamp || 0);
-        if (messageAge > 60) {
-          logger.info({ age: messageAge, chat: chatJid }, '⏭️ Skipping stale message (>60s old)');
+        const timeSinceBoot = Date.now() - BOOT_TIMESTAMP;
+        const staleThreshold = timeSinceBoot < 60000 ? 300 : 60; // 5 min during boot window, else 60s
+        if (messageAge > staleThreshold) {
+          logger.info({ age: messageAge, threshold: staleThreshold, chat: chatJid }, '⏭️ Skipping stale message');
           continue;
         }
 
@@ -3705,8 +3908,15 @@ async function startBot() {
           // ---- CLAUDE EXECUTION + POST-PROCESSING ----
           // Extracted into a closure so it can run inline (light) or queued (heavy)
           const _runClaudeAndRespond = async () => {
+            const progressTimer = new ProgressTimer(currentSock, chatJid);
+            progressTimer.start();
             const _claudeStart = Date.now();
-            const claudeResult = await askClaude(chatJid, last.senderJid, last.parsed, last.mediaResult, triage.reason);
+            let claudeResult;
+            try {
+              claudeResult = await askClaude(chatJid, last.senderJid, last.parsed, last.mediaResult, triage.reason);
+            } finally {
+              progressTimer.stop();
+            }
             const _claudeDuration = Date.now() - _claudeStart;
             const response = claudeResult.text;
             const routeModelId = claudeResult.modelId || 'unknown';
@@ -3796,6 +4006,18 @@ async function startBot() {
               responseTimeMs: _claudeDuration,
             }).catch(() => {});
 
+            // Log usage for cost tracking
+            logUsage({
+              chatJid,
+              senderJid: last.senderJid,
+              modelId: routeModelId,
+              promptLength: (claudeResult._training?.sysPrompt || '').length + (claudeResult._training?.recentContext || '').length + (claudeResult._training?.memory || '').length + (last.parsed.text || '').length,
+              responseLength: (response || '').length,
+              responseTimeMs: _claudeDuration,
+              taskType: claudeResult._training?.taskType,
+              routeVia: claudeResult._training?.routeVia,
+            }).catch(() => {});
+
             // ---- MEMEX: async memory extraction ----
             setImmediate(async () => {
               try {
@@ -3847,8 +4069,14 @@ async function startBot() {
 // ============================================================
 // SHUTDOWN
 // ============================================================
-process.on('SIGINT', () => { console.log('\n👋 Bye!'); process.exit(0); });
-process.on('SIGTERM', () => { console.log('\n👋 Bye!'); process.exit(0); });
+function persistDedupIds() {
+  try {
+    const ids = Array.from(PROCESSED_MSG_IDS).slice(-100);
+    writeFileSync(DEDUP_PERSIST_FILE, JSON.stringify(ids));
+  } catch { /* best effort */ }
+}
+process.on('SIGINT', () => { console.log('\n👋 Bye!'); persistDedupIds(); process.exit(0); });
+process.on('SIGTERM', () => { console.log('\n👋 Bye!'); persistDedupIds(); process.exit(0); });
 
 // ============================================================
 // START

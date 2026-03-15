@@ -413,12 +413,23 @@ New message: "${text.substring(0, 500)}"
 Reply with ONLY one word: COMPLEX, MEDIUM, or SIMPLE`;
 
   try {
-    const classification = await callOpenRouter(
-      MODEL_REGISTRY['step-flash'].id,
-      'You are a message classifier. Reply with ONLY one word: COMPLEX, MEDIUM, or SIMPLE.',
-      classifyPrompt,
-      10
-    );
+    // Use Haiku via Claude CLI for faster, more reliable classification (5s timeout)
+    const classification = await new Promise((resolve, reject) => {
+      let stdout = '';
+      const proc = spawn('claude', [
+        '-p', '--model', 'claude-haiku-4-5', '--max-turns', '1', '--output-format', 'text',
+      ], { timeout: 5000, env: { ...process.env, TERM: 'dumb' } });
+      proc.stdin.write(classifyPrompt);
+      proc.stdin.end();
+      proc.stdout.on('data', d => { stdout += d.toString(); });
+      proc.on('close', (code) => {
+        if (stdout.trim()) resolve(stdout.trim());
+        else reject(new Error(`Haiku exited ${code} with no output`));
+      });
+      proc.on('error', reject);
+      // Hard timeout fallback
+      setTimeout(() => { try { proc.kill(); } catch {} reject(new Error('Haiku timeout')); }, 5500);
+    });
 
     // Parse response — extract the classification word
     const cleaned = classification.toUpperCase().trim();
@@ -430,8 +441,8 @@ Reply with ONLY one word: COMPLEX, MEDIUM, or SIMPLE`;
     console.warn(`[Router] Classification unclear: "${classification.substring(0, 100)}" — falling back to regex`);
     return classifyTask(parsed, isAdmin);
   } catch (err) {
-    // API call failed — fall back to regex classifier
-    console.warn(`[Router] Classification failed: ${err.message} — falling back to regex`);
+    // Haiku call failed — fall back to regex classifier
+    console.warn(`[Router] Haiku classification failed: ${err.message} — falling back to regex`);
     return classifyTask(parsed, isAdmin);
   }
 }

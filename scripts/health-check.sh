@@ -56,3 +56,7 @@ fi
 echo ""
 
 echo "=== Health Check Complete ==="
+
+# Cron heartbeat
+mkdir -p /root/overlord/data/cron-heartbeats
+date +%s > /root/overlord/data/cron-heartbeats/health-check

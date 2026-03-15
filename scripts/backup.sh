@@ -74,3 +74,7 @@ find "$BACKUP_DIR" -name "*.sql.gz" -mtime +7 -delete 2>/dev/null
 
 log "Backup complete. Contents of $BACKUP_DIR:"
 ls -lh "$BACKUP_DIR"/ 2>/dev/null
+
+# Cron heartbeat
+mkdir -p /root/overlord/data/cron-heartbeats
+date +%s > /root/overlord/data/cron-heartbeats/backup

@@ -111,3 +111,7 @@ echo ""
 echo "========================================="
 echo "  End of Brief"
 echo "========================================="
+
+# Cron heartbeat
+mkdir -p /root/overlord/data/cron-heartbeats
+date +%s > /root/overlord/data/cron-heartbeats/morning-brief

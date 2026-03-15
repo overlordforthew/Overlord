@@ -23,10 +23,20 @@ import {
 } from './meta-learning.js';
 import { runHeartbeat } from './heartbeat.js';
 import { sweepZombies } from './session-guard.js';
-import { createTask, getActiveTasks, getRecentDoneTasks, formatTaskList, TaskStatus } from './task-store.js';
-import { executeTaskAutonomously } from './executor.js';
+import { createTask, getActiveTasks, getRecentDoneTasks, formatTaskList, TaskStatus, closeTask } from './task-store.js';
+import { executeTaskAutonomously, createAndExecuteTask } from './executor.js';
+import { initErrorWatcher, watchDockerEvents, checkTraefik5xx } from './error-watcher.js';
+import { writeFileSync } from 'fs';
 
 const execAsync = promisify(exec);
+
+function writeHeartbeat(jobName) {
+  try {
+    const dir = '/app/data/cron-heartbeats';
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, jobName), String(Math.floor(Date.now() / 1000)));
+  } catch { /* best effort */ }
+}
 
 const DATA_DIR = process.env.DATA_DIR || './data';
 const ADMIN_JID = `${process.env.ADMIN_NUMBER}@s.whatsapp.net`;
@@ -514,8 +524,20 @@ async function checkContainerLogs(sockRef) {
         const containerName = containerMatch ? containerMatch[1].trim() : 'unknown';
 
         // Check if there's already an active repair task for this specific container
+        // Stale tasks (>15 min in_progress) are auto-closed so they don't block new repairs
         const existing = await getActiveTasks(ADMIN_JID);
-        const alreadyTracked = existing.some(t =>
+        const STALE_MS = 15 * 60 * 1000;
+        for (const t of existing) {
+          if (t.kind === 'repair' && t.project === containerName && t.status === 'in_progress') {
+            const age = Date.now() - new Date(t.startedAt || t.createdAt).getTime();
+            if (age > STALE_MS) {
+              await closeTask(t.id, TaskStatus.DONE, 'Auto-closed: stale repair task (>15min)');
+              console.log(`🧹 Closed stale repair task ${t.id} for ${containerName}`);
+            }
+          }
+        }
+        const freshExisting = await getActiveTasks(ADMIN_JID);
+        const alreadyTracked = freshExisting.some(t =>
           t.kind === 'repair' &&
           t.project === containerName
         );
@@ -571,6 +593,7 @@ export async function startScheduler(sockRef) {
     try {
       const briefing = await generateBriefing();
       await sockRef.sock.sendMessage(ADMIN_JID, { text: briefing });
+      writeHeartbeat('daily-briefing');
       console.log('☀️ Sent daily briefing');
     } catch (err) {
       console.error('Failed to send daily briefing:', err.message);
@@ -582,6 +605,7 @@ export async function startScheduler(sockRef) {
   cron.schedule('*/15 * * * *', async () => {
     try {
       await checkURLChanges(sockRef);
+      writeHeartbeat('url-monitor');
     } catch (err) {
       console.error('URL monitor error:', err.message);
     }
@@ -592,6 +616,7 @@ export async function startScheduler(sockRef) {
   cron.schedule('*/5 * * * *', async () => {
     try {
       await checkContainerLogs(sockRef);
+      writeHeartbeat('log-monitor');
     } catch (err) {
       console.error('Log monitor error:', err.message);
     }
@@ -611,6 +636,7 @@ export async function startScheduler(sockRef) {
       } else {
         console.log('🧠 Nightly synthesis: clean day, no alert sent');
       }
+      writeHeartbeat('nightly-synthesis');
     } catch (err) {
       console.error('Nightly synthesis error:', err.message);
     }
@@ -644,6 +670,7 @@ export async function startScheduler(sockRef) {
   cron.schedule('0 */2 * * *', async () => {
     try {
       await runHeartbeat(sockRef);
+      writeHeartbeat('heartbeat');
     } catch (err) {
       console.error('Heartbeat error:', err.message);
     }
@@ -653,6 +680,7 @@ export async function startScheduler(sockRef) {
   // 8. Session guard — kill zombie Claude processes every minute
   cron.schedule('* * * * *', async () => {
     try {
+      writeHeartbeat('session-guard');
       const killed = await sweepZombies();
       if (killed.length > 0) {
         const msg = `🔪 Session Guard: killed ${killed.length} hung session(s)\n` +
@@ -664,6 +692,25 @@ export async function startScheduler(sockRef) {
     }
   });
   console.log('🛡️ Session guard scheduled (every 1 min)');
+
+  // 8b. Cron health monitor — every 30 minutes
+  cron.schedule('*/30 * * * *', async () => {
+    try {
+      const { stdout } = await execAsync('bash /app/scripts/cron-monitor.sh', { timeout: 10000 });
+      if (stdout.startsWith('STALE:')) {
+        const msg = `⚠️ Cron Health Monitor — stale jobs detected:\n${stdout.replace('STALE:', '').trim()}`;
+        await sockRef.sock.sendMessage(ADMIN_JID, { text: msg });
+        console.log('⚠️ Cron monitor: stale jobs detected');
+      }
+    } catch (err) {
+      // Exit code 1 = stale jobs found (message in stdout)
+      if (err.stdout?.startsWith('STALE:')) {
+        const msg = `⚠️ Cron Health Monitor — stale jobs detected:\n${err.stdout.replace('STALE:', '').trim()}`;
+        await sockRef.sock.sendMessage(ADMIN_JID, { text: msg }).catch(() => {});
+      }
+    }
+  });
+  console.log('🔍 Cron health monitor scheduled (every 30 min)');
 
   // 9. Weekly AI repo intelligence — Friday 10am AST (= 2pm UTC)
   cron.schedule('0 14 * * 5', async () => {
@@ -713,6 +760,26 @@ export async function startScheduler(sockRef) {
       }
     } catch { /* ignore */ }
   });
+
+  // 12. Error Watcher — auto-detect container crashes and 5xx spikes
+  initErrorWatcher(async (taskParams) => {
+    const task = await createTask(taskParams);
+    executeTaskAutonomously(task, sockRef).catch(err => {
+      console.error(`Error watcher repair task ${task.id} failed:`, err.message);
+    });
+    return task;
+  }, sockRef);
+  watchDockerEvents();
+
+  // Traefik 5xx check every 2 minutes
+  cron.schedule('*/2 * * * *', async () => {
+    try {
+      await checkTraefik5xx();
+    } catch (err) {
+      console.error('Traefik 5xx check error:', err.message);
+    }
+  });
+  console.log('👁️ Error watcher scheduled (docker events + Traefik 5xx every 2 min)');
 
   console.log('⏰ Scheduler ready');
 }

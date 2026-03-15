@@ -17,6 +17,8 @@ import {
 import { setChatState, clearChatState } from './state-store.js';
 import { logRegression } from './meta-learning.js';
 import { spawnWithMemoryLimit, getMemoryLimit } from './work-queue.js';
+import { initFixPatterns, findMatchingPatterns, storeFixPattern, extractFixPattern, formatPatternsForPrompt, recordPatternFailure } from './fix-patterns.js';
+import { runTaskWithSDK, isSDKEnabled } from './claude-sdk.js';
 
 const ADMIN_JID = `${process.env.ADMIN_NUMBER}@s.whatsapp.net`;
 const CLAUDE_PATH = process.env.CLAUDE_PATH || 'claude';
@@ -180,11 +182,33 @@ export async function executeTaskAutonomously(task, sockRef) {
       await safeSend(sockRef, chatJid, `🔧 Auto-investigating: ${task.title}`);
     }
 
-    const prompt = buildTaskPrompt(task);
+    // Inject known fix patterns for similar issues
+    let patternContext = '';
+    try {
+      await initFixPatterns();
+      const symptomText = task.title + ' ' + (task.nextAction || '') + ' ' + (task.lastResult || '');
+      const patterns = await findMatchingPatterns(symptomText, task.project);
+      if (patterns.length > 0) {
+        patternContext = '\n\n' + formatPatternsForPrompt(patterns);
+      }
+    } catch { /* best effort */ }
+
+    const prompt = buildTaskPrompt(task) + patternContext;
 
     let responseText;
     try {
-      responseText = await runClaudeForTask(prompt);
+      // Try SDK path if enabled, fall back to CLI spawn
+      if (isSDKEnabled()) {
+        try {
+          const sdkResult = await runTaskWithSDK({ prompt });
+          responseText = sdkResult.text;
+        } catch (sdkErr) {
+          console.warn(`[Executor] SDK path failed, falling back to CLI: ${sdkErr.message}`);
+          responseText = await runClaudeForTask(prompt);
+        }
+      } else {
+        responseText = await runClaudeForTask(prompt);
+      }
     } catch (err) {
       await addTaskEvent(task.id, { type: 'claude_error', description: err.message });
 
@@ -256,6 +280,10 @@ export async function executeTaskAutonomously(task, sockRef) {
         blockedReason: responseText.substring(0, 300),
         lastResult: responseText.substring(0, 300),
       });
+      // Record pattern failure if we injected patterns that didn't help
+      if (patternContext) {
+        recordPatternFailure(task.title + ' ' + (task.nextAction || '')).catch(() => {});
+      }
       logRegression(
         'task_blocked',
         `Task "${task.title}" (${task.kind}): ${responseText.substring(0, 150)}`,
@@ -319,6 +347,27 @@ export async function executeTaskAutonomously(task, sockRef) {
 
     // Done
     await closeTask(task.id, TaskStatus.DONE, responseText.substring(0, 400));
+
+    // Extract and store fix pattern (async, fire-and-forget)
+    if (task.kind === 'repair' || task.kind === 'fix') {
+      setImmediate(async () => {
+        try {
+          const extracted = await extractFixPattern(task.title, responseText);
+          if (extracted) {
+            await storeFixPattern({
+              project: extracted.project || task.project,
+              category: extracted.category,
+              symptomPattern: extracted.symptom,
+              rootCause: extracted.rootCause,
+              fixDescription: extracted.fix,
+              keywords: extracted.keywords || [],
+            });
+            console.log(`[Executor] Stored fix pattern from task ${task.id}`);
+          }
+        } catch { /* best effort */ }
+      });
+    }
+
     // Only clear activeTaskId if we own it — don't wipe an unrelated active task
     const stateAtDone = await import('./state-store.js').then(m => m.getChatState(chatJid));
     if (stateAtDone.activeTaskId === task.id) {

@@ -59,3 +59,7 @@ EOF
 fi
 
 echo "Journal updated: $JOURNAL ($TOTAL_MESSAGES messages, $CHAT_COUNT chats)"
+
+# Cron heartbeat
+mkdir -p /root/overlord/data/cron-heartbeats
+date +%s > /root/overlord/data/cron-heartbeats/auto-journal
