@@ -30,7 +30,7 @@ import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs/promises';
 import path from 'path';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import crypto from 'crypto';
 import https from 'https';
 import os from 'os';
@@ -52,7 +52,7 @@ import {
 } from './router.js';
 import { registerSession, unregisterSession } from './session-guard.js';
 import { getHeartbeatStatus } from './heartbeat.js';
-import { initConversationStore, logConversation, getConversationStats } from './conversation-store.js';
+import { initConversationStore, logConversation, getConversationStats, getRecentConversations } from './conversation-store.js';
 import { getSessionGuardStatus } from './session-guard.js';
 import QRCode from 'qrcode';
 import sharp from 'sharp';
@@ -78,6 +78,21 @@ import { getSemanticContext } from './semantic-store.js';
 import { heavyQueue, spawnWithMemoryLimit, getMemoryLimit, shouldQueue, getMemoryPressure } from './work-queue.js';
 
 const execAsync = promisify(exec);
+
+// ---- MESSAGE DEDUP: Prevent processing same message twice (Baileys reconnect duplicates) ----
+const PROCESSED_MSG_IDS = new Set();
+const DEDUP_MAX_SIZE = 500;
+function isDuplicateMessage(msgId) {
+  if (PROCESSED_MSG_IDS.has(msgId)) return true;
+  PROCESSED_MSG_IDS.add(msgId);
+  // Evict oldest entries when set gets too large
+  if (PROCESSED_MSG_IDS.size > DEDUP_MAX_SIZE) {
+    const first = PROCESSED_MSG_IDS.values().next().value;
+    PROCESSED_MSG_IDS.delete(first);
+  }
+  return false;
+}
+
 const ADMIN_FALLBACK_ESCALATION_PATTERNS = [
   /nothing came to mind/i,
   /try rephrasing/i,
@@ -1229,18 +1244,36 @@ class ConversationContext {
   _load(chatJid) {
     if (this.contexts.has(chatJid)) return;
     try {
-      const data = require('fs').readFileSync(this._contextFile(chatJid), 'utf-8');
-      this.contexts.set(chatJid, JSON.parse(data));
-    } catch {
-      this.contexts.set(chatJid, []);
-    }
+      const data = readFileSync(this._contextFile(chatJid), 'utf-8');
+      const parsed = JSON.parse(data);
+      if (parsed.length > 0) {
+        this.contexts.set(chatJid, parsed);
+        return;
+      }
+    } catch { /* file missing or corrupt */ }
+    this.contexts.set(chatJid, []);
+  }
+
+  // Load context from DB when local file is empty (e.g. after restart)
+  async ensureContext(chatJid) {
+    this._load(chatJid);
+    const ctx = this.contexts.get(chatJid);
+    if (ctx && ctx.length > 0) return; // already have context
+    try {
+      const dbEntries = await getRecentConversations(chatJid, 20);
+      if (dbEntries.length > 0) {
+        this.contexts.set(chatJid, dbEntries);
+        this._save(chatJid);
+        logger.info({ chatJid, count: dbEntries.length }, 'Restored context from DB');
+      }
+    } catch { /* best effort */ }
   }
 
   _save(chatJid) {
     const ctx = this.contexts.get(chatJid) || [];
     try {
       ensureDir(contactDir(chatJid));
-      require('fs').writeFileSync(this._contextFile(chatJid), JSON.stringify(ctx));
+      writeFileSync(this._contextFile(chatJid), JSON.stringify(ctx));
     } catch { /* best effort */ }
   }
 
@@ -1757,6 +1790,8 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
   const isAdminUser = profile.role === 'admin';
   const isPower = profile.role === 'power';
   const memory = await getMemory(chatJid, parsed.text || '');
+  // Ensure context is loaded from DB if local file is empty (e.g. after restart)
+  await conversationContext.ensureContext(chatJid);
   // Tiered context depth: admin DMs get full history for continuity; groups and
   // regular DMs get a shallower window to keep token costs down.
   const contextDepth = isAdminUser && !isGroup(chatJid) ? 20 : 8;
@@ -2170,8 +2205,11 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       proc.on('close', async (code, signal) => {
         // Session guard: untrack this process
         unregisterSession(chatJid);
-        if (code !== 0 && !stdout) {
-          if (signal) logger.warn({ signal, code, pid: proc.pid, attempt }, 'Claude process killed by signal');
+        // Treat signal kills (SIGKILL/SIGTERM) as retryable even with partial stdout —
+        // partial output from a killed process is garbled/incomplete and should not be sent
+        const killedBySignal = signal || code === null;
+        if ((code !== 0 && !stdout) || (killedBySignal && attempt < MAX_RETRIES)) {
+          if (signal) logger.warn({ signal, code, pid: proc.pid, attempt, hadPartialStdout: !!stdout }, 'Claude process killed by signal');
           // If resume failed (stale session), clear session and retry fresh
           if (sessionId && /session/i.test(stderr) && attempt < MAX_RETRIES) {
             logger.warn({ sessionId, stderr: stderr.substring(0, 300) }, 'Stale session, clearing and retrying fresh');
@@ -3415,6 +3453,12 @@ async function startBot() {
         if (msg.key.fromMe) continue;
         if (msg.key.remoteJid === 'status@broadcast') continue;
 
+        // Dedup: skip if we already processed this exact message ID
+        if (msg.key.id && isDuplicateMessage(msg.key.id)) {
+          logger.debug({ msgId: msg.key.id }, 'Skipping duplicate message');
+          continue;
+        }
+
         const chatJid = msg.key.remoteJid;
 
         // Skip stale messages (older than 60 seconds) — prevents processing old messages after reconnect/restart
@@ -3608,11 +3652,7 @@ async function startBot() {
           // Extracted into a closure so it can run inline (light) or queued (heavy)
           const _runClaudeAndRespond = async () => {
             const _claudeStart = Date.now();
-            const _longAckTimer = setTimeout(() => {
-              currentSock.sendMessage(chatJid, { text: '⏳' }).catch(() => {});
-            }, 20000);
             const claudeResult = await askClaude(chatJid, last.senderJid, last.parsed, last.mediaResult, triage.reason);
-            clearTimeout(_longAckTimer);
             const _claudeDuration = Date.now() - _claudeStart;
             const response = claudeResult.text;
             const routeModelId = claudeResult.modelId || 'unknown';

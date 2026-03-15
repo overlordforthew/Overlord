@@ -243,6 +243,52 @@ export async function exportTrainingData({
 }
 
 /**
+ * Load recent conversation context from DB for a given chat.
+ * Used as fallback when context.json file is missing (e.g. after restart).
+ */
+export async function getRecentConversations(chatJid, limit = 20) {
+  if (!pool || !initialized) return [];
+  try {
+    const { rows } = await pool.query(
+      `SELECT sender_name, user_message, assistant_response, created_at
+       FROM conversations
+       WHERE chat_jid = $1
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [chatJid, limit]
+    );
+    // Return in chronological order
+    return rows.reverse().flatMap(r => {
+      const entries = [];
+      if (r.user_message) {
+        entries.push({
+          timestamp: r.created_at?.toISOString(),
+          sender: r.sender_name || 'user',
+          senderName: r.sender_name || 'user',
+          role: 'user',
+          type: 'text',
+          text: r.user_message,
+        });
+      }
+      if (r.assistant_response) {
+        entries.push({
+          timestamp: r.created_at?.toISOString(),
+          sender: 'bot',
+          senderName: 'Overlord',
+          role: 'bot',
+          type: 'text',
+          text: r.assistant_response,
+        });
+      }
+      return entries;
+    });
+  } catch (err) {
+    logger.error({ err: err.message }, 'Failed to load recent conversations from DB');
+    return [];
+  }
+}
+
+/**
  * Graceful shutdown.
  */
 export async function closeConversationStore() {
