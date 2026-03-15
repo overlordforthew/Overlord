@@ -293,7 +293,28 @@ export async function getSemanticContext(query) {
   if (!query || query.length < 3) return '';
 
   try {
-    const results = await searchSemantic(query, { limit: 10 });
+    // Search with full query first
+    let results = await searchSemantic(query, { limit: 10 });
+
+    // If few results, also try individual significant words (4+ chars, not stop words)
+    if (results.length < 3) {
+      const stopWords = new Set(['this','that','what','with','from','have','been','will','your','they','them','than','when','where','which','there','their','about','would','could','should','these','those','being','other','after','before','between','under','above','into','each','some','more','also','just','only']);
+      const words = query.toLowerCase().split(/\W+/).filter(w => w.length >= 4 && !stopWords.has(w));
+      const seen = new Set(results.map(r => r.id));
+      for (const word of words.slice(0, 3)) {
+        const extra = await searchSemantic(word, { limit: 5 });
+        for (const r of extra) {
+          if (!seen.has(r.id)) {
+            seen.add(r.id);
+            results.push(r);
+          }
+        }
+      }
+      // Re-sort by importance
+      results.sort((a, b) => (b.importance || 0) - (a.importance || 0));
+      results = results.slice(0, 10);
+    }
+
     if (!results.length) return '';
 
     const lines = ['## System Knowledge'];
