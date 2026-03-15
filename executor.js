@@ -16,6 +16,7 @@ import {
 } from './task-store.js';
 import { setChatState, clearChatState } from './state-store.js';
 import { logRegression } from './meta-learning.js';
+import { spawnWithMemoryLimit, getMemoryLimit } from './work-queue.js';
 
 const ADMIN_JID = `${process.env.ADMIN_NUMBER}@s.whatsapp.net`;
 const CLAUDE_PATH = process.env.CLAUDE_PATH || 'claude';
@@ -44,16 +45,21 @@ async function runClaudeForTask(prompt, workDir = '/projects', timeoutMs = 600_0
       '--model', 'claude-opus-4-6',
     ];
 
-    const proc = spawn(CLAUDE_PATH, args, {
+    // Safe env: don't leak API keys to Claude CLI subprocesses
+    const SAFE_KEYS = ['HOME', 'USER', 'PATH', 'SHELL', 'LANG', 'LC_ALL', 'TMPDIR', 'HOSTNAME', 'PWD', 'LOGNAME'];
+    const safeEnv = {};
+    for (const k of SAFE_KEYS) { if (process.env[k]) safeEnv[k] = process.env[k]; }
+    safeEnv.TERM = 'dumb';
+    safeEnv.NODE_OPTIONS = '--max-old-space-size=1024';
+    safeEnv.CLAUDE_CODE_MAX_OUTPUT_TOKENS = '16000';
+    safeEnv.HOME = process.env.HOME || '/root';
+    safeEnv.PATH = process.env.PATH || '/usr/local/bin:/usr/bin:/bin';
+
+    const proc = spawnWithMemoryLimit(CLAUDE_PATH, args, {
       cwd: workDir,
       timeout: timeoutMs,
-      env: {
-        ...process.env,
-        TERM: 'dumb',
-        NODE_OPTIONS: '--max-old-space-size=1024',
-        CLAUDE_CODE_MAX_OUTPUT_TOKENS: '16000',
-      },
-    });
+      env: safeEnv,
+    }, getMemoryLimit('complex'));
 
     proc.stdin.write(prompt);
     proc.stdin.end();

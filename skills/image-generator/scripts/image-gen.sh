@@ -8,6 +8,9 @@ set -euo pipefail
 DEFAULT_WIDTH=1024
 DEFAULT_HEIGHT=1024
 DEFAULT_OUTPUT_DIR="/tmp"
+DEFAULT_MODEL="flux"
+MAX_RETRIES=2
+RETRY_DELAY=5
 
 # ── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -44,27 +47,44 @@ download_image() {
   local width="$3"
   local height="$4"
   local seed="${5:-$RANDOM}"
+  local model="${6:-$DEFAULT_MODEL}"
 
   local encoded
   encoded=$(url_encode "$prompt")
-  local url="https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&seed=${seed}&nologo=true"
+  local url="https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&seed=${seed}&model=${model}&nologo=true"
 
   echo "Generating: ${prompt}"
-  echo "Size: ${width}x${height}"
+  echo "Size: ${width}x${height} | Model: ${model}"
   echo "Downloading..."
 
+  local attempt=0
   local http_code
-  http_code=$(curl -sS -L -o "$output" -w "%{http_code}" "$url")
+  while [ $attempt -le $MAX_RETRIES ]; do
+    if [ $attempt -gt 0 ]; then
+      echo "Retry ${attempt}/${MAX_RETRIES} (waiting ${RETRY_DELAY}s)..."
+      sleep "$RETRY_DELAY"
+    fi
 
-  if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
-    local size
-    size=$(du -h "$output" | cut -f1)
-    echo "Saved: ${output} (${size})"
-  else
-    echo "ERROR: HTTP $http_code — generation failed" >&2
-    rm -f "$output"
-    return 1
-  fi
+    http_code=$(curl -sS -L --max-time 120 -o "$output" -w "%{http_code}" "$url")
+
+    if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+      # Verify it's actually an image (not a JSON error with 200 status)
+      local content_type
+      content_type=$(file -b --mime-type "$output" 2>/dev/null || echo "unknown")
+      if [[ "$content_type" == image/* ]]; then
+        local size
+        size=$(du -h "$output" | cut -f1)
+        echo "Saved: ${output} (${size})"
+        return 0
+      fi
+    fi
+
+    attempt=$((attempt + 1))
+  done
+
+  echo "ERROR: HTTP $http_code — generation failed after $((MAX_RETRIES + 1)) attempts" >&2
+  rm -f "$output"
+  return 1
 }
 
 # ── COMMANDS ─────────────────────────────────────────────────────────────────
@@ -75,6 +95,7 @@ cmd_generate() {
   local width="$DEFAULT_WIDTH"
   local height="$DEFAULT_HEIGHT"
   local style=""
+  local model="$DEFAULT_MODEL"
 
   # Parse args
   while [ $# -gt 0 ]; do
@@ -83,6 +104,7 @@ cmd_generate() {
       --width)   width="$2"; shift 2 ;;
       --height)  height="$2"; shift 2 ;;
       --style)   style="$2"; shift 2 ;;
+      --model)   model="$2"; shift 2 ;;
       --*)
         echo "ERROR: Unknown option: $1" >&2
         return 1
@@ -100,7 +122,7 @@ cmd_generate() {
 
   if [ -z "$prompt" ]; then
     echo "ERROR: No prompt provided" >&2
-    echo "Usage: image-gen.sh generate <prompt> [--output FILE] [--width W] [--height H] [--style STYLE]" >&2
+    echo "Usage: image-gen.sh generate <prompt> [--output FILE] [--width W] [--height H] [--style STYLE] [--model MODEL]" >&2
     return 1
   fi
 
@@ -114,7 +136,7 @@ cmd_generate() {
     output="${DEFAULT_OUTPUT_DIR}/generated_$(timestamp).png"
   fi
 
-  download_image "$prompt" "$output" "$width" "$height"
+  download_image "$prompt" "$output" "$width" "$height" "$RANDOM" "$model"
 }
 
 cmd_styles() {
@@ -260,6 +282,7 @@ COMMANDS:
     --width W                         Width in pixels (default: 1024)
     --height H                        Height in pixels (default: 1024)
     --style STYLE                     Apply a style preset
+    --model MODEL                     Pollinations model (default: flux)
 
   styles                              List available style presets
 

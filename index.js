@@ -75,6 +75,7 @@ import {
 } from './memory-store.js';
 import { extractAndStore, scoreRelevance } from './memory-curator.js';
 import { getSemanticContext } from './semantic-store.js';
+import { heavyQueue, spawnWithMemoryLimit, getMemoryLimit, shouldQueue, getMemoryPressure } from './work-queue.js';
 
 const execAsync = promisify(exec);
 const ADMIN_FALLBACK_ESCALATION_PATTERNS = [
@@ -730,12 +731,12 @@ async function runOverlordEscalation(requestText, powerProfile, chatJid, sock) {
   try {
     const resultText = await new Promise((resolve, reject) => {
       let stdout = '';
-      const proc = spawn(CONFIG.claudePath, args, {
+      const proc = spawnWithMemoryLimit(CONFIG.claudePath, args, {
         cwd: '/projects',
         timeout: CONFIG.maxResponseTime,
         killSignal: 'SIGKILL',
-        env: { ...process.env, TERM: 'dumb', NODE_OPTIONS: '--max-old-space-size=1024' },
-      });
+        env: buildSafeEnv(),
+      }, getMemoryLimit('complex'));
       proc.stdin.write(`Escalated from Ai Chan on behalf of ${powerProfile.name}:\n\n${requestText}`);
       proc.stdin.end();
       proc.stdout.on('data', d => { stdout += d.toString(); });
@@ -1689,7 +1690,7 @@ Reply ONLY: YES or NO`;
         let out = '';
         const proc = spawn(CONFIG.claudePath, [
           '-p', '--output-format', 'text', '--max-turns', '1', '--model', triageRoute.model.id,
-        ], { timeout: 15_000, env: { ...process.env, TERM: 'dumb' } });
+        ], { timeout: 15_000, env: buildSafeEnv() });
         proc.stdin.write(triagePrompt);
         proc.stdin.end();
         proc.stdout.on('data', (d) => { out += d.toString(); });
@@ -2146,14 +2147,15 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       let stdout = '';
       let stderr = '';
 
-      logger.info({ attempt, workDir, argsCount: args.length, promptLen: fullPrompt.length, model: route.model?.id }, 'Spawning Claude CLI');
-      const proc = spawn(CONFIG.claudePath, args, {
+      const memLimit = getMemoryLimit(route.taskType);
+      logger.info({ attempt, workDir, argsCount: args.length, promptLen: fullPrompt.length, model: route.model?.id, memLimitMB: memLimit }, 'Spawning Claude CLI');
+      const proc = spawnWithMemoryLimit(CONFIG.claudePath, args, {
         cwd: workDir,
         timeout: route.taskType === 'complex' ? CONFIG.maxResponseTime : CONFIG.chatResponseTimeout,
         killSignal: 'SIGKILL',
         env: buildSafeEnv(),
         maxBuffer: 10 * 1024 * 1024,
-      });
+      }, memLimit);
 
       // Session guard: track this process
       registerSession(chatJid, proc.pid);
@@ -2399,8 +2401,31 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
   if (cmd === '/status' && isAdmin(senderJid)) {
     try {
       const { stdout } = await execAsync('echo "🖥️ Server" && uptime -p && echo "" && free -h | head -2 && echo "" && df -h / | tail -1 && echo "" && echo "Claude:" && which claude && claude --version 2>/dev/null || echo "version unknown"');
-      return stdout;
+      const mem = getMemoryPressure();
+      const qs = heavyQueue.getStatus();
+      const queueLine = qs.isRunning
+        ? `\n📋 Queue: running (${qs.runningType}), ${qs.queueLength} waiting`
+        : `\n📋 Queue: idle (${qs.stats.completed} done, ${qs.stats.failed} failed)`;
+      const memLine = `\n💾 Memory: ${mem.usedPct}% used (${mem.freeMB}MB free)${mem.critical ? ' ⚠️ CRITICAL' : ''}`;
+      return stdout + memLine + queueLine;
     } catch { return '⚠️ Could not fetch status.'; }
+  }
+
+  if (cmd === '/queue' && isAdmin(senderJid)) {
+    const qs = heavyQueue.getStatus();
+    const mem = getMemoryPressure();
+    const lines = ['📋 *Work Queue*', ''];
+    lines.push(`State: ${qs.isRunning ? `Running (${qs.runningType})` : 'Idle'}`);
+    lines.push(`Waiting: ${qs.queueLength}`);
+    lines.push(`Stats: ${qs.stats.completed} done, ${qs.stats.failed} failed, ${qs.stats.killed} cancelled`);
+    lines.push(`Memory: ${mem.usedPct}% (${mem.freeMB}MB free)${mem.critical ? ' CRITICAL' : ''}`);
+    if (qs.waiting.length > 0) {
+      lines.push('', 'Queued:');
+      for (const w of qs.waiting) {
+        lines.push(`  ${w.id} — ${w.taskType} (${w.chatJid.split('@')[0]})`);
+      }
+    }
+    return lines.join('\n');
   }
 
   if (cmd === '/memory') {
@@ -3579,123 +3604,141 @@ async function startBot() {
             }
           }
 
-          // Ask Claude (with friction tracking + delayed ack for long requests)
-          const _claudeStart = Date.now();
-          const _longAckTimer = setTimeout(() => {
-            currentSock.sendMessage(chatJid, { text: '⏳' }).catch(() => {});
-          }, 20000); // Send hourglass after 20s of silence
-          const claudeResult = await askClaude(chatJid, last.senderJid, last.parsed, last.mediaResult, triage.reason);
-          clearTimeout(_longAckTimer);
-          const _claudeDuration = Date.now() - _claudeStart;
-          const response = claudeResult.text;
-          const routeModelId = claudeResult.modelId || 'unknown';
-          if (_claudeDuration > 60000) {
-            logFriction('slow_response', `${_claudeDuration}ms for ${chatJid}`, _claudeDuration).catch(() => {});
-          }
-          if (response.startsWith('⚠️')) {
-            logFriction('api_error', response.substring(0, 200), _claudeDuration).catch(() => {});
-          }
-
-          // Stop typing
-          if (CONFIG.typingIndicator) await currentSock.sendPresenceUpdate('paused', chatJid).catch(() => {});
-
-          // ---- PROMPT GUARD: Output Scan (DLP) ----
-          const guardOut = await sanitizeOutputWithGuard(response);
-          let finalResponse = response;
-          if (guardOut.blocked) {
-            logger.warn({ redactedTypes: guardOut.redactedTypes }, "🛡️ Prompt Guard BLOCKED outbound response (credential leak)");
-            finalResponse = "I generated a response but it contained sensitive data that was blocked for security. Please rephrase your request.";
-          } else if (guardOut.wasModified) {
-            logger.info({ redactedTypes: guardOut.redactedTypes, count: guardOut.redactionCount }, "🛡️ Prompt Guard redacted credentials from response");
-            finalResponse = guardOut.sanitizedText;
-          }
-
-          // Append model tag for genuine model responses (skip errors/blocked)
-          if (routeModelId !== 'unknown' && !guardOut.blocked && !response.startsWith('⚠️')) {
-            let modelTag = routeModelId;
-            if (modelTag.startsWith('claude-')) {
-              modelTag = modelTag.replace(/^claude-/, '').replace(/-(\d+)-(\d+)$/, ' $1.$2');
-            } else {
-              // Free/OpenRouter models: extract short name from "provider/model:free"
-              modelTag = modelTag.replace(/^[^/]+\//, '').replace(/:free$/, '');
+          // ---- CLAUDE EXECUTION + POST-PROCESSING ----
+          // Extracted into a closure so it can run inline (light) or queued (heavy)
+          const _runClaudeAndRespond = async () => {
+            const _claudeStart = Date.now();
+            const _longAckTimer = setTimeout(() => {
+              currentSock.sendMessage(chatJid, { text: '⏳' }).catch(() => {});
+            }, 20000);
+            const claudeResult = await askClaude(chatJid, last.senderJid, last.parsed, last.mediaResult, triage.reason);
+            clearTimeout(_longAckTimer);
+            const _claudeDuration = Date.now() - _claudeStart;
+            const response = claudeResult.text;
+            const routeModelId = claudeResult.modelId || 'unknown';
+            if (_claudeDuration > 60000) {
+              logFriction('slow_response', `${_claudeDuration}ms for ${chatJid}`, _claudeDuration).catch(() => {});
             }
-            finalResponse = finalResponse.trimEnd() + `\n\n— ${modelTag}`;
-          }
+            if (response.startsWith('⚠️')) {
+              logFriction('api_error', response.substring(0, 200), _claudeDuration).catch(() => {});
+            }
 
-          // Send (with media detection + auto-split) — use current socket reference
-          await sendResponse(currentSock, chatJid, finalResponse);
+            // Stop typing
+            if (CONFIG.typingIndicator) await currentSock.sendPresenceUpdate('paused', chatJid).catch(() => {});
 
-          // ---- TASK STATE UPDATE (admin DMs only) ----
-          if (isAdmin(last.senderJid) && !isGroup(chatJid)) {
-            updateAdminTaskState(chatJid, last.parsed.text || '', finalResponse).catch(() => {});
-          }
+            // ---- PROMPT GUARD: Output Scan (DLP) ----
+            const guardOut = await sanitizeOutputWithGuard(response);
+            let finalResponse = response;
+            if (guardOut.blocked) {
+              logger.warn({ redactedTypes: guardOut.redactedTypes }, "🛡️ Prompt Guard BLOCKED outbound response (credential leak)");
+              finalResponse = "I generated a response but it contained sensitive data that was blocked for security. Please rephrase your request.";
+            } else if (guardOut.wasModified) {
+              logger.info({ redactedTypes: guardOut.redactedTypes, count: guardOut.redactionCount }, "🛡️ Prompt Guard redacted credentials from response");
+              finalResponse = guardOut.sanitizedText;
+            }
 
-          // Outgoing escalation: Ai Chan's response contains "Overlord, [request]"
-          const senderProfile = getUserProfile(last.senderJid);
-          if (senderProfile.role === 'power') {
-            const _outEscRequest = extractOverlordRequest(finalResponse);
-            if (_outEscRequest) {
-              runOverlordEscalation(_outEscRequest, senderProfile, chatJid, currentSock).catch(err =>
-                logger.error({ err }, 'Outgoing Overlord escalation failed')
+            // Append model tag for genuine model responses (skip errors/blocked)
+            if (routeModelId !== 'unknown' && !guardOut.blocked && !response.startsWith('⚠️')) {
+              let modelTag = routeModelId;
+              if (modelTag.startsWith('claude-')) {
+                modelTag = modelTag.replace(/^claude-/, '').replace(/-(\d+)-(\d+)$/, ' $1.$2');
+              } else {
+                modelTag = modelTag.replace(/^[^/]+\//, '').replace(/:free$/, '');
+              }
+              finalResponse = finalResponse.trimEnd() + `\n\n— ${modelTag}`;
+            }
+
+            // Send response
+            await sendResponse(currentSock, chatJid, finalResponse);
+
+            // ---- TASK STATE UPDATE (admin DMs only) ----
+            if (isAdmin(last.senderJid) && !isGroup(chatJid)) {
+              updateAdminTaskState(chatJid, last.parsed.text || '', finalResponse).catch(() => {});
+            }
+
+            // Outgoing escalation
+            const senderProfile = getUserProfile(last.senderJid);
+            if (senderProfile.role === 'power') {
+              const _outEscRequest = extractOverlordRequest(finalResponse);
+              if (_outEscRequest) {
+                runOverlordEscalation(_outEscRequest, senderProfile, chatJid, currentSock).catch(err =>
+                  logger.error({ err }, 'Outgoing Overlord escalation failed')
+                );
+              }
+            }
+
+            // Auto-deploy for power users
+            if (senderProfile.role === 'power' && senderProfile.projects?.length) {
+              await autoDeployIfChanged(senderProfile, chatJid, currentSock).catch(err =>
+                logger.error({ err }, 'Auto-deploy hook error')
               );
             }
-          }
 
-          // Auto-deploy: if power user edited project files, commit + deploy automatically
-          if (senderProfile.role === 'power' && senderProfile.projects?.length) {
-            await autoDeployIfChanged(senderProfile, chatJid, currentSock).catch(err =>
-              logger.error({ err }, 'Auto-deploy hook error')
-            );
-          }
+            // Track in context
+            conversationContext.add(chatJid, {
+              sender: "bot", senderName: CONFIG.botName, role: "bot", type: "text", text: finalResponse,
+            });
+            await logMessage(chatJid, senderJid, "bot", finalResponse);
 
-          // Track in context
-          conversationContext.add(chatJid, {
-            sender: "bot", senderName: CONFIG.botName, role: "bot", type: "text", text: finalResponse,
-          });
-          await logMessage(chatJid, senderJid, "bot", finalResponse);
+            // Log to conversation store (training data)
+            logConversation({
+              chatJid,
+              senderJid,
+              senderName,
+              chatType: isGroup(chatJid) ? 'group' : 'dm',
+              userMessage: last.parsed.text || `[${last.parsed.type}]`,
+              messageType: last.parsed.type,
+              quotedText: last.parsed.quotedText,
+              mediaPath: last.mediaResult?.filePath,
+              transcription: last.parsed.transcription,
+              systemPrompt: claudeResult._training?.sysPrompt,
+              conversationContext: claudeResult._training?.recentContext,
+              memorySnapshot: claudeResult._training?.memory,
+              assistantResponse: response,
+              modelId: routeModelId,
+              routerMode: CONFIG.routerMode,
+              taskType: claudeResult._training?.taskType,
+              routeVia: claudeResult._training?.routeVia,
+              responseTimeMs: _claudeDuration,
+            }).catch(() => {});
 
-          // Log to conversation store (training data) — fire and forget
-          logConversation({
-            chatJid,
-            senderJid,
-            senderName,
-            chatType: isGroup(chatJid) ? 'group' : 'dm',
-            userMessage: last.parsed.text || `[${last.parsed.type}]`,
-            messageType: last.parsed.type,
-            quotedText: last.parsed.quotedText,
-            mediaPath: last.mediaResult?.filePath,
-            transcription: last.parsed.transcription,
-            systemPrompt: claudeResult._training?.sysPrompt,
-            conversationContext: claudeResult._training?.recentContext,
-            memorySnapshot: claudeResult._training?.memory,
-            assistantResponse: response,
-            modelId: routeModelId,
-            routerMode: CONFIG.routerMode,
-            taskType: claudeResult._training?.taskType,
-            routeVia: claudeResult._training?.routeVia,
-            responseTimeMs: _claudeDuration,
-          }).catch(() => {});
-
-          // ---- MEMEX: async memory extraction (non-blocking) ----
-          setImmediate(async () => {
-            try {
-              const userText = last.parsed.text || '';
-              if (userText.length > 15) {
-                const stored = await extractAndStore(chatJid, {
-                  userMessage: userText,
-                  assistantResponse: response,
-                  existingMemories: claudeResult._training?.memory || '',
-                });
-                if (stored > 0) {
-                  logger.info({ jid: senderNumber(chatJid), count: stored }, '[memex] Extracted new facts');
+            // ---- MEMEX: async memory extraction ----
+            setImmediate(async () => {
+              try {
+                const userText = last.parsed.text || '';
+                if (userText.length > 15) {
+                  const stored = await extractAndStore(chatJid, {
+                    userMessage: userText,
+                    assistantResponse: response,
+                    existingMemories: claudeResult._training?.memory || '',
+                  });
+                  if (stored > 0) {
+                    logger.info({ jid: senderNumber(chatJid), count: stored }, '[memex] Extracted new facts');
+                  }
                 }
+              } catch (err) {
+                logger.error({ err: err.message }, '[memex] Post-response extraction failed');
               }
-            } catch (err) {
-              logger.error({ err: err.message }, '[memex] Post-response extraction failed');
-            }
-          });
+            });
 
-          logger.info(`📤 → ${senderName}: ${finalResponse.substring(0, 100)}...`);
+            logger.info(`📤 → ${senderName}: ${finalResponse.substring(0, 100)}...`);
+          };
+
+          // ---- PROCESS ISOLATION: Queue heavy tasks, run light ones inline ----
+          if (shouldQueue(triage.taskType || 'medium', isAdmin(last.senderJid)) && heavyQueue.isRunning) {
+            // Another heavy task is already running — queue this one
+            const queuePos = heavyQueue.length + 1;
+            await currentSock.sendMessage(chatJid, {
+              text: `🔄 Heavy task queued (position ${queuePos}). I'll send the result when it's done.`,
+            }).catch(() => {});
+            heavyQueue.enqueue(chatJid, triage.taskType || 'complex', _runClaudeAndRespond).catch(err => {
+              logger.error({ err, chatJid }, 'Queued task failed');
+              currentSock.sendMessage(chatJid, { text: `⚠️ Queued task failed: ${err.message}` }).catch(() => {});
+            });
+          } else {
+            // Run inline (light task, or first heavy task with no queue contention)
+            await _runClaudeAndRespond();
+          }
         });
 
       } catch (err) {
