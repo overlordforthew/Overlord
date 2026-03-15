@@ -53,8 +53,14 @@ log "Backing up Coolify configs..."
 tar czf "$BACKUP_DIR/coolify-config-$DATE.tar.gz" \
     -C /data/coolify proxy/dynamic/ 2>/dev/null || log "WARN: Could not backup Coolify config"
 
-# 4. Backup databases (all PostgreSQL containers)
-for CONTAINER in $(docker ps --filter "ancestor=postgres:17-alpine" --format '{{.Names}}' 2>/dev/null); do
+# 4. Backup databases (all PostgreSQL containers — any postgres version)
+# Use Config.Image instead of ancestor filter to survive image tag updates
+for CONTAINER in $(docker ps --format '{{.Names}}' 2>/dev/null); do
+    IMG=$(docker inspect "$CONTAINER" --format '{{.Config.Image}}' 2>/dev/null)
+    case "$IMG" in
+        postgres:*|pgvector/pgvector:*) ;;
+        *) continue ;;
+    esac
     log "Dumping database from $CONTAINER..."
     PG_USER=$(docker inspect "$CONTAINER" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^POSTGRES_USER=' | cut -d= -f2)
     PG_USER="${PG_USER:-postgres}"

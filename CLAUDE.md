@@ -76,6 +76,23 @@ See /projects/CLAUDE.md for infrastructure rules, projects list, and permissions
   - `mem consolidate` — Run decay/boost/prune/associate cycle
   - Always check `mem search` before claiming inability — the knowledge may be there
 
+## DATABASE SCHEMAS (overlord-db)
+
+When querying the `conversations` table, use these EXACT column names:
+- `id`, `chat_jid` (NOT chat_id), `sender_jid`, `sender_name`, `chat_type`
+- `user_message` (NOT content), `assistant_response`, `message_type`
+- `quoted_text`, `media_path`, `transcription`
+- `system_prompt`, `conversation_context`, `memory_snapshot`
+- `model_id`, `router_mode`, `task_type`, `route_via`
+- `response_time_ms`, `token_estimate`, `quality_score`
+- `flagged`, `flag_reason`, `tags`, `created_at`
+
+There is NO `role` or `content` column. To get role, check sender_name.
+For convenience, a VIEW `conversation_log` exists with aliased columns:
+- `chat_id` (maps to chat_jid), `role` (derived: assistant/user), `content` (maps to user_message)
+
+Prefer using `conversation_log` for ad-hoc lookups.
+
 ## MEMORY SYSTEM
 
 - **Episodic** (memory-store.js): Per-JID conversational facts, auto-extracted by memory-curator.js

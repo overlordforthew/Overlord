@@ -50,7 +50,7 @@ import {
   routeMessage, routeTriage, planWithOpus, callOpenRouter, callGemini, callWithFallback,
   shouldEscalate, classifyTask, classifyWithOpus, getRouterStatus, MODEL_REGISTRY, FREE_FALLBACK_CHAINS,
 } from './router.js';
-import { registerSession, unregisterSession } from './session-guard.js';
+import { registerSession, unregisterSession, setOnSessionKilled } from './session-guard.js';
 import { getHeartbeatStatus } from './heartbeat.js';
 import { initConversationStore, logConversation, getConversationStats, getRecentConversations } from './conversation-store.js';
 import { getSessionGuardStatus } from './session-guard.js';
@@ -2403,6 +2403,15 @@ const messageBatcher = new MessageBatcher();
 // When a new message arrives while Claude is already processing for that chat,
 // the new message waits for the current call to finish before processing.
 const chatLocks = new Map();
+
+// When sweepZombies kills a stuck process, force-release the chat lock
+// so queued messages aren't blocked forever
+setOnSessionKilled((chatJid) => {
+  if (chatLocks.has(chatJid)) {
+    chatLocks.delete(chatJid);
+    console.log(`⚠️ Chat lock force-released for ${chatJid} after stuck process kill`);
+  }
+});
 
 async function withChatLock(chatJid, fn) {
   // Wait for any existing lock to release

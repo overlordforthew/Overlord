@@ -16,7 +16,18 @@ import { promisify } from 'util';
 const execAsync = promisify(exec);
 
 // Max time a Claude process can run before being considered hung (ms)
-const MAX_SESSION_AGE_MS = 15 * 60 * 1000; // 15 minutes (matches CONFIG.maxResponseTime)
+const MAX_SESSION_AGE_MS = 5 * 60 * 1000; // 5 minutes — absolute max for any reasonable response
+
+// Callback invoked when sweepZombies kills a stuck process (set via setOnSessionKilled)
+let onSessionKilledCallback = null;
+
+/**
+ * Set a callback to be invoked when sweepZombies kills a stuck process.
+ * Callback receives the chatJid of the killed session.
+ */
+export function setOnSessionKilled(callback) {
+  onSessionKilledCallback = callback;
+}
 
 // How often the guard scans for zombies (called externally via cron)
 // Active sessions tracked in memory (not persisted — they're transient)
@@ -117,6 +128,15 @@ export async function sweepZombies() {
 
       // Either way, clean up the tracking
       activeSessions.delete(jid);
+
+      // Notify callback so chat locks can be released
+      if (onSessionKilledCallback) {
+        try {
+          onSessionKilledCallback(jid);
+        } catch (err) {
+          console.error(`Session guard: onSessionKilled callback error for ${jid}:`, err);
+        }
+      }
     }
   }
 
