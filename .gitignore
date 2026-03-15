@@ -17,3 +17,4 @@ data/*/context.json
 !data/*/memory.md
 skills/prompt-guard/prompt_guard/__pycache__/
 .overlord-db-pass
+*.pyc

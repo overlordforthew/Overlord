@@ -3495,9 +3495,13 @@ async function startBot() {
             }
           }
 
-          // Ask Claude (with friction tracking)
+          // Ask Claude (with friction tracking + delayed ack for long requests)
           const _claudeStart = Date.now();
+          const _longAckTimer = setTimeout(() => {
+            currentSock.sendMessage(chatJid, { text: '⏳' }).catch(() => {});
+          }, 20000); // Send hourglass after 20s of silence
           const claudeResult = await askClaude(chatJid, last.senderJid, last.parsed, last.mediaResult, triage.reason);
+          clearTimeout(_longAckTimer);
           const _claudeDuration = Date.now() - _claudeStart;
           const response = claudeResult.text;
           const routeModelId = claudeResult.modelId || 'unknown';

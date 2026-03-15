@@ -13,6 +13,17 @@ Quick reference of all available skills and their tools. Read the SKILL.md in ea
 | **Data Analysis** | `skills/data-analysis/` | `analyze.py`, `chart.py` | Process CSV/JSON, statistics, filtering, chart generation |
 | **X Trends** | `skills/x-trends/` | `xtrends.py` | X/Twitter trending topics, tweet search, user profiles |
 | **Database Admin** | `skills/database-admin/` | `db-admin.sh` | Unified PostgreSQL management — health, sizes, queries, backups, slow query analysis |
+| **Log Analyzer** | `skills/log-analyzer/` | `log-analyzer.sh` | AI-powered log analysis — error detection, pattern matching, LLM diagnosis |
+| **Email Composer** | `skills/email-composer/` | `email-compose.sh` | Draft and send emails via gws CLI with templates |
+| **Backup Verifier** | `skills/backup-verifier/` | `backup-verify.sh` | Verify backup integrity, compare against live DBs, test restores |
+| **Security Scanner** | `skills/security-scanner/` | `security-scan.sh` | Port scan, SSL check, HTTP headers, npm audit, Docker security, fail2ban |
+| **DNS Manager** | `skills/dns-manager/` | `dns-manager.sh` | Cloudflare DNS management — add/remove records, new site setup, SSL status |
+| **Git Intelligence** | `skills/git-intelligence/` | `git-intel.sh` | Cross-repo analysis — status, deps, stale branches, security, PRs |
+| **Calendar Manager** | `skills/calendar-manager/` | `calendar.sh` | Google Calendar via gws — agenda, create events, free time |
+| **Performance Profiler** | `skills/performance-profiler/` | `perf-profile.sh` | System profiling — CPU, memory, disk, Docker stats, capacity planning |
+| **Notification Hub** | `skills/notification-hub/` | `notify.sh` | Multi-channel notifications — WhatsApp, Discord, email with fallback |
+| **Document Reader** | `skills/document-reader/` | `doc-reader.py` | Parse PDFs, XLSX, CSV, DOCX with AI summarization |
+| **Image Generator** | `skills/image-generator/` | `image-gen.sh` | AI image generation via Pollinations.ai — styles, social media sizes |
 
 ## Skills with Instructions Only
 
@@ -50,35 +61,38 @@ Installed via `llm` CLI + `llm-openrouter` plugin. One API key, hundreds of mode
 ## Quick Examples
 ```bash
 # Database health across all containers
-/app/skills/database-admin/scripts/db-admin.sh health
+db-admin.sh health
 
-# Table sizes in overlord
-/app/skills/database-admin/scripts/db-admin.sh sizes overlord-db overlord
+# Scan all containers for errors
+log-analyzer.sh health
 
-# Check if all services are running
-/app/skills/monitoring/service-check.sh --brief
+# Security audit
+security-scan.sh full
 
-# Get Bitcoin price
-python3 /app/skills/api-integrations/crypto.py bitcoin --detail
+# Backup verification
+backup-verify.sh check
 
-# Weather in Port of Spain
-python3 /app/skills/api-integrations/weather.py "Port of Spain"
+# Git status across all repos
+git-intel.sh status
 
-# Scrape a webpage
-python3 /app/skills/web-scraper/scrape.py "https://example.com"
+# Today's calendar
+calendar.sh today
 
-# Stealth scrape (bypasses anti-bot protections)
-python3 /app/skills/scrapling/scrape-stealth.py "https://protected-site.com"
+# System snapshot
+perf-profile.sh snapshot
 
-# Stealth scrape with CSS selector
-python3 /app/skills/scrapling/scrape-stealth.py "https://example.com" --selector "div.price" --json
+# Send notification (WhatsApp → Discord → Email fallback)
+notify.sh send "Deploy complete"
 
-# Read tech news
-python3 /app/skills/api-integrations/news.py --topic tech
+# Generate an image
+image-gen.sh generate "sunset over Caribbean marina" --style photorealistic
 
-# Convert currency
-python3 /app/skills/api-integrations/exchange.py 100 USD TTD
+# Read a PDF
+doc-reader.py read /path/to/document.pdf
 
-# Analyze a CSV file
-python3 /app/skills/data-analysis/analyze.py /path/to/data.csv
+# DNS management
+dns-manager.sh list namibarden.com
+
+# Send an email
+email-compose.sh send "client@example.com" "Subject" "Body text"
 ```
