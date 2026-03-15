@@ -2240,6 +2240,13 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
           return;
         }
 
+        // Final attempt killed by signal — discard partial stdout, return error
+        if (killedBySignal && stdout) {
+          logger.error({ signal, code, attempt, partialLen: stdout.length }, 'Claude killed on final attempt with partial output — discarding');
+          resolve({ retry: false, text: '⚠️ Response timed out. Please try again.' });
+          return;
+        }
+
         // Parse JSON response for session_id and result text
         let response = '';
         let hitTurnLimit = false;
