@@ -106,8 +106,8 @@ CREATE TRIGGER IF NOT EXISTS obs_fts_delete AFTER DELETE ON observations BEGIN
 END;
 
 CREATE TRIGGER IF NOT EXISTS obs_fts_update AFTER UPDATE ON observations
-  WHEN old.title != new.title OR old.subtitle != new.subtitle OR old.narrative != new.narrative
-    OR old.facts != new.facts OR old.concepts != new.concepts
+  WHEN old.title IS NOT new.title OR old.subtitle IS NOT new.subtitle OR old.narrative IS NOT new.narrative
+    OR old.facts IS NOT new.facts OR old.concepts IS NOT new.concepts
 BEGIN
   INSERT INTO observations_fts(observations_fts, rowid, title, subtitle, narrative, facts, concepts)
   VALUES ('delete', old.id, old.title, old.subtitle, old.narrative, old.facts, old.concepts);
