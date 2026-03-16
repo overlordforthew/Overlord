@@ -39,7 +39,21 @@ else
     log "No config changes to push"
 fi
 
-# 2. Backup Overlord workspace (excluding node_modules, auth, media, .git)
+# 2. Backup memory v2 SQLite database (hot backup via .backup command)
+MEMDB="$OVERLORD_DIR/data/memory-v2.db"
+if [ -f "$MEMDB" ]; then
+    log "Backing up memory-v2 SQLite database..."
+    node -e "
+      const Database = require('better-sqlite3');
+      const db = new Database('$MEMDB', { readonly: true });
+      db.backup('$BACKUP_DIR/memory-v2-$DATE.db').then(() => db.close());
+    " 2>/dev/null || cp "$MEMDB" "$BACKUP_DIR/memory-v2-$DATE.db" 2>/dev/null
+    log "Memory DB: $(du -sh "$BACKUP_DIR/memory-v2-$DATE.db" 2>/dev/null | cut -f1)"
+    # Clean old memory DB backups (keep 7 days)
+    find "$BACKUP_DIR" -name "memory-v2-*.db" -mtime +7 -delete 2>/dev/null
+fi
+
+# 3. Backup Overlord workspace (excluding node_modules, auth, media, .git)
 log "Backing up Overlord workspace..."
 tar czf "$BACKUP_DIR/overlord-$DATE.tar.gz" \
     --exclude='node_modules' \
@@ -48,12 +62,12 @@ tar czf "$BACKUP_DIR/overlord-$DATE.tar.gz" \
     -C /root overlord/ 2>/dev/null
 log "Overlord workspace: $(du -sh "$BACKUP_DIR/overlord-$DATE.tar.gz" | cut -f1)"
 
-# 3. Backup Coolify configs
+# 4. Backup Coolify configs
 log "Backing up Coolify configs..."
 tar czf "$BACKUP_DIR/coolify-config-$DATE.tar.gz" \
     -C /data/coolify proxy/dynamic/ 2>/dev/null || log "WARN: Could not backup Coolify config"
 
-# 4. Backup databases (all PostgreSQL containers — any postgres version)
+# 5. Backup databases (all PostgreSQL containers — any postgres version)
 # Use Config.Image instead of ancestor filter to survive image tag updates
 for CONTAINER in $(docker ps --format '{{.Names}}' 2>/dev/null); do
     IMG=$(docker inspect "$CONTAINER" --format '{{.Config.Image}}' 2>/dev/null)
@@ -67,7 +81,7 @@ for CONTAINER in $(docker ps --format '{{.Names}}' 2>/dev/null); do
     docker exec "$CONTAINER" pg_dumpall -U "$PG_USER" 2>/dev/null | gzip > "$BACKUP_DIR/db-$CONTAINER-$DATE.sql.gz" || log "WARN: Failed to dump $CONTAINER"
 done
 
-# 5. Clean old backups (keep last 7 days)
+# 6. Clean old backups (keep last 7 days)
 log "Cleaning backups older than 7 days..."
 find "$BACKUP_DIR" -name "*.tar.gz" -mtime +7 -delete 2>/dev/null
 find "$BACKUP_DIR" -name "*.sql.gz" -mtime +7 -delete 2>/dev/null

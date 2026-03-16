@@ -7,6 +7,7 @@
  */
 
 import { buildSessionContext, detectProject } from '../lib/context.mjs';
+import { formatCompressionPrompt } from '../lib/compression.mjs';
 import { initSchema } from '../lib/schema.mjs';
 import { getDb } from '../lib/db.mjs';
 
@@ -45,9 +46,19 @@ async function main() {
 
   try {
     const project = detectActiveProject();
+    const parts = [];
+
     const context = buildSessionContext({ project });
-    if (context) {
-      process.stdout.write(JSON.stringify({ systemMessage: context }));
+    if (context) parts.push(context);
+
+    // Check for stale uncompressed events from previous sessions
+    const compression = formatCompressionPrompt({ threshold: 10 });
+    if (compression) {
+      parts.push(`\nSTALE EVENTS FROM PREVIOUS SESSION: ${compression.eventCount} uncompressed events found. Please compress them before starting new work.\n\n${compression.prompt}`);
+    }
+
+    if (parts.length > 0) {
+      process.stdout.write(JSON.stringify({ systemMessage: parts.join('\n\n') }));
     } else {
       process.stdout.write('{}');
     }
