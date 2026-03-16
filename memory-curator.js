@@ -3,8 +3,7 @@
  * Uses OpenRouter free models to keep cost at zero.
  */
 
-import { storeManyMemories, storeMemory } from './memory-store.js';
-import { saveSemantic } from './semantic-store.js';
+import { storeManyMemories, storeMemory, saveSemantic } from './skills/memory-v2/lib/v1-compat.mjs';
 import { callOpenRouter, callWithFallback, FREE_FALLBACK_CHAINS } from './router.js';
 
 const EXTRACT_SYSTEM = `You are a memory extraction system for an AI assistant called Overlord.

@@ -71,10 +71,9 @@ import { executeTaskAutonomously, scheduleVerification } from './executor.js';
 import {
   ensureSchema as ensureMemorySchema, retrieveMemories, formatMemoriesForPrompt,
   seedFromLegacyFile, storeMemory, listMemories, deleteMemory, clearMemories,
-  getMemoryStats,
-} from './memory-store.js';
-import { extractAndStore, scoreRelevance } from './memory-curator.js';
-import { getSemanticContext } from './semantic-store.js';
+  getMemoryStats, scoreRelevance, getSemanticContext,
+} from './skills/memory-v2/lib/v1-compat.mjs';
+import { extractAndStore } from './memory-curator.js';
 import { heavyQueue, spawnWithMemoryLimit, getMemoryLimit, shouldQueue, getMemoryPressure } from './work-queue.js';
 import { initUsageTracker, logUsage, getTodayUsage, getWeekUsage, getCostTrend, formatCostReport } from './usage-tracker.js';
 import { askClaudeSDK, isSDKEnabled, loadSDK } from './claude-sdk.js';
