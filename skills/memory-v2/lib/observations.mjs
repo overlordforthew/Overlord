@@ -69,24 +69,39 @@ export function search(query, { project, limit = 20 } = {}) {
   initSchema();
   const db = getDb();
 
-  let sql = `
-    SELECT o.*, fts.rank
-    FROM observations_fts fts
-    JOIN observations o ON o.id = fts.rowid
-    WHERE observations_fts MATCH ?
-      AND o.status = 'active'
-  `;
-  const params = [query];
+  let results;
+  try {
+    let sql = `
+      SELECT o.*, fts.rank
+      FROM observations_fts fts
+      JOIN observations o ON o.id = fts.rowid
+      WHERE observations_fts MATCH ?
+        AND o.status = 'active'
+    `;
+    const params = [query];
 
-  if (project) {
-    sql += ' AND o.project = ?';
-    params.push(project);
+    if (project) {
+      sql += ' AND o.project = ?';
+      params.push(project);
+    }
+
+    sql += ' ORDER BY fts.rank LIMIT ?';
+    params.push(limit);
+
+    results = db.prepare(sql).all(...params);
+  } catch {
+    // FTS5 query syntax error — fallback to LIKE
+    let sql = "SELECT * FROM observations WHERE status = 'active' AND (title LIKE ? OR narrative LIKE ?)";
+    const likeQ = `%${query}%`;
+    const params = [likeQ, likeQ];
+    if (project) {
+      sql += ' AND project = ?';
+      params.push(project);
+    }
+    sql += ' ORDER BY importance DESC LIMIT ?';
+    params.push(limit);
+    results = db.prepare(sql).all(...params);
   }
-
-  sql += ' ORDER BY fts.rank LIMIT ?';
-  params.push(limit);
-
-  const results = db.prepare(sql).all(...params);
 
   // Update access counts
   const updateStmt = db.prepare('UPDATE observations SET access_count = access_count + 1, last_accessed = ? WHERE id = ?');

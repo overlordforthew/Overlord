@@ -160,32 +160,4 @@ Extract new facts worth remembering. Return [] if nothing new.`;
   }
 }
 
-/**
- * Score retrieved memories for relevance to current message.
- * Pure heuristic — no API call, runs in <1ms.
- */
-export function scoreRelevance(memories, currentMessage, limit = 15) {
-  if (memories.length <= limit) return memories;
-
-  const words = new Set(
-    currentMessage.toLowerCase().split(/\W+/).filter(w => w.length > 3)
-  );
-
-  const scored = memories.map(m => {
-    let score = m.importance || 5;
-    // Keyword overlap boost
-    const mWords = m.content.toLowerCase().split(/\W+/);
-    const overlap = mWords.filter(w => words.has(w)).length;
-    score += overlap * 2;
-    // Recency boost (last 7 days)
-    const age = Date.now() - new Date(m.created_at).getTime();
-    if (age < 7 * 24 * 3600 * 1000) score += 1;
-    // Access frequency boost
-    if (m.access_count > 5) score += 1;
-    return { ...m, _score: score };
-  });
-
-  return scored
-    .sort((a, b) => b._score - a._score)
-    .slice(0, limit);
-}
+// scoreRelevance moved to skills/memory-v2/lib/v1-compat.mjs

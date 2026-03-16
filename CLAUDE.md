@@ -11,7 +11,7 @@ See /projects/CLAUDE.md for infrastructure rules, projects list, and permissions
 - **WhatsApp mode:** Concise, plain text, no markdown headers in messages
 - **Emoji:** Use sparingly, natural not forced
 - **Response rules:** Smart mode — only respond when genuinely helpful
-- **Memory:** Three-tier system — episodic (per-user, PostgreSQL), semantic (global knowledge, PostgreSQL), procedural (how-tos, PostgreSQL). MEMORY.md is auto-generated from DB.
+- **Memory:** Unified SQLite-backed system (memory-v2) — episodic (per-user), semantic (global knowledge), procedural (how-tos), session observations. MEMORY.md auto-generated from DB.
 
 ## UNIQUE TO OVERLORD (not in root CLAUDE.md)
 
@@ -93,14 +93,17 @@ For convenience, a VIEW `conversation_log` exists with aliased columns:
 
 Prefer using `conversation_log` for ad-hoc lookups.
 
-## MEMORY SYSTEM
+## MEMORY SYSTEM (v2 — SQLite)
 
-- **Episodic** (memory-store.js): Per-JID conversational facts, auto-extracted by memory-curator.js
-- **Semantic** (semantic-store.js): Global system knowledge — tools, APIs, infrastructure, configs
-- **Procedural** (procedural in semantic-store.js): Step-by-step procedures for common operations
-- **Associations** (memory_associations table): Cross-type links between memories
-- **Consolidation** (memory-consolidator.js): Daily decay/boost/prune/associate cycle, rebuilds MEMORY.md
+All memory lives in a single SQLite DB at `data/memory-v2.db` (WAL mode). The unified `observations` table handles all memory types.
+
+- **Episodic** (v1-compat.mjs): Per-JID conversational facts, auto-extracted by memory-curator.js
+- **Semantic** (v1-compat.mjs): Global system knowledge — tools, APIs, infrastructure, configs
+- **Procedural** (v1-compat.mjs): Step-by-step procedures for common operations
+- **Session observations**: Claude Code tool events captured by hooks, compressed into observations
+- **Consolidation** (memory-consolidator.js): Daily decay/boost/prune cycle, rebuilds MEMORY.md
 - **Curator** (memory-curator.js): Auto-extracts both episodic AND semantic facts from conversations
+- **CLI**: `mem` (container) or `node scripts/mem.mjs` (host) — search, save, recall, learn, stats
 - When asked about capabilities, ALWAYS search semantic memory first (`mem search` or `getSemanticContext`)
 
 ## PERSONALITY

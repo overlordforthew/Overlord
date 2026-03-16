@@ -372,8 +372,8 @@ async function main() {
   const compResult = formatCompressionPrompt({ threshold: 10 });
   assert(compResult !== null, 'Compression prompt generated (threshold met)');
   assert(compResult.prompt.includes('MEMORY SYSTEM'), 'Prompt contains MEMORY SYSTEM header');
-  assert(compResult.prompt.includes('memory store'), 'Prompt contains store instruction');
-  assert(compResult.prompt.includes('memory mark-compressed'), 'Prompt contains mark-compressed instruction');
+  assert(compResult.prompt.includes('memory.mjs store'), 'Prompt contains store instruction');
+  assert(compResult.prompt.includes('memory.mjs mark-compressed'), 'Prompt contains mark-compressed instruction');
   assert(compResult.lastEventId > 0, 'lastEventId is positive');
   assert(compResult.eventCount >= 10, `Event count >= 10 (got ${compResult.eventCount})`);
 

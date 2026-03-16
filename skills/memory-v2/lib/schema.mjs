@@ -105,7 +105,10 @@ CREATE TRIGGER IF NOT EXISTS obs_fts_delete AFTER DELETE ON observations BEGIN
   VALUES ('delete', old.id, old.title, old.subtitle, old.narrative, old.facts, old.concepts);
 END;
 
-CREATE TRIGGER IF NOT EXISTS obs_fts_update AFTER UPDATE ON observations BEGIN
+CREATE TRIGGER IF NOT EXISTS obs_fts_update AFTER UPDATE ON observations
+  WHEN old.title != new.title OR old.subtitle != new.subtitle OR old.narrative != new.narrative
+    OR old.facts != new.facts OR old.concepts != new.concepts
+BEGIN
   INSERT INTO observations_fts(observations_fts, rowid, title, subtitle, narrative, facts, concepts)
   VALUES ('delete', old.id, old.title, old.subtitle, old.narrative, old.facts, old.concepts);
   INSERT INTO observations_fts(rowid, title, subtitle, narrative, facts, concepts)
@@ -120,6 +123,12 @@ export function initSchema() {
   const db = getDb();
   db.exec(SCHEMA_SQL);
   db.exec(FTS_SQL);
+
+  // Drop and recreate triggers to pick up any definition changes
+  db.exec('DROP TRIGGER IF EXISTS obs_fts_insert');
+  db.exec('DROP TRIGGER IF EXISTS obs_fts_delete');
+  db.exec('DROP TRIGGER IF EXISTS obs_fts_update');
   db.exec(TRIGGER_SQL);
+
   initialized = true;
 }

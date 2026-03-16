@@ -21,7 +21,8 @@ async function main() {
   }
 
   try {
-    // Threshold 10 for batch, but on prompt submit we compress if there are any pending
+    // Hybrid trigger: compress at 10+ events on each prompt submit
+    // Keeps batches meaningful (1-2 observations per batch) without being too noisy
     const result = formatCompressionPrompt({ threshold: 10 });
     if (result) {
       process.stdout.write(JSON.stringify({ systemMessage: result.prompt }));

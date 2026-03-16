@@ -23,12 +23,12 @@ Raw events:
 ${lines.join('\n')}
 
 For each observation, run:
-  memory store --type <decision|bugfix|feature|refactor|discovery|config> --title "..." --narrative "..." --facts '["fact1","fact2"]' --concepts '["concept1"]'
+  node /root/overlord/skills/memory-v2/scripts/memory.mjs store --type <decision|bugfix|feature|refactor|discovery|config> --title "..." --narrative "..." --facts '["fact1","fact2"]' --concepts '["concept1"]'
 
-Optionally add: --files-read '["path"]' --files-modified '["path"]' --outcome worked|failed|partial
+Optionally add: --files-read '["path"]' --files-modified '["path"]' --outcome worked|failed|partial --project <ProjectName>
 
 After storing all observations, run:
-  memory mark-compressed --through-id ${lastEventId}`;
+  node /root/overlord/skills/memory-v2/scripts/memory.mjs mark-compressed --through-id ${lastEventId}`;
 
   return { prompt, lastEventId, eventCount: events.length };
 }
