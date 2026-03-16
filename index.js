@@ -3437,6 +3437,18 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
   if (cmd === '/drafts' && isAdmin(senderJid)) {
     return formatPendingDrafts();
   }
+  if (cmd.startsWith('/send ') && isAdmin(senderJid)) {
+    const draftId = fullText.substring(6).trim();
+    const draft = getPendingDraft(draftId);
+    if (!draft) return `❌ Draft not found: ${draftId}\nUse /drafts to list pending drafts.`;
+    try {
+      await sendDraft(draft);
+      removePendingDraft(draftId);
+      return `✅ Email sent to ${draft.to}`;
+    } catch (err) {
+      return `❌ Failed to send: ${err.message}`;
+    }
+  }
 
   // ---- BOT FLEET (Admin) ----
   if (cmd === '/fleet' && isAdmin(senderJid)) {
@@ -3531,6 +3543,7 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
         '/predict — Predictive infrastructure alerts',
         '/kb <query> — Search knowledge base',
         '/draft <template> <email> — Draft email',
+        '/send <draft-id> — Send pending draft',
         '/fleet — Bot fleet status',
         '/skills — Acquired skills',
         '/servers — Multi-server status',

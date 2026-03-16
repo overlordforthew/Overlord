@@ -72,8 +72,10 @@ export async function checkForNewCommits() {
 }
 
 export async function reviewProject(projectName, commitRange = 'HEAD~1..HEAD') {
-  const path = PROJECTS[projectName];
-  if (!path) return `Unknown project: ${projectName}`;
+  // Case-insensitive lookup
+  const key = Object.keys(PROJECTS).find(k => k.toLowerCase() === projectName.toLowerCase());
+  const path = key ? PROJECTS[key] : null;
+  if (!path) return `Unknown project: ${projectName}. Available: ${Object.keys(PROJECTS).join(', ')}`;
 
   try {
     const { stdout: diff } = await execAsync(
