@@ -22,3 +22,6 @@
 17 */12 * * * docker exec overlord find /root/.claude/projects/ -maxdepth 1 -type d \! -name 'projects' -exec rm -rf {} + 2>/dev/null
 # Ai Chan self-healing health check — every 30 min
 */30 * * * * docker exec overlord bash /app/scripts/test-aichan.sh --heal >> /var/log/aichan-health.log 2>&1
+
+# Memory monitor — alert when Overlord container approaches memory limit
+*/5 * * * * /root/overlord/scripts/memory-monitor.sh >> /root/overlord/logs/memory-monitor.log 2>&1
