@@ -6,7 +6,7 @@ Persistent session memory for Claude Code. Automatically captures tool events, c
 
 All commands via: `node /root/overlord/skills/memory-v2/scripts/memory.mjs <command>`
 
-Full path: `node /root/overlord/skills/memory-v2/scripts/memory.mjs <command>`
+CLI: `memory <command>` (host wrapper at `/usr/local/bin/memory`)
 
 ### Commands
 

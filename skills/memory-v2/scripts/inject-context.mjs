@@ -7,6 +7,29 @@
  */
 
 import { buildSessionContext, detectProject } from '../lib/context.mjs';
+import { initSchema } from '../lib/schema.mjs';
+import { getDb } from '../lib/db.mjs';
+
+function detectActiveProject() {
+  // 1. Try CWD
+  const cwd = process.cwd();
+  const fromCwd = detectProject(cwd);
+  if (fromCwd) return fromCwd;
+
+  // 2. Look at most recent tool events to find the active project
+  try {
+    initSchema();
+    const db = getDb();
+    const row = db.prepare(`
+      SELECT project FROM tool_events
+      WHERE project IS NOT NULL
+      ORDER BY timestamp DESC LIMIT 1
+    `).get();
+    if (row) return row.project;
+  } catch { /* fall through */ }
+
+  return null;
+}
 
 async function main() {
   let raw = '';
@@ -21,10 +44,7 @@ async function main() {
   }
 
   try {
-    // Detect project from CWD
-    const cwd = process.cwd();
-    const project = detectProject(cwd);
-
+    const project = detectActiveProject();
     const context = buildSessionContext({ project });
     if (context) {
       process.stdout.write(JSON.stringify({ systemMessage: context }));

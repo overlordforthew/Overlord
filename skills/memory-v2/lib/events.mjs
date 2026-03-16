@@ -54,3 +54,15 @@ export function getEventsBySession(sessionId) {
   const db = getDb();
   return db.prepare('SELECT * FROM tool_events WHERE session_id = ? ORDER BY timestamp ASC').all(sessionId);
 }
+
+/**
+ * Delete compressed events older than `daysOld` days.
+ * Returns number of rows deleted.
+ */
+export function purgeOldEvents(daysOld = 7) {
+  initSchema();
+  const db = getDb();
+  const cutoff = Date.now() - daysOld * 24 * 3600 * 1000;
+  const { changes } = db.prepare('DELETE FROM tool_events WHERE compressed = 1 AND timestamp < ?').run(cutoff);
+  return changes;
+}

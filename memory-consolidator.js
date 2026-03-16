@@ -8,6 +8,7 @@
 
 import { initSchema } from './skills/memory-v2/lib/schema.mjs';
 import { getDb, closeDb } from './skills/memory-v2/lib/db.mjs';
+import { purgeOldEvents } from './skills/memory-v2/lib/events.mjs';
 import { writeFileSync } from 'fs';
 
 async function decay(db, now) {
@@ -104,6 +105,7 @@ export async function consolidate() {
     report.decayed = await decay(db, now);
     report.boosted = await boost(db, now);
     report.pruned = await prune(db, now);
+    report.purged = purgeOldEvents(7);  // Delete compressed events older than 7 days
     report.rebuild = await rebuildMemoryMd(db);
 
     const stats = db.prepare(`
@@ -130,6 +132,7 @@ if (process.argv[1] && (process.argv[1].endsWith('memory-consolidator.js') || pr
     console.log(`Decayed:      ${report.decayed} memories`);
     console.log(`Boosted:      ${report.boosted} memories`);
     console.log(`Pruned:       ${report.pruned} memories`);
+    console.log(`Purged:       ${report.purged} old compressed events`);
     if (report.rebuild?.path) {
       console.log(`MEMORY.md:    ${report.rebuild.lines} lines -> ${report.rebuild.path}`);
     }
