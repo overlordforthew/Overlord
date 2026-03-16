@@ -13,6 +13,7 @@ const logger = pino({ level: 'info' });
 
 let pool = null;
 let initialized = false;
+let initPromise = null;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS fix_patterns (
@@ -50,14 +51,20 @@ CREATE TRIGGER fix_patterns_search_trigger
 
 export async function initFixPatterns() {
   if (initialized) return true;
+  if (initPromise) return initPromise;
 
+  initPromise = _doInit();
+  return initPromise;
+}
+
+async function _doInit() {
   const host = process.env.CONV_DB_HOST || 'overlord-db';
   const port = parseInt(process.env.CONV_DB_PORT || '5432');
   const database = process.env.CONV_DB_NAME || 'overlord';
   const user = process.env.CONV_DB_USER || 'overlord';
   const password = process.env.CONV_DB_PASS;
 
-  if (!password) return false;
+  if (!password) { initPromise = null; return false; }
 
   try {
     pool = new pg.Pool({
@@ -68,8 +75,14 @@ export async function initFixPatterns() {
     });
 
     const client = await pool.connect();
-    await client.query(SCHEMA);
-    client.release();
+    try {
+      // Advisory lock prevents concurrent schema init deadlocks
+      await client.query('SELECT pg_advisory_lock(299792458)');
+      await client.query(SCHEMA);
+      await client.query('SELECT pg_advisory_unlock(299792458)');
+    } finally {
+      client.release();
+    }
 
     initialized = true;
     logger.info('🔧 Fix patterns initialized');
@@ -77,6 +90,7 @@ export async function initFixPatterns() {
   } catch (err) {
     logger.error({ err: err.message }, 'Fix patterns init failed');
     pool = null;
+    initPromise = null;
     return false;
   }
 }

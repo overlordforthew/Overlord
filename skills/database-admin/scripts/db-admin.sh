@@ -9,8 +9,8 @@ discover_pg_containers() {
   docker ps --format '{{.Names}}' | while read -r name; do
     img=$(docker inspect --format '{{.Config.Image}}' "$name" 2>/dev/null || true)
     if echo "$img" | grep -qi 'postgres'; then
-      user=$(docker exec "$name" bash -c 'echo $POSTGRES_USER' 2>/dev/null || echo "postgres")
-      [ -z "$user" ] && user="postgres"
+      user=$(docker exec "$name" bash -c 'echo $POSTGRES_USER' 2>/dev/null || echo "")
+      [ -z "$user" ] && user="${name%%-db*}"
       echo "$name|$user|$img"
     fi
   done
@@ -18,7 +18,7 @@ discover_pg_containers() {
 
 get_pg_user() {
   local container="$1"
-  docker exec "$container" bash -c 'echo ${POSTGRES_USER:-postgres}' 2>/dev/null || echo "postgres"
+  docker exec "$container" bash -c 'echo ${POSTGRES_USER:-}' 2>/dev/null || echo "${container%%-db*}"
 }
 
 run_psql() {
