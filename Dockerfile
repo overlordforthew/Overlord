@@ -60,7 +60,7 @@ COPY package.json ./
 RUN npm install
 
 # Copy app files
-COPY index.js server.js scheduler.js meta-learning.js router.js session-guard.js heartbeat.js CLAUDE.md traefik-watcher.sh task-store.js state-store.js executor.js policy.js conversation-store.js memory-store.js memory-curator.js semantic-store.js memory-consolidator.js work-queue.js ssrf-guard.js usage-tracker.js fix-patterns.js error-watcher.js claude-sdk.js knowledge-base.js predictive-infra.js web-intel.js revenue-intel.js git-reviewer.js client-comms.js bot-fleet.js skill-learner.js multi-server.js ./
+COPY index.js server.js scheduler.js meta-learning.js router.js session-guard.js heartbeat.js CLAUDE.md traefik-watcher.sh task-store.js state-store.js executor.js policy.js conversation-store.js memory-store.js memory-curator.js semantic-store.js memory-consolidator.js work-queue.js ssrf-guard.js usage-tracker.js fix-patterns.js error-watcher.js claude-sdk.js knowledge-base.js predictive-infra.js web-intel.js revenue-intel.js git-reviewer.js client-comms.js bot-fleet.js skill-learner.js multi-server.js postmortem.js ./
 
 # Copy skills and scripts into container
 COPY skills/ ./skills/

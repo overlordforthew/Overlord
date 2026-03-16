@@ -87,6 +87,7 @@ import { buildDraft, savePendingDraft, formatDraftPreview, formatPendingDrafts, 
 import { getFleetStatus, formatFleetStatus } from './bot-fleet.js';
 import { formatSkillsList, detectCapabilityGap, buildSkillAcquisitionPrompt, markSkillInProgress } from './skill-learner.js';
 import { getAllServersStatus, formatAllServersStatus, runRemoteCommand, getServerNames } from './multi-server.js';
+import { searchPostmortems, formatPostmortemList } from './postmortem.js';
 
 const execAsync = promisify(exec);
 
@@ -3461,6 +3462,13 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
     return formatSkillsList();
   }
 
+  // ---- POSTMORTEMS (Admin) ----
+  if (cmd.startsWith('/postmortems') && isAdmin(senderJid)) {
+    const query = fullText.substring(12).trim();
+    const results = await searchPostmortems(query || '', 10);
+    return formatPostmortemList(results);
+  }
+
   // ---- MULTI-SERVER (Admin) ----
   if (cmd === '/servers' && isAdmin(senderJid)) {
     const statuses = await getAllServersStatus();
@@ -3546,6 +3554,7 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
         '/send <draft-id> — Send pending draft',
         '/fleet — Bot fleet status',
         '/skills — Acquired skills',
+        '/postmortems [query] — Incident postmortems',
         '/servers — Multi-server status',
         '/server <name> <cmd> — Remote command',
         '',

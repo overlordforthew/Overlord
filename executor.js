@@ -20,6 +20,7 @@ import { spawnWithMemoryLimit, getMemoryLimit } from './work-queue.js';
 import { initFixPatterns, findMatchingPatterns, storeFixPattern, extractFixPattern, formatPatternsForPrompt, recordPatternFailure } from './fix-patterns.js';
 import { runTaskWithSDK, isSDKEnabled } from './claude-sdk.js';
 import { detectCapabilityGap, markSkillInProgress, buildSkillAcquisitionPrompt } from './skill-learner.js';
+import { generateAndStorePostmortem } from './postmortem.js';
 
 const ADMIN_JID = `${process.env.ADMIN_NUMBER}@s.whatsapp.net`;
 const CLAUDE_PATH = process.env.CLAUDE_PATH || 'claude';
@@ -359,7 +360,7 @@ export async function executeTaskAutonomously(task, sockRef) {
     // Done
     await closeTask(task.id, TaskStatus.DONE, responseText.substring(0, 400));
 
-    // Extract and store fix pattern (async, fire-and-forget)
+    // Extract fix pattern + generate postmortem (async, fire-and-forget)
     if (task.kind === 'repair' || task.kind === 'fix') {
       setImmediate(async () => {
         try {
@@ -375,6 +376,10 @@ export async function executeTaskAutonomously(task, sockRef) {
             });
             console.log(`[Executor] Stored fix pattern from task ${task.id}`);
           }
+        } catch { /* best effort */ }
+        try {
+          const pm = await generateAndStorePostmortem(task, responseText);
+          if (pm) console.log(`[Executor] Postmortem generated for task ${task.id}: ${pm.title}`);
         } catch { /* best effort */ }
       });
     }
