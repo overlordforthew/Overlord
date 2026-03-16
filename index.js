@@ -78,6 +78,15 @@ import { getSemanticContext } from './semantic-store.js';
 import { heavyQueue, spawnWithMemoryLimit, getMemoryLimit, shouldQueue, getMemoryPressure } from './work-queue.js';
 import { initUsageTracker, logUsage, getTodayUsage, getWeekUsage, getCostTrend, formatCostReport } from './usage-tracker.js';
 import { askClaudeSDK, isSDKEnabled, loadSDK } from './claude-sdk.js';
+import { initKnowledgeBase, ingest as kbIngest, search as kbSearch, getRecent as kbRecent, getStats as kbStats, formatSearchResults as kbFormatResults, formatStats as kbFormatStats } from './knowledge-base.js';
+import { getPredictions, formatPredictions, getAlerts as getInfraAlerts } from './predictive-infra.js';
+import { isResearchRequest, extractResearchTopic, runResearch } from './web-intel.js';
+import { formatRevenueDashboard } from './revenue-intel.js';
+import { reviewProject } from './git-reviewer.js';
+import { buildDraft, savePendingDraft, formatDraftPreview, formatPendingDrafts, getPendingDraft, removePendingDraft, sendDraft, getTemplateNames } from './client-comms.js';
+import { getFleetStatus, formatFleetStatus } from './bot-fleet.js';
+import { formatSkillsList, detectCapabilityGap, buildSkillAcquisitionPrompt, markSkillInProgress } from './skill-learner.js';
+import { getAllServersStatus, formatAllServersStatus, runRemoteCommand, getServerNames } from './multi-server.js';
 
 const execAsync = promisify(exec);
 
@@ -3361,6 +3370,99 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
     }
   }
 
+  // ---- KNOWLEDGE BASE (Admin) ----
+  if (cmd.startsWith('/kb ') && isAdmin(senderJid)) {
+    const subCmd = fullText.substring(4).trim();
+    if (subCmd === 'stats') {
+      const stats = await kbStats();
+      return kbFormatStats(stats);
+    }
+    if (subCmd === 'recent') {
+      const recent = await kbRecent(10);
+      return recent.length ? recent.map((r, i) => {
+        const d = new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return `${i + 1}. [${r.type}] ${r.title || '(untitled)'} (${d})`;
+      }).join('\n') : 'Knowledge base is empty.';
+    }
+    // Default: search
+    const query = subCmd.replace(/^search\s+/i, '');
+    const results = await kbSearch(query);
+    return kbFormatResults(results);
+  }
+
+  // ---- PREDICTIVE INFRASTRUCTURE (Admin) ----
+  if (cmd === '/predict' && isAdmin(senderJid)) {
+    const predictions = await getPredictions();
+    return formatPredictions(predictions);
+  }
+
+  // ---- RESEARCH (Admin) ----
+  if (cmd.startsWith('/research ') && isAdmin(senderJid)) {
+    const topic = fullText.substring(10).trim();
+    if (!topic) return '❌ Usage: /research <topic>';
+    await sockRef.sock.sendMessage(chatJid, { text: `🔍 Researching: ${topic}\nThis may take a few minutes...` }).catch(() => {});
+    try {
+      const result = await runResearch(topic);
+      return result.substring(0, 3500);
+    } catch (err) {
+      return `❌ Research failed: ${err.message}`;
+    }
+  }
+
+  // ---- REVENUE DASHBOARD (Admin) ----
+  if (cmd === '/revenue' && isAdmin(senderJid)) {
+    return await formatRevenueDashboard();
+  }
+
+  // ---- CODE REVIEW (Admin) ----
+  if (cmd.startsWith('/review ') && isAdmin(senderJid)) {
+    const project = fullText.substring(8).trim();
+    if (!project) return '❌ Usage: /review <project>';
+    await sockRef.sock.sendMessage(chatJid, { text: `🔍 Reviewing ${project}...` }).catch(() => {});
+    const result = await reviewProject(project);
+    return result.substring(0, 3000);
+  }
+
+  // ---- CLIENT COMMS (Admin) ----
+  if (cmd.startsWith('/draft ') && isAdmin(senderJid)) {
+    const parts = fullText.substring(7).trim().split(/\s+/);
+    const template = parts[0];
+    const to = parts[1];
+    if (!template || !to) return `❌ Usage: /draft <template> <email>\nTemplates: ${getTemplateNames().join(', ')}`;
+    const draft = buildDraft(template, { to, name: parts[2] || '' });
+    if (!draft) return `❌ Unknown template: ${template}\nAvailable: ${getTemplateNames().join(', ')}`;
+    const id = savePendingDraft(draft);
+    return formatDraftPreview(draft);
+  }
+  if (cmd === '/drafts' && isAdmin(senderJid)) {
+    return formatPendingDrafts();
+  }
+
+  // ---- BOT FLEET (Admin) ----
+  if (cmd === '/fleet' && isAdmin(senderJid)) {
+    const status = await getFleetStatus();
+    return formatFleetStatus(status);
+  }
+
+  // ---- SKILLS (Admin) ----
+  if (cmd === '/skills' && isAdmin(senderJid)) {
+    return formatSkillsList();
+  }
+
+  // ---- MULTI-SERVER (Admin) ----
+  if (cmd === '/servers' && isAdmin(senderJid)) {
+    const statuses = await getAllServersStatus();
+    return formatAllServersStatus(statuses);
+  }
+  if (cmd.startsWith('/server ') && isAdmin(senderJid)) {
+    const parts = fullText.substring(8).trim().split(/\s+/);
+    const serverName = parts[0];
+    const command = parts.slice(1).join(' ');
+    if (!serverName || !command) return `❌ Usage: /server <name> <command>\nServers: ${getServerNames().join(', ')}`;
+    const result = await runRemoteCommand(serverName, command);
+    return result.success ? result.output.substring(0, 2000) : `❌ ${result.error}`;
+  }
+
   // ---- HELP ----
   if (cmd === '/help') {
     const profile = getUserProfile(senderJid);
@@ -3423,6 +3525,16 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
         '/stripe — Stripe payments',
         '/cf — Cloudflare DNS & cache',
         '/cost — Usage & cost dashboard',
+        '/revenue — Stripe revenue dashboard',
+        '/research <topic> — Deep web research',
+        '/review <project> — Code review latest commits',
+        '/predict — Predictive infrastructure alerts',
+        '/kb <query> — Search knowledge base',
+        '/draft <template> <email> — Draft email',
+        '/fleet — Bot fleet status',
+        '/skills — Acquired skills',
+        '/servers — Multi-server status',
+        '/server <name> <cmd> — Remote command',
         '',
         '📋 Project Management:',
         '/approve <name> — Approve project request',
@@ -3593,6 +3705,9 @@ async function startBot() {
 
   // Initialize usage tracker (cost dashboard)
   await initUsageTracker();
+
+  // Initialize knowledge base
+  await initKnowledgeBase();
 
   // Initialize episodic memory schema (Memex)
   try {

@@ -19,6 +19,7 @@ import { logRegression } from './meta-learning.js';
 import { spawnWithMemoryLimit, getMemoryLimit } from './work-queue.js';
 import { initFixPatterns, findMatchingPatterns, storeFixPattern, extractFixPattern, formatPatternsForPrompt, recordPatternFailure } from './fix-patterns.js';
 import { runTaskWithSDK, isSDKEnabled } from './claude-sdk.js';
+import { detectCapabilityGap, markSkillInProgress, buildSkillAcquisitionPrompt } from './skill-learner.js';
 
 const ADMIN_JID = `${process.env.ADMIN_NUMBER}@s.whatsapp.net`;
 const CLAUDE_PATH = process.env.CLAUDE_PATH || 'claude';
@@ -293,6 +294,16 @@ export async function executeTaskAutonomously(task, sockRef) {
       await safeSend(sockRef, chatJid,
         `🚫 *Task blocked:* ${task.title}\n\n${responseText.substring(0, 400)}`
       );
+      // Detect capability gaps and trigger skill acquisition
+      setImmediate(async () => {
+        try {
+          const gap = detectCapabilityGap(responseText);
+          if (gap) {
+            markSkillInProgress(task.title, gap.gap);
+            console.log(`[Executor] Skill gap detected: ${gap.gap}`);
+          }
+        } catch { /* best effort */ }
+      });
       return { status: 'blocked', result: responseText };
     }
 

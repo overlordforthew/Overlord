@@ -781,5 +781,53 @@ export async function startScheduler(sockRef) {
   });
   console.log('👁️ Error watcher scheduled (docker events + Traefik 5xx every 2 min)');
 
+  // 13. Git auto-review — check for new commits every 30 minutes
+  cron.schedule('*/30 * * * *', async () => {
+    try {
+      const { autoReviewNewCommits } = await import('./git-reviewer.js');
+      await autoReviewNewCommits(async (msg) => {
+        await sockRef.sock.sendMessage(ADMIN_JID, { text: msg.substring(0, 3900) });
+      });
+      writeHeartbeat('git-review');
+    } catch (err) {
+      console.error('Git auto-review error:', err.message);
+    }
+  });
+  console.log('🔍 Git auto-review scheduled (every 30 min)');
+
+  // 14. Fleet health check — every 5 minutes
+  cron.schedule('*/5 * * * *', async () => {
+    try {
+      const { checkFleetHealth } = await import('./bot-fleet.js');
+      await checkFleetHealth(async (msg) => {
+        await sockRef.sock.sendMessage(ADMIN_JID, { text: msg.substring(0, 3900) });
+      });
+      writeHeartbeat('fleet-health');
+    } catch (err) {
+      console.error('Fleet health check error:', err.message);
+    }
+  });
+  console.log('🤖 Fleet health check scheduled (every 5 min)');
+
+  // 15. Predictive infrastructure alerts — daily at 7am AST (= 11am UTC)
+  cron.schedule('0 11 * * *', async () => {
+    try {
+      const { getAlerts } = await import('./predictive-infra.js');
+      const alerts = await getAlerts();
+      if (alerts.length > 0) {
+        const lines = ['🔮 *Predictive Infrastructure Alerts*\n'];
+        for (const a of alerts) {
+          const emoji = a.severity === 'critical' ? '🔴' : '🟡';
+          lines.push(`${emoji} ${a.message}`);
+        }
+        await sockRef.sock.sendMessage(ADMIN_JID, { text: lines.join('\n') });
+      }
+      writeHeartbeat('predictive-infra');
+    } catch (err) {
+      console.error('Predictive infra alert error:', err.message);
+    }
+  });
+  console.log('🔮 Predictive infrastructure alerts scheduled (7:00 AM AST / 11:00 UTC)');
+
   console.log('⏰ Scheduler ready');
 }
