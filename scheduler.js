@@ -829,5 +829,51 @@ export async function startScheduler(sockRef) {
   });
   console.log('🔮 Predictive infrastructure alerts scheduled (7:00 AM AST / 11:00 UTC)');
 
+  // 16. Memory v2 health check — every 6 hours
+  cron.schedule('0 */6 * * *', async () => {
+    try {
+      const { initSchema } = await import('./skills/memory-v2/lib/schema.mjs');
+      const { getDb } = await import('./skills/memory-v2/lib/db.mjs');
+      initSchema();
+      const db = getDb();
+
+      const stats = db.prepare(`
+        SELECT
+          (SELECT COUNT(*) FROM observations WHERE status = 'active') as active_obs,
+          (SELECT COUNT(*) FROM tool_events WHERE compressed = 0) as uncompressed,
+          (SELECT COUNT(*) FROM tool_events) as total_events,
+          (SELECT ROUND(AVG(importance), 2) FROM observations WHERE status = 'active') as avg_importance
+      `).get();
+
+      const alerts = [];
+
+      // Alert if uncompressed events are piling up (compression may be stuck)
+      if (stats.uncompressed > 50) {
+        alerts.push(`⚠️ ${stats.uncompressed} uncompressed events — compression may be stuck`);
+      }
+
+      // Alert if no active observations exist (possible DB issue)
+      if (stats.total_events > 100 && stats.active_obs === 0) {
+        alerts.push(`⚠️ 0 active observations despite ${stats.total_events} events — possible issue`);
+      }
+
+      // Alert if average importance is dropping too low
+      if (stats.avg_importance !== null && stats.avg_importance < 0.2) {
+        alerts.push(`⚠️ Average importance ${stats.avg_importance} — consolidation may be too aggressive`);
+      }
+
+      if (alerts.length > 0) {
+        const msg = `🧠 Memory Health Alert\n\n${alerts.join('\n')}\n\nStats: ${stats.active_obs} obs, ${stats.uncompressed} pending, ${stats.total_events} total events`;
+        await sockRef.sock.sendMessage(ADMIN_JID, { text: msg });
+        console.log(`🧠 Memory health: ${alerts.length} alert(s) sent`);
+      }
+
+      writeHeartbeat('memory-health');
+    } catch (err) {
+      console.error('Memory health check error:', err.message);
+    }
+  });
+  console.log('🧠 Memory v2 health check scheduled (every 6 hours)');
+
   console.log('⏰ Scheduler ready');
 }
