@@ -118,13 +118,19 @@ export function removePendingDraft(id) {
 export async function sendDraft(draft) {
   if (!draft || !draft.to || !draft.body) throw new Error('Invalid draft');
 
-  // Build RFC 2822 email via gws
-  const escapedBody = draft.body.replace(/'/g, "'\\''");
-  const escapedSubject = (draft.subject || 'No subject').replace(/'/g, "'\\''");
+  // Validate email to prevent shell injection
+  if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(draft.to)) {
+    throw new Error(`Invalid email address: ${draft.to}`);
+  }
+
+  // Build RFC 2822 email — encode in JS to avoid shell interpolation
+  const subject = draft.subject || 'No subject';
+  const raw = `To: ${draft.to}\nSubject: ${subject}\nContent-Type: text/plain; charset=utf-8\n\n${draft.body}`;
+  const rawB64 = Buffer.from(raw).toString('base64url');
 
   try {
     await execAsync(
-      `gws gmail users messages send --params '{"userId":"me"}' --body '{"raw":"'$(echo "To: ${draft.to}\nSubject: ${escapedSubject}\nContent-Type: text/plain; charset=utf-8\n\n${escapedBody}" | base64 -w 0)'"}'`,
+      `gws gmail users messages send --params '{"userId":"me"}' --body '{"raw":"${rawB64}"}'`,
       { timeout: 15000 }
     );
     logger.info({ to: draft.to, template: draft.template }, 'Email sent');

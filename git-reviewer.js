@@ -41,6 +41,7 @@ function saveState(state) {
 export async function checkForNewCommits() {
   const state = loadState();
   const newCommits = [];
+  let stateChanged = false;
 
   for (const [name, path] of Object.entries(PROJECTS)) {
     try {
@@ -63,11 +64,14 @@ export async function checkForNewCommits() {
         newCommits.push({ name, path, from: lastKnown, to: currentHash, log: log.trim() });
       }
 
-      state[name] = currentHash;
+      if (state[name] !== currentHash) {
+        state[name] = currentHash;
+        stateChanged = true;
+      }
     } catch { /* skip unavailable repos */ }
   }
 
-  saveState(state);
+  if (stateChanged) saveState(state);
   return newCommits;
 }
 

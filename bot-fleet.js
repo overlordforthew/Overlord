@@ -29,54 +29,34 @@ export async function getFleetStatus() {
   for (const [key, bot] of Object.entries(BOTS)) {
     const info = { name: bot.name, admin: bot.admin, status: 'unknown', uptime: null, errors: [] };
 
-    // Container status
-    try {
-      const { stdout } = await execAsync(
-        `docker inspect --format='{{.State.Status}} {{.State.StartedAt}}' ${bot.container} 2>/dev/null`,
-        { timeout: 5000 }
-      );
-      const [state, started] = stdout.trim().split(' ');
+    // Run all 4 checks in parallel (independent docker commands)
+    const [containerResult, errorsResult, dbResult, escalationsResult] = await Promise.allSettled([
+      execAsync(`docker inspect --format='{{.State.Status}} {{.State.StartedAt}}' ${bot.container} 2>/dev/null`, { timeout: 5000 }),
+      execAsync(`docker logs ${bot.container} --tail 100 2>&1 | grep -i "error\\|fatal\\|crash\\|SIGTERM" | tail -5`, { timeout: 10000 }),
+      execAsync(`docker inspect --format='{{.State.Status}}' ${bot.dbContainer} 2>/dev/null`, { timeout: 5000 }),
+      execAsync(`docker logs ${bot.container} --tail 200 2>&1 | grep -i "overlord\\|escalat\\|need help\\|stuck" | tail -3`, { timeout: 10000 }),
+    ]);
+
+    if (containerResult.status === 'fulfilled') {
+      const [state, started] = containerResult.value.stdout.trim().split(' ');
       info.status = state;
       if (state === 'running') {
         const upMs = Date.now() - new Date(started).getTime();
         info.uptime = `${Math.round(upMs / 3600000)}h`;
       }
-    } catch {
+    } else {
       info.status = 'not found';
     }
 
-    // Recent errors
-    try {
-      const { stdout } = await execAsync(
-        `docker logs ${bot.container} --tail 100 2>&1 | grep -i "error\\|fatal\\|crash\\|SIGTERM" | tail -5`,
-        { timeout: 10000 }
-      );
-      if (stdout.trim()) {
-        info.errors = stdout.trim().split('\n').map(l => l.substring(0, 150));
-      }
-    } catch {}
-
-    // DB container status
-    try {
-      const { stdout } = await execAsync(
-        `docker inspect --format='{{.State.Status}}' ${bot.dbContainer} 2>/dev/null`,
-        { timeout: 5000 }
-      );
-      info.dbStatus = stdout.trim();
-    } catch {
-      info.dbStatus = 'not found';
+    if (errorsResult.status === 'fulfilled' && errorsResult.value.stdout.trim()) {
+      info.errors = errorsResult.value.stdout.trim().split('\n').map(l => l.substring(0, 150));
     }
 
-    // Check for escalation patterns in recent logs
-    try {
-      const { stdout } = await execAsync(
-        `docker logs ${bot.container} --tail 200 2>&1 | grep -i "overlord\\|escalat\\|need help\\|stuck" | tail -3`,
-        { timeout: 10000 }
-      );
-      if (stdout.trim()) {
-        info.escalations = stdout.trim().split('\n').map(l => l.substring(0, 200));
-      }
-    } catch {}
+    info.dbStatus = dbResult.status === 'fulfilled' ? dbResult.value.stdout.trim() : 'not found';
+
+    if (escalationsResult.status === 'fulfilled' && escalationsResult.value.stdout.trim()) {
+      info.escalations = escalationsResult.value.stdout.trim().split('\n').map(l => l.substring(0, 200));
+    }
 
     status[key] = info;
   }
@@ -137,18 +117,33 @@ export function formatFleetStatus(status) {
   return lines.join('\n');
 }
 
+// Track failed restart attempts to avoid spamming alerts
+const _fleetAlertState = {};
+
 export async function checkFleetHealth(sendAlert) {
   const status = await getFleetStatus();
 
   for (const [key, info] of Object.entries(status)) {
     if (info.status !== 'running') {
-      await sendAlert(`🔴 *Fleet Alert:* ${info.name} is ${info.status}. Auto-restarting...`);
-      try {
-        await restartBot(key);
-        await sendAlert(`🟢 ${info.name} restarted successfully.`);
-      } catch (err) {
-        await sendAlert(`❌ Failed to restart ${info.name}: ${err.message}`);
+      const state = _fleetAlertState[key] || { failures: 0, lastAlert: 0 };
+      // Only alert on first failure or every 30 minutes after
+      const timeSinceLastAlert = Date.now() - state.lastAlert;
+      if (state.failures === 0 || timeSinceLastAlert > 30 * 60 * 1000) {
+        await sendAlert(`🔴 *Fleet Alert:* ${info.name} is ${info.status}. Auto-restarting...`);
+        try {
+          await restartBot(key);
+          await sendAlert(`🟢 ${info.name} restarted successfully.`);
+          delete _fleetAlertState[key];
+          continue;
+        } catch (err) {
+          await sendAlert(`❌ Failed to restart ${info.name}: ${err.message}`);
+        }
+        state.lastAlert = Date.now();
       }
+      state.failures++;
+      _fleetAlertState[key] = state;
+    } else {
+      delete _fleetAlertState[key];
     }
   }
 }

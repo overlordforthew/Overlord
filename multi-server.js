@@ -88,10 +88,10 @@ export async function getServerStatus(serverKey) {
 }
 
 export async function getAllServersStatus() {
+  const keys = Object.keys(SERVERS);
+  const statuses = await Promise.all(keys.map(key => getServerStatus(key)));
   const results = {};
-  for (const key of Object.keys(SERVERS)) {
-    results[key] = await getServerStatus(key);
-  }
+  keys.forEach((key, i) => { results[key] = statuses[i]; });
   return results;
 }
 

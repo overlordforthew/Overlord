@@ -37,20 +37,18 @@ export async function getDailyRevenue() {
   const weekAgo = now - 604800;
   const monthAgo = now - 2592000;
 
-  const [todayCharges, weekCharges, monthCharges] = await Promise.all([
-    s.charges.list({ created: { gte: dayAgo }, limit: 100 }),
-    s.charges.list({ created: { gte: weekAgo }, limit: 100 }),
-    s.charges.list({ created: { gte: monthAgo }, limit: 100 }),
-  ]);
+  // Single API call — slice locally for today/week/month
+  const allCharges = await s.charges.list({ created: { gte: monthAgo }, limit: 100 });
 
-  const sum = (charges) => charges.data
-    .filter(c => c.paid && !c.refunded)
-    .reduce((acc, c) => acc + c.amount, 0) / 100;
+  const sumAndCount = (charges, since) => {
+    const filtered = charges.filter(c => c.paid && !c.refunded && c.created >= since);
+    return { amount: filtered.reduce((acc, c) => acc + c.amount, 0) / 100, count: filtered.length };
+  };
 
   return {
-    today: { amount: sum(todayCharges), count: todayCharges.data.filter(c => c.paid).length },
-    week: { amount: sum(weekCharges), count: weekCharges.data.filter(c => c.paid).length },
-    month: { amount: sum(monthCharges), count: monthCharges.data.filter(c => c.paid).length },
+    today: sumAndCount(allCharges.data, dayAgo),
+    week: sumAndCount(allCharges.data, weekAgo),
+    month: sumAndCount(allCharges.data, monthAgo),
   };
 }
 
