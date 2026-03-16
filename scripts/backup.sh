@@ -47,7 +47,12 @@ if [ -f "$MEMDB" ]; then
       const Database = require('better-sqlite3');
       const db = new Database('$MEMDB', { readonly: true });
       db.backup('$BACKUP_DIR/memory-v2-$DATE.db').then(() => db.close());
-    " 2>/dev/null || cp "$MEMDB" "$BACKUP_DIR/memory-v2-$DATE.db" 2>/dev/null
+    " 2>/dev/null || {
+      # WAL-safe fallback: copy all three files
+      cp "$MEMDB" "$BACKUP_DIR/memory-v2-$DATE.db" 2>/dev/null
+      cp "${MEMDB}-wal" "$BACKUP_DIR/memory-v2-$DATE.db-wal" 2>/dev/null || true
+      cp "${MEMDB}-shm" "$BACKUP_DIR/memory-v2-$DATE.db-shm" 2>/dev/null || true
+    }
     log "Memory DB: $(du -sh "$BACKUP_DIR/memory-v2-$DATE.db" 2>/dev/null | cut -f1)"
     # Clean old memory DB backups (keep 7 days)
     find "$BACKUP_DIR" -name "memory-v2-*.db" -mtime +7 -delete 2>/dev/null
