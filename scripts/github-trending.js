@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 /**
- * github-trending.js — Weekly AI/agent repo intelligence report
+ * github-trending.js — Weekly AI/agent repo intelligence + skill harvester
  *
- * Searches GitHub API for trending AI repos and generates a WhatsApp-friendly
- * report with recommendations for Gil's stack.
+ * Searches GitHub API for trending AI repos, generates a WhatsApp-friendly
+ * report with recommendations, then runs the skill harvester on top picks
+ * to auto-analyze repos for extractable skills.
  *
  * Usage: node github-trending.js [--json]
  */
+
+import { execSync } from 'child_process';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 
 const CATEGORIES = [
   { label: 'AI Agents & Assistants', query: 'ai agent OR ai assistant OR multi-agent OR autonomous agent' },
@@ -212,6 +216,87 @@ async function generateReport() {
   if (rateLimited) {
     lines.push('', '(Note: GitHub API rate limited — some categories may be incomplete)');
   }
+
+  // === SKILL HARVESTER INTEGRATION ===
+  // Run harvester on top 3 most relevant repos
+  const harvestTargets = relevantToStack
+    .filter(r => r.relevance >= 30)
+    .slice(0, 3);
+
+  const harvested = [];
+  const HARVESTER = '/app/skills/skill-harvester/repo-analyzer.sh';
+
+  if (harvestTargets.length > 0 && existsSync(HARVESTER)) {
+    lines.push('', 'SKILL HARVESTER — auto-analyzed repos:');
+
+    for (const repo of harvestTargets) {
+      const repoUrl = repo.html_url || `https://github.com/${repo.full_name}`;
+      const repoSlug = repo.full_name.replace('/', '-');
+      const analysisPath = `/tmp/repos/${repoSlug}/ANALYSIS_RAW.txt`;
+
+      try {
+        console.log(`Harvesting ${repo.full_name}...`);
+        execSync(`bash ${HARVESTER} "${repoUrl}" --quick`, {
+          timeout: 60000,
+          encoding: 'utf-8',
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+
+        if (existsSync(analysisPath)) {
+          // Parse key stats from analysis
+          const analysis = readFileSync(analysisPath, 'utf-8');
+          const totalFiles = analysis.match(/TOTAL_FILES:\s*(\d+)/)?.[1] || '?';
+          const lang = analysis.match(/PRIMARY_LANGUAGE:\s*(.+)/)?.[1]?.trim() || '?';
+          const toolCount = (analysis.match(/=== TOOLS.*?===/s)?.[0]?.split('\n').filter(l => l.startsWith('./')).length) || 0;
+          const promptCount = (analysis.match(/=== PROMPTS.*?===/s)?.[0]?.split('\n').filter(l => l.startsWith('./')).length) || 0;
+
+          lines.push(`  ${repo.full_name} (${formatNumber(repo.stargazers_count)} stars)`);
+          lines.push(`    ${totalFiles} files | ${lang} | ${toolCount} tools | ${promptCount} prompts`);
+          lines.push(`    Analysis: ${analysisPath}`);
+          lines.push('');
+
+          harvested.push({
+            repo: repo.full_name,
+            url: repoUrl,
+            stars: repo.stargazers_count,
+            relevance: repo.relevance,
+            analysisPath,
+            lang,
+            totalFiles: parseInt(totalFiles) || 0,
+            toolCount,
+            promptCount,
+          });
+        }
+      } catch (err) {
+        console.error(`Harvest failed for ${repo.full_name}:`, err.message?.substring(0, 100));
+        lines.push(`  ${repo.full_name} — harvest failed (timeout or clone error)`);
+        lines.push('');
+      }
+    }
+
+    if (harvested.length > 0) {
+      lines.push(`${harvested.length} repo(s) harvested. Reply "extract skills from [repo]" to generate SKILL.md drafts.`);
+    }
+  } else if (harvestTargets.length === 0) {
+    lines.push('', 'SKILL HARVESTER: No repos scored high enough for auto-harvest this week.');
+  }
+
+  // Save harvest manifest for easy follow-up
+  try {
+    const manifestDir = '/app/data';
+    if (!existsSync(manifestDir)) mkdirSync(manifestDir, { recursive: true });
+    writeFileSync('/app/data/friday-harvest.json', JSON.stringify({
+      date: now.toISOString(),
+      harvested,
+      topRepos: scored.slice(0, 10).map(r => ({
+        name: r.full_name,
+        stars: r.stargazers_count,
+        relevance: r.relevance,
+        velocity: r.velocity,
+        url: r.html_url,
+      })),
+    }, null, 2));
+  } catch { /* best effort */ }
 
   return lines.join('\n');
 }

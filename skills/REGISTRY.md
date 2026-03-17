@@ -24,11 +24,14 @@ Quick reference of all available skills and their tools. Read the SKILL.md in ea
 | **Notification Hub** | `skills/notification-hub/` | `notify.sh` | Multi-channel notifications — WhatsApp, Discord, email with fallback |
 | **Document Reader** | `skills/document-reader/` | `doc-reader.py` | Parse PDFs, XLSX, CSV, DOCX with AI summarization |
 | **Image Generator** | `skills/image-generator/` | `image-gen.sh` | AI image generation via Pollinations.ai — styles, social media sizes |
+| **Skill Harvester** | `skills/skill-harvester/` | `harvest.sh`, `repo-analyzer.sh`, `skill-extract.sh` | Auto-extract skills from GitHub repos — clone, analyze, generate SKILL.md drafts |
 
 ## Skills with Instructions Only
 
 | Skill | Directory | Description |
 |-------|-----------|-------------|
+| **Code Review** | `skills/code-review/` | Structured reviews with priority markers (BLOCKER/SUGGESTION/NIT/PRAISE), security focus |
+| **Incident Response** | `skills/incident-response/` | Severity classification, self-healing escalation, post-mortem templates, runbooks |
 | **Server Admin** | `skills/server-admin/` | Docker, Coolify, UFW, Tailscale, backups, security procedures |
 | **WhatsApp** | `skills/whatsapp/` | Chat behavior, group rules, admin commands, media handling |
 | **Video Pipeline** | `skills/video-pipeline/` | Nami's meditation videos: script → voice → visuals → publish |

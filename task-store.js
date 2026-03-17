@@ -10,6 +10,14 @@ import { existsSync, mkdirSync } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 
+// Simple async mutex to serialize writes to tasks.json
+let writeLock = Promise.resolve();
+function withWriteLock(fn) {
+  const next = writeLock.then(() => fn(), () => fn());
+  writeLock = next.catch(() => {});
+  return next;
+}
+
 const DATA_DIR = process.env.DATA_DIR || './data';
 const TASKS_FILE = path.join(DATA_DIR, 'tasks.json');
 const EVENTS_FILE = path.join(DATA_DIR, 'task-events.jsonl');
@@ -54,11 +62,15 @@ async function readTasks() {
   }
 }
 
-async function writeTasks(tasks) {
+async function writeTasksUnsafe(tasks) {
   ensureDir(DATA_DIR);
-  const tmp = TASKS_FILE + '.tmp';
+  const tmp = TASKS_FILE + '.' + crypto.randomBytes(4).toString('hex') + '.tmp';
   await fs.writeFile(tmp, JSON.stringify(tasks, null, 2));
   await fs.rename(tmp, TASKS_FILE);
+}
+
+async function writeTasks(tasks) {
+  return withWriteLock(() => writeTasksUnsafe(tasks));
 }
 
 /**
@@ -78,7 +90,6 @@ export async function createTask({
   retryBudget = 3,
   source = 'user', // 'user' | 'observer' | 'scheduler'
 }) {
-  const tasks = await readTasks();
   const id = crypto.randomBytes(4).toString('hex');
   const task = {
     id,
@@ -104,8 +115,11 @@ export async function createTask({
     awaitingApproval: false,
     source,
   };
-  tasks.push(task);
-  await writeTasks(tasks);
+  await withWriteLock(async () => {
+    const tasks = await readTasks();
+    tasks.push(task);
+    await writeTasksUnsafe(tasks);
+  });
   await addTaskEvent(id, { type: 'created', description: `Task created: ${title}` });
   return task;
 }
@@ -114,12 +128,16 @@ export async function createTask({
  * Update fields on a task.
  */
 export async function updateTask(taskId, updates) {
-  const tasks = await readTasks();
-  const idx = tasks.findIndex(t => t.id === taskId);
-  if (idx === -1) return null;
-  tasks[idx] = { ...tasks[idx], ...updates, updatedAt: now() };
-  await writeTasks(tasks);
-  return tasks[idx];
+  let updated = null;
+  await withWriteLock(async () => {
+    const tasks = await readTasks();
+    const idx = tasks.findIndex(t => t.id === taskId);
+    if (idx === -1) return;
+    tasks[idx] = { ...tasks[idx], ...updates, updatedAt: now() };
+    updated = tasks[idx];
+    await writeTasksUnsafe(tasks);
+  });
+  return updated;
 }
 
 export async function getTask(taskId) {

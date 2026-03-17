@@ -76,6 +76,25 @@ namibarden.com, beastmode.namibarden.com, lumina.namibarden.com, surfababe.namib
 
 Uses only standard Ubuntu tools: `ss`, `openssl`, `curl`, `npm`, `docker`, `fail2ban-client`, `sshd`, `stat`, `find`, `jq`.
 
+## Application Security Review (STRIDE)
+
+Beyond infrastructure scanning, use STRIDE analysis for application-level code reviews:
+
+| Threat | What to Check | Example |
+|--------|--------------|---------|
+| Spoofing | Auth endpoints, token validation, session management | Missing MFA, weak JWT validation |
+| Tampering | Input validation, HMAC signatures, data integrity | Unsigned API requests, unvalidated form data |
+| Repudiation | Audit logging, action tracking | No log of who deleted data |
+| Info Disclosure | Error messages, stack traces, verbose logging | Raw SQL errors shown to users |
+| Denial of Service | Rate limiting, resource limits, input size bounds | No rate limit on public API |
+| Elevation of Privilege | RBAC, session isolation, admin panel access | User can access admin routes |
+
+When reviewing code for security:
+1. Map trust boundaries (User -> API -> Service -> Database)
+2. Run STRIDE against each boundary crossing
+3. Classify findings as BLOCKER/SUGGESTION/NIT (see code-review skill)
+4. Prioritize: auth bypass and injection > info disclosure > missing headers
+
 ## When to Use
 
 - Weekly security audit
@@ -83,3 +102,4 @@ Uses only standard Ubuntu tools: `ss`, `openssl`, `curl`, `npm`, `docker`, `fail
 - After infrastructure changes (new domains, new containers)
 - Before and after Traefik or fail2ban config changes
 - When investigating suspicious activity
+- Before deploying new user-facing features (STRIDE review)
