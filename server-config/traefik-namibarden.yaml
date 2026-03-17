@@ -201,6 +201,25 @@ http:
       tls:
         certResolver: letsencrypt
 
+    # === Hyperliquid Dashboard (Tailscale only) ===
+    http-hl-dashboard:
+      entryPoints:
+        - http
+      rule: "Host(`hl.namibarden.com`)"
+      middlewares:
+        - redirect-to-https-file
+      service: hl-dashboard
+
+    https-hl-dashboard:
+      entryPoints:
+        - https
+      rule: "Host(`hl.namibarden.com`)"
+      middlewares:
+        - security-headers
+      service: hl-dashboard
+      tls:
+        certResolver: letsencrypt
+
     # SurfaBabe deploy webhook (path on surfababe subdomain)
     https-surfababe-deploy:
       entryPoints:
@@ -279,6 +298,11 @@ http:
       loadBalancer:
         servers:
           - url: "http://qkggs84cs88o0gww4wc80gwo-184905842428:80"
+
+    hl-dashboard:
+      loadBalancer:
+        servers:
+          - url: "http://hl-dashboard:5555"
 
     overlord-api:
       loadBalancer:

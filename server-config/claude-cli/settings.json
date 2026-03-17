@@ -39,6 +39,38 @@
             "command": "bash /root/.claude/hooks/post-edit-check.sh"
           }
         ]
+      },
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /root/overlord/skills/memory-v2/scripts/capture-event.mjs",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /root/overlord/skills/memory-v2/scripts/prompt-compress.mjs",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /root/overlord/skills/memory-v2/scripts/inject-context.mjs",
+            "timeout": 10000
+          }
+        ]
       }
     ]
   },
