@@ -875,5 +875,32 @@ export async function startScheduler(sockRef) {
   });
   console.log('🧠 Memory v2 health check scheduled (every 6 hours)');
 
+  // 17. Memory v2 auto-compression — every 6 hours (15 min after health check)
+  cron.schedule('15 */6 * * *', async () => {
+    try {
+      const { execSync } = await import('child_process');
+      const output = execSync('node /app/skills/memory-v2/scripts/auto-compress.mjs', {
+        timeout: 120000,
+        encoding: 'utf-8',
+        cwd: '/app',
+      });
+
+      // Parse the last JSON line
+      const lines = output.trim().split('\n');
+      const lastLine = lines[lines.length - 1];
+      try {
+        const result = JSON.parse(lastLine);
+        if (result.observations > 0) {
+          console.log(`🗜️ Auto-compressed: ${result.compressed} events → ${result.observations} observations`);
+        }
+      } catch { /* non-JSON output, log it */ }
+
+      writeHeartbeat('auto-compress');
+    } catch (err) {
+      console.error('Auto-compress error:', err.message);
+    }
+  });
+  console.log('🗜️ Memory v2 auto-compression scheduled (every 6 hours, :15 offset)');
+
   console.log('⏰ Scheduler ready');
 }
