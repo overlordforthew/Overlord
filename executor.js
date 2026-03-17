@@ -132,8 +132,8 @@ function splitMessage(text, maxLen = 3900) {
         if (line > maxLen * 0.5) { splitAt = line; }
       }
     }
-    chunks.push(remaining.substring(0, splitAt).trim());
-    remaining = remaining.substring(splitAt).trim();
+    chunks.push(remaining.substring(0, splitAt).trimEnd());
+    remaining = remaining.substring(splitAt).trimStart();
   }
   if (remaining) chunks.push(remaining);
   return chunks;
