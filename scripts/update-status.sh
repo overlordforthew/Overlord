@@ -37,7 +37,7 @@ echo "| Service | URL | Status |"
 echo "|---------|-----|--------|"
 
 # Check each service
-for PAIR in "namibarden.com:namibarden.com" "beastmode.namibarden.com:BeastMode" "lumina.namibarden.com:Lumina" "elsalvador.namibarden.com:ElSalvador"; do
+for PAIR in "namibarden.com:namibarden.com" "lumina.namibarden.com:Lumina"; do
     URL="${PAIR%%:*}"
     NAME="${PAIR##*:}"
     HTTP_CODE=$(curl -sL -o /dev/null -w '%{http_code}' --max-time 5 "https://$URL" 2>/dev/null || echo "000")

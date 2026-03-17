@@ -1633,7 +1633,6 @@ BEHAVIOR:
     'https://namibarden.com',
     'https://www.namibarden.com',
     'https://mastercommander.namibarden.com',
-    'https://beastmode.namibarden.com',
     'http://localhost',
     'http://localhost:3000',
     'http://localhost:3457',

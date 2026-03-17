@@ -22,9 +22,9 @@ export async function getPredictions() {
     execAsync("df / | tail -1 | awk '{print $2, $3, $5}'", { timeout: 5000 }),
     // 2. Memory trend
     execAsync("free | awk '/Mem/{printf \"%.1f %.1f\", $3/$2*100, $7/$2*100}'", { timeout: 5000 }),
-    // 3. SSL checks — all 7 domains in parallel
+    // 3. SSL checks — all active domains in parallel
     Promise.allSettled(
-      ['namibarden.com', 'beastmode.namibarden.com', 'lumina.namibarden.com', 'mastercommander.namibarden.com', 'surfababe.namibarden.com', 'onlyhulls.com', 'onlydrafting.com'].map(domain =>
+      ['namibarden.com', 'lumina.namibarden.com', 'mastercommander.namibarden.com', 'surfababe.namibarden.com', 'onlyhulls.com', 'onlydrafting.com'].map(domain =>
         execAsync(`echo | openssl s_client -servername ${domain} -connect ${domain}:443 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2`, { timeout: 8000 })
           .then(({ stdout }) => ({ domain, stdout }))
       )

@@ -29,9 +29,6 @@ case "$PROJECT" in
     check_url "https://namibarden.com/admin" "Admin panel"
     check_url "https://namibarden.com/api/health" "API health" "200"
     ;;
-  beastmode)
-    check_url "https://beastmode.namibarden.com" "Homepage"
-    ;;
   lumina)
     check_url "https://lumina.namibarden.com" "Homepage"
     check_url "https://lumina.namibarden.com/api/health" "API health"

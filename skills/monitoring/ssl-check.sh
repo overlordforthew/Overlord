@@ -2,7 +2,7 @@
 # ssl-check.sh — Check SSL certificate expiry for all domains
 set -euo pipefail
 
-DOMAINS="namibarden.com beastmode.namibarden.com lumina.namibarden.com elsalvador.namibarden.com"
+DOMAINS="namibarden.com lumina.namibarden.com mastercommander.namibarden.com surfababe.namibarden.com onlyhulls.com onlydrafting.com"
 WARN_DAYS=14
 NOW=$(date +%s)
 

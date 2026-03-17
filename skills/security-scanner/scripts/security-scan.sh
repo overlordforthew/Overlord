@@ -5,7 +5,7 @@ set -uo pipefail
 
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 
-ALL_DOMAINS="namibarden.com beastmode.namibarden.com lumina.namibarden.com surfababe.namibarden.com mastercommander.namibarden.com onlyhulls.com onlydrafting.com"
+ALL_DOMAINS="namibarden.com lumina.namibarden.com surfababe.namibarden.com mastercommander.namibarden.com onlyhulls.com onlydrafting.com"
 PROJECT_DIRS="/root/projects/* /root/overlord"
 SSL_WARN_DAYS=30
 
