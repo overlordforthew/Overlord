@@ -212,11 +212,11 @@ class ProgressTimer {
       if (this.stopped) return;
       this.sock.sendMessage(this.chatJid, { text: '⏳ Working on it...' }).catch(() => {});
     }, 15000));
-    // At 30s: send "Still working on this..."
+    // At 90s: send "Still working on this..."
     this.timers.push(setTimeout(() => {
       if (this.stopped) return;
       this.sock.sendMessage(this.chatJid, { text: '⏳ Still working on this...' }).catch(() => {});
-    }, 30000));
+    }, 90000));
     // Refresh composing indicator every 20s (WhatsApp auto-expires at ~25s)
     const refreshComposing = () => {
       if (this.stopped) return;

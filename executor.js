@@ -116,10 +116,38 @@ async function verifyUrl(url, timeoutMs = 20000) {
 // NOTIFICATION HELPERS
 // ============================================================
 
+function splitMessage(text, maxLen = 3900) {
+  if (text.length <= maxLen) return [text];
+  const chunks = [];
+  let remaining = text;
+  while (remaining.length > maxLen) {
+    let splitAt = maxLen;
+    const para = remaining.lastIndexOf('\n\n', maxLen);
+    if (para > maxLen * 0.5) { splitAt = para; }
+    else {
+      const sent = remaining.lastIndexOf('. ', maxLen);
+      if (sent > maxLen * 0.5) { splitAt = sent + 1; }
+      else {
+        const line = remaining.lastIndexOf('\n', maxLen);
+        if (line > maxLen * 0.5) { splitAt = line; }
+      }
+    }
+    chunks.push(remaining.substring(0, splitAt).trim());
+    remaining = remaining.substring(splitAt).trim();
+  }
+  if (remaining) chunks.push(remaining);
+  return chunks;
+}
+
 async function safeSend(sockRef, chatJid, text) {
   try {
     if (sockRef?.sock) {
-      await sockRef.sock.sendMessage(chatJid, { text });
+      const chunks = splitMessage(text);
+      for (let i = 0; i < chunks.length; i++) {
+        const prefix = chunks.length > 1 ? `(${i + 1}/${chunks.length}) ` : '';
+        await sockRef.sock.sendMessage(chatJid, { text: prefix + chunks[i] });
+        if (i < chunks.length - 1) await new Promise(r => setTimeout(r, 500));
+      }
     }
   } catch (err) {
     console.error('[Executor] Send failed:', err.message);
@@ -265,12 +293,12 @@ export async function executeTaskAutonomously(task, sockRef) {
           lastQuestion: responseText.substring(0, 300),
         });
         await safeSend(sockRef, chatJid,
-          `⏳ *Task paused — needs your input:*\n\n${task.title}\n\n${responseText.substring(0, 500)}`
+          `⏳ *Task paused — needs your input:*\n\n${task.title}\n\n${responseText}`
         );
       } else {
         // Another task owns the active slot — notify with manual resume hint so this task isn't lost
         await safeSend(sockRef, chatJid,
-          `⏳ *Task waiting for approval (background):*\n\n${task.title}\n\n${responseText.substring(0, 400)}\n\n_Reply \`/task run ${task.id}\` when ready to resume._`
+          `⏳ *Task waiting for approval (background):*\n\n${task.title}\n\n${responseText}\n\n_Reply \`/task run ${task.id}\` when ready to resume._`
         );
       }
       return { status: 'waiting', result: responseText };
@@ -293,7 +321,7 @@ export async function executeTaskAutonomously(task, sockRef) {
         `For "${task.kind}" tasks that block: provide more specific success criteria or break into smaller steps`
       ).catch(() => {});
       await safeSend(sockRef, chatJid,
-        `🚫 *Task blocked:* ${task.title}\n\n${responseText.substring(0, 400)}`
+        `🚫 *Task blocked:* ${task.title}\n\n${responseText}`
       );
       // Detect capability gaps and trigger skill acquisition
       setImmediate(async () => {
@@ -398,7 +426,7 @@ export async function executeTaskAutonomously(task, sockRef) {
     if (task.source === 'observer' || task.source === 'scheduler') {
       const verifyNote = task.verificationUrl ? `\n✅ ${task.verificationUrl} verified` : '';
       await safeSend(sockRef, chatJid,
-        `✅ *Done:* ${task.title}${verifyNote}\n\n${responseText.substring(0, 400)}`
+        `✅ *Done:* ${task.title}${verifyNote}\n\n${responseText}`
       );
     }
 
