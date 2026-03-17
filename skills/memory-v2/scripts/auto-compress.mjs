@@ -60,6 +60,7 @@ function buildRuleSummary(group) {
 
   return {
     type: 'config',
+    session_id: group.session_id,
     title: `Auto-compressed: ${project} session (${group.events.length} events)`,
     narrative: `Autonomous session ${group.session_id.slice(0, 8)} on ${project}. Tools: ${toolList}. Time: ${first} to ${last}.`,
     facts: [
@@ -110,6 +111,7 @@ Return ONLY valid JSON:
 
     return {
       type: parsed.type || 'config',
+      session_id: group.session_id,
       title: parsed.title.slice(0, 200),
       narrative: parsed.narrative.slice(0, 500),
       facts: Array.isArray(parsed.facts) ? parsed.facts.slice(0, 5) : [],
