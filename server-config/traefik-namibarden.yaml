@@ -4,24 +4,7 @@ http:
     # Removed file-based routes to prevent 502s after deploys.
     # See docker-compose.yaml labels in /data/coolify/applications/ock0wowgsgwwww8w00400k00/
 
-    # === OpenClaw (Tailscale only) ===
-    http-openclaw:
-      entryPoints:
-        - http
-      rule: "Host(`openclaw.namibarden.com`)"
-      middlewares:
-        - redirect-to-https-file
-      service: openclaw
-
-    https-openclaw:
-      entryPoints:
-        - https
-      rule: "Host(`openclaw.namibarden.com`)"
-      middlewares:
-        - tailscale-only
-      service: openclaw
-      tls:
-        certResolver: letsencrypt
+    # === OpenClaw — REMOVED (service deleted, container gone) ===
 
     # === Coolify Sentinel API (token-authenticated, no Tailscale needed) ===
     https-coolify-sentinel-api:
@@ -265,10 +248,7 @@ http:
           - "100.64.0.0/10"
 
   services:
-    openclaw:
-      loadBalancer:
-        servers:
-          - url: "http://openclaw-s8ck4g0k80wwwg0coswg4occ:18789"
+    # openclaw service removed — container deleted
 
     coolify-app:
       loadBalancer:

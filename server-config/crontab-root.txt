@@ -25,3 +25,6 @@
 
 # Memory monitor — alert when Overlord container approaches memory limit
 */5 * * * * /root/overlord/scripts/memory-monitor.sh >> /root/overlord/logs/memory-monitor.log 2>&1
+
+# Recall indexer — keep session history searchable
+0 2 * * * python3 /root/projects/.claude/scripts/recall-indexer.py >> /root/.claude/recall-index.log 2>&1

@@ -1,8 +1,7 @@
 {
   "env": {
     "CLAUDE_CODE_ATTRIBUTION_HEADER": "0",
-    "CLAUDE_CODE_ENABLE_TELEMETRY": "0",
-    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "0"
   },
   "permissions": {
     "allow": [
@@ -51,17 +50,6 @@
         ]
       }
     ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node /root/overlord/skills/memory-v2/scripts/prompt-compress.mjs",
-            "timeout": 10000
-          }
-        ]
-      }
-    ],
     "SessionStart": [
       {
         "hooks": [
@@ -81,5 +69,6 @@
   "enabledPlugins": {
     "frontend-design@claude-plugins-official": true
   },
-  "effortLevel": "high"
+  "effortLevel": "high",
+  "defaultView": "chat"
 }
