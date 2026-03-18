@@ -3507,6 +3507,118 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
     return result.success ? result.output.substring(0, 2000) : `❌ ${result.error}`;
   }
 
+  // ---- BACKTEST ----
+  if (cmd.startsWith('/backtest') && isAdmin(senderJid)) {
+    const parts = fullText.substring(9).trim().split(/\s+/);
+    // Parse args: /backtest [months] [tp%] [account] [stop] [sweep]
+    // Examples: /backtest              → 12 months, defaults
+    //           /backtest 24           → 24 months
+    //           /backtest 12 1.0       → 12 months, 1% TP
+    //           /backtest 6 0.5 5000   → 6 months, 0.5% TP, $5k account
+    //           /backtest sweep        → 12 months with TP% sweep
+    //           /backtest 2022         → calendar year 2022
+    const hasSweep = parts.includes('sweep');
+    const numParts = parts.filter(p => p !== 'sweep');
+
+    let startArg = '', endArg = '', months = 12;
+    let tp = 0.5, account = 10000, stop = 38000;
+
+    // Detect year shorthand (e.g., "2022" or "2024")
+    if (numParts[0] && /^\d{4}$/.test(numParts[0])) {
+      const year = numParts[0];
+      startArg = `${year}-01-01`;
+      endArg = `${parseInt(year) + 1}-01-01`;
+    } else {
+      if (numParts[0] && !isNaN(numParts[0])) months = parseInt(numParts[0]);
+    }
+    if (numParts[1] && !isNaN(numParts[1])) tp = parseFloat(numParts[1]);
+    if (numParts[2] && !isNaN(numParts[2])) account = parseFloat(numParts[2]);
+    if (numParts[3] && !isNaN(numParts[3])) stop = parseFloat(numParts[3]);
+
+    const btArgs = [
+      '/projects/hyperliquid-bot/backtest.py',
+      '--json',
+      '--tp', tp.toString(),
+      '--account', account.toString(),
+      '--stop', stop.toString(),
+    ];
+    if (startArg) {
+      btArgs.push('--start', startArg, '--end', endArg);
+    } else {
+      btArgs.push('--months', months.toString());
+    }
+    if (hasSweep) btArgs.push('--sweep');
+
+    try {
+      const { execFile } = await import('child_process');
+      const result = await new Promise((resolve, reject) => {
+        const proc = spawn('python3', btArgs, {
+          timeout: 180_000, cwd: '/',
+          env: { ...process.env, PYTHONUNBUFFERED: '1' },
+        });
+        let stdout = '', stderr = '';
+        proc.stdout.on('data', d => { stdout += d.toString(); });
+        proc.stderr.on('data', d => { stderr += d.toString(); });
+        proc.on('close', code => {
+          if (code === 0 && stdout) {
+            try { resolve(JSON.parse(stdout)); }
+            catch { reject(new Error(`JSON parse failed: ${stdout.substring(0, 200)}`)); }
+          } else {
+            reject(new Error(stderr.substring(0, 300) || `Exit code ${code}`));
+          }
+        });
+        proc.on('error', reject);
+      });
+
+      // Format response for WhatsApp
+      const r = result;
+      let msg = `📊 *Blessings Backtest*\n`;
+      msg += `${r.period}\n`;
+      msg += `BTC: $${r.start_price?.toLocaleString()} → $${r.end_price?.toLocaleString()}\n\n`;
+
+      msg += `💰 *Performance*\n`;
+      msg += `Final equity: $${r.final_equity?.toLocaleString()}\n`;
+      msg += `Return: ${r.total_return_pct >= 0 ? '+' : ''}${r.total_return_pct}%\n`;
+      msg += `Annualized: ${r.annualized_return_pct >= 0 ? '+' : ''}${r.annualized_return_pct}%\n`;
+      msg += `Max DD: ${r.max_drawdown_pct}%\n`;
+      msg += `Fees: $${r.total_fees?.toFixed(2)}\n\n`;
+
+      msg += `📈 *Trades*\n`;
+      msg += `${r.round_trips} trips (${r.trades_per_day}/day)\n`;
+      msg += `Win rate: ${r.win_rate}%\n`;
+      msg += `Avg: $${r.avg_pnl_per_trade?.toFixed(4)}/trade\n\n`;
+
+      msg += `⚡ *Risk*\n`;
+      msg += `Max positions: ${r.max_open_positions}\n`;
+      msg += `Max exposure: $${r.max_exposure_usd?.toLocaleString()}\n`;
+      msg += `Stop hit: ${r.stopped ? 'YES ⚠️' : 'No'}\n\n`;
+
+      msg += `📊 *vs Buy & Hold*\n`;
+      msg += `BTC: ${r.btc_buy_hold_pct >= 0 ? '+' : ''}${r.btc_buy_hold_pct}%\n`;
+      msg += `Alpha: ${r.alpha_vs_btc >= 0 ? '+' : ''}${r.alpha_vs_btc}%`;
+
+      if (r.zones) {
+        msg += `\n\n🏗️ *Zones*\n`;
+        for (const [name, z] of Object.entries(r.zones)) {
+          msg += `${name}: ${z.trips} trips, $${z.pnl >= 0 ? '+' : ''}${z.pnl}\n`;
+        }
+      }
+
+      if (r.sweep) {
+        msg += `\n📉 *TP% Sweep*\n`;
+        msg += `TP%   Trips   P&L      Return  DD%\n`;
+        for (const s of r.sweep) {
+          msg += `${s.tp_pct}%  ${String(s.trips).padStart(4)}  $${s.realized_pnl >= 0 ? '+' : ''}${s.realized_pnl.toFixed(0).padStart(6)}  ${s.return_pct >= 0 ? '+' : ''}${s.return_pct.toFixed(1)}%  ${s.max_dd_pct.toFixed(1)}%${s.stopped ? ' STOP' : ''}\n`;
+        }
+      }
+
+      return msg.trim();
+    } catch (err) {
+      logger.error({ err }, 'Backtest command failed');
+      return `❌ Backtest failed: ${err.message}`;
+    }
+  }
+
   // ---- HELP ----
   if (cmd === '/help') {
     const profile = getUserProfile(senderJid);
@@ -3581,6 +3693,11 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
         '/postmortems [query] — Incident postmortems',
         '/servers — Multi-server status',
         '/server <name> <cmd> — Remote command',
+        '',
+        '📊 Trading:',
+        '/backtest [months] [tp%] [account] [stop] — Blessings backtest',
+        '/backtest <year> — Backtest a calendar year (e.g. /backtest 2022)',
+        '/backtest sweep — Run with TP% sensitivity analysis',
         '',
         '📋 Project Management:',
         '/approve <name> — Approve project request',
