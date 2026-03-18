@@ -147,10 +147,10 @@ export function spawnWithMemoryLimit(command, args, opts, memoryMB) {
     return spawn('systemd-run', wrappedArgs, opts);
   }
 
-  // Fallback: set Node.js heap limit via env
-  // This only limits V8 heap, not total process memory, but it's better than nothing
-  const env = { ...(opts.env || {}), NODE_OPTIONS: `--max-old-space-size=${memoryMB || 1024}` };
-  return spawn(command, args, { ...opts, env });
+  // No cgroup support — spawn without artificial memory limits.
+  // The container mem_limit is the real safety net; V8 heap caps were causing
+  // unnecessary SIGKILL failures when Claude CLI needed more memory for large prompts.
+  return spawn(command, args, opts);
 }
 
 /**
