@@ -84,7 +84,7 @@ import { formatRevenueDashboard } from './revenue-intel.js';
 import { reviewProject } from './git-reviewer.js';
 import { buildDraft, savePendingDraft, formatDraftPreview, formatPendingDrafts, getPendingDraft, removePendingDraft, sendDraft, getTemplateNames } from './client-comms.js';
 import { getFleetStatus, formatFleetStatus } from './bot-fleet.js';
-import { formatSkillsList, detectCapabilityGap, buildSkillAcquisitionPrompt, markSkillInProgress } from './skill-learner.js';
+import { formatSkillsList, formatRegistry, detectCapabilityGap, buildSkillAcquisitionPrompt, markSkillInProgress, record as pulseRecord, check as pulseCheck, dashboard as pulseDashboard } from './pulse.js';
 import { getAllServersStatus, formatAllServersStatus, runRemoteCommand, getServerNames } from './multi-server.js';
 import { searchPostmortems, formatPostmortemList } from './postmortem.js';
 
@@ -581,12 +581,22 @@ async function sendResponse(sock, chatJid, responseText) {
     if (validFiles.length > 1) await sleep(1000);
   }
 
-  // Send text (auto-split if long)
+  // Send text (auto-split if long, with retry per chunk)
   if (cleanText) {
     const chunks = splitMessage(cleanText);
     for (let i = 0; i < chunks.length; i++) {
       const prefix = chunks.length > 1 ? `(${i + 1}/${chunks.length}) ` : '';
-      await sock.sendMessage(chatJid, { text: prefix + chunks[i] });
+      let chunkSent = false;
+      for (let attempt = 1; attempt <= 3 && !chunkSent; attempt++) {
+        try {
+          await sock.sendMessage(chatJid, { text: prefix + chunks[i] });
+          chunkSent = true;
+        } catch (err) {
+          logger.warn({ err: err.message, chunk: i + 1, total: chunks.length, attempt }, `Text chunk send failed`);
+          if (attempt < 3) await sleep(2000 * attempt);
+          else logger.error({ chunk: i + 1, total: chunks.length }, 'Failed to send text chunk after 3 attempts');
+        }
+      }
       if (i < chunks.length - 1) await sleep(500);
     }
   }
@@ -942,12 +952,14 @@ async function autoDeployIfChanged(profile, chatJid, sock) {
       const result = await triggerDeploy(projName);
 
       if (result.success) {
+        pulseRecord(`deploy:${projName}`, 'up', `auto-deploy by ${profile.name}`);
         logger.info(`🚀 Auto-deployed ${projName} for ${profile.name}: ${commitMsg}`);
         // Only notify admin — power users already get deploy confirmation from their agent's response
         if (profile.role === 'admin') {
           await sock.sendMessage(chatJid, { text: `✅ Changes saved and deployed to ${deployUrl} — live now!` });
         }
       } else {
+        pulseRecord(`deploy:${projName}`, 'down', result.error, ['broken-script']);
         logger.error(`❌ Auto-deploy failed for ${projName}: ${result.error}`);
         // Always notify on failures so the user knows something went wrong
         await sock.sendMessage(chatJid, { text: `⚠️ Changes saved to git but deploy had an issue: ${result.error}` });
@@ -2609,8 +2621,15 @@ setOnSessionKilled((chatJid) => {
 });
 
 async function withChatLock(chatJid, fn) {
-  // Wait for any existing lock to release
+  // Wait for any existing lock to release (with timeout to prevent indefinite blocking)
+  const LOCK_TIMEOUT = 330_000; // 5.5 min — slightly longer than Claude's 5 min timeout
+  const lockWaitStart = Date.now();
   while (chatLocks.has(chatJid)) {
+    if (Date.now() - lockWaitStart > LOCK_TIMEOUT) {
+      logger.warn({ chatJid, waitedMs: Date.now() - lockWaitStart }, 'Chat lock timeout — forcing release');
+      chatLocks.delete(chatJid);
+      break;
+    }
     await chatLocks.get(chatJid).catch(() => {});
   }
   // Set lock
@@ -3000,8 +3019,10 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
       if (verifyUrl) {
         scheduleVerification(verifyUrl, null, project, chatJid, sockRef, 90000);
       }
+      pulseRecord(`deploy:${project}`, 'up', 'manual deploy');
       return `🚀 Deploy triggered for ${project}\n\n${result.output}`;
     }
+    pulseRecord(`deploy:${project}`, 'down', result.error, ['broken-script']);
     return `❌ Deploy failed: ${result.error}`;
   }
 
@@ -3009,8 +3030,10 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
     const container = fullText.substring(9).trim();
     try {
       await execAsync(`docker restart "${container}"`, { timeout: 30000 });
+      pulseRecord(`container:${container}`, 'up', 'restarted');
       return `🔄 Restarted container: ${container}`;
     } catch (err) {
+      pulseRecord(`container:${container}`, 'down', err.message, ['broken-script']);
       return `❌ Restart failed: ${err.message}`;
     }
   }
@@ -3456,9 +3479,11 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
     return formatFleetStatus(status);
   }
 
-  // ---- SKILLS (Admin) ----
-  if (cmd === '/skills' && isAdmin(senderJid)) {
-    return formatSkillsList();
+  // ---- PULSE — health & quality tracker (Admin) ----
+  if ((cmd === '/pulse' || cmd === '/skills') && isAdmin(senderJid)) {
+    const arg = fullText.split(/\s+/).slice(1).join(' ').trim();
+    if (arg) return pulseCheck(arg);
+    return pulseDashboard();
   }
 
   // ---- POSTMORTEMS (Admin) ----
@@ -3552,7 +3577,7 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
         '/draft <template> <email> — Draft email',
         '/send <draft-id> — Send pending draft',
         '/fleet — Bot fleet status',
-        '/skills — Acquired skills',
+        '/pulse [name] — Health dashboard / check entity',
         '/postmortems [query] — Incident postmortems',
         '/servers — Multi-server status',
         '/server <name> <cmd> — Remote command',
@@ -4071,8 +4096,8 @@ async function startBot() {
               logFriction('api_error', response.substring(0, 200), _claudeDuration).catch(() => {});
             }
 
-            // Stop typing
-            if (CONFIG.typingIndicator) await currentSock.sendPresenceUpdate('paused', chatJid).catch(() => {});
+            // Stop typing (re-resolve socket in case of reconnect)
+            if (CONFIG.typingIndicator) await (sockRef.sock || currentSock).sendPresenceUpdate('paused', chatJid).catch(() => {});
 
             // ---- PROMPT GUARD: Output Scan (DLP) ----
             const guardOut = await sanitizeOutputWithGuard(response);
@@ -4096,8 +4121,9 @@ async function startBot() {
               finalResponse = finalResponse.trimEnd() + `\n\n— ${modelTag}`;
             }
 
-            // Send response
-            await sendResponse(currentSock, chatJid, finalResponse);
+            // Send response (re-resolve socket in case of reconnect during Claude processing)
+            const sendSock = sockRef.sock || currentSock;
+            await sendResponse(sendSock, chatJid, finalResponse);
 
             // ---- TASK STATE UPDATE (admin DMs only) ----
             if (isAdmin(last.senderJid) && !isGroup(chatJid)) {
@@ -4197,12 +4223,27 @@ async function startBot() {
             });
           } else {
             // Run inline (light task, or first heavy task with no queue contention)
-            await _runClaudeAndRespond();
+            try {
+              await _runClaudeAndRespond();
+            } catch (inlineErr) {
+              logger.error({ err: inlineErr, chatJid }, 'Inline Claude execution failed');
+              const errSock = sockRef.sock || currentSock;
+              await errSock.sendMessage(chatJid, { text: '⚠️ Something went wrong. Please try again.' }).catch(() => {});
+            }
           }
         });
 
       } catch (err) {
         logger.error({ err, key: msg.key }, 'Message handler error');
+        // Notify user on unhandled pipeline errors (parse, triage, media, etc.)
+        try {
+          const errChatJid = msg.key?.remoteJid;
+          if (errChatJid) {
+            await (sockRef.sock || sock).sendMessage(errChatJid, {
+              text: '⚠️ Something went wrong processing your message. Please try again.',
+            }).catch(() => {});
+          }
+        } catch { /* last resort — don't let error notification crash the handler */ }
       }
     }
   });
