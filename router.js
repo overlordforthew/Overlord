@@ -244,6 +244,10 @@ function resolveAdminShorthand(parsed, opts = {}) {
   const botAskedForConfirmation = !!lastBotText &&
     CONFIRMATION_REQUEST_PATTERNS.test(lastBotText) &&
     /[?]$/.test(lastBotText);
+  // Bot made a substantive statement (not just an error/hiccup) — admin "Yes" likely means "proceed"
+  const botMadeSubstantiveStatement = !!lastBotText &&
+    lastBotText.length > 80 &&
+    !lastBotText.startsWith('⚠️');
 
   if (ADMIN_REPAIR_PATTERNS.test(text)) {
     return {
@@ -252,10 +256,10 @@ function resolveAdminShorthand(parsed, opts = {}) {
     };
   }
 
-  if (ADMIN_CONFIRMATION_PATTERNS.test(text) && botAskedForConfirmation) {
+  if (ADMIN_CONFIRMATION_PATTERNS.test(text) && (botAskedForConfirmation || botMadeSubstantiveStatement)) {
     return {
       taskType: hasOperationalContext ? 'complex' : inheritedTaskType,
-      classifiedBy: 'admin_shorthand_confirm',
+      classifiedBy: botAskedForConfirmation ? 'admin_shorthand_confirm' : 'admin_shorthand_confirm_implicit',
     };
   }
 

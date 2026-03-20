@@ -2380,8 +2380,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
 
   // Auto-retry on transient signal errors (SIGTERM=143, SIGKILL=137, SIGABRT=134)
   const RETRYABLE_CODES = new Set([143, 137, 134]);
-  // Simple tasks: no retry on timeout — retrying just doubles the wait (300+300=605s)
-  const MAX_RETRIES = route.taskType === 'simple' ? 1 : 2;
+  const MAX_RETRIES = 2;
   let fallbackEscalatedToOpus = false;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
