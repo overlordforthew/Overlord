@@ -276,6 +276,7 @@ const CONFIG = {
   routerMode: process.env.ROUTER_MODE || 'alpha',
   maxResponseTime: 300_000,  // 5 min — matches session guard timeout; longer tasks should be done from Claude Code
   chatResponseTimeout: 300_000, // 5 min — matched to maxResponseTime
+  simpleResponseTimeout: 120_000, // 2 min — simple messages shouldn't take long; fail fast to avoid 605s double-timeout
 
   // ---- RESPONSE BEHAVIOR ----
   // Mode: 'all' = respond to every message
@@ -2379,7 +2380,8 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
 
   // Auto-retry on transient signal errors (SIGTERM=143, SIGKILL=137, SIGABRT=134)
   const RETRYABLE_CODES = new Set([143, 137, 134]);
-  const MAX_RETRIES = 2;
+  // Simple tasks: no retry on timeout — retrying just doubles the wait (300+300=605s)
+  const MAX_RETRIES = route.taskType === 'simple' ? 1 : 2;
   let fallbackEscalatedToOpus = false;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -2391,7 +2393,9 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       logger.info({ attempt, workDir, argsCount: args.length, promptLen: fullPrompt.length, model: route.model?.id, memLimitMB: memLimit }, 'Spawning Claude CLI');
       const proc = spawnWithMemoryLimit(CONFIG.claudePath, args, {
         cwd: workDir,
-        timeout: route.taskType === 'complex' ? CONFIG.maxResponseTime : CONFIG.chatResponseTimeout,
+        timeout: route.taskType === 'complex' ? CONFIG.maxResponseTime
+          : route.taskType === 'simple' ? CONFIG.simpleResponseTimeout
+          : CONFIG.chatResponseTimeout,
         killSignal: 'SIGKILL',
         env: buildSafeEnv(),
         maxBuffer: 10 * 1024 * 1024,
