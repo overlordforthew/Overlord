@@ -1,8 +1,7 @@
 {
   "env": {
     "CLAUDE_CODE_ATTRIBUTION_HEADER": "0",
-    "CLAUDE_CODE_ENABLE_TELEMETRY": "0",
-    "ANTHROPIC_MODEL": "default"
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "0"
   },
   "permissions": {
     "allow": [
@@ -69,6 +68,5 @@
   "enabledPlugins": {
     "frontend-design@claude-plugins-official": true
   },
-  "effortLevel": "high",
   "defaultView": "chat"
 }

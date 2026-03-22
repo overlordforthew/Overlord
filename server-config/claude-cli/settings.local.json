@@ -22,7 +22,8 @@
       "mcp__chrome-devtools__emulate",
       "mcp__chrome-devtools__list_network_requests",
       "mcp__chrome-devtools__handle_dialog",
-      "mcp__chrome-devtools__list_pages"
+      "mcp__chrome-devtools__list_pages",
+      "mcp__chrome-devtools__wait_for"
     ]
   }
 }
