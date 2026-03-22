@@ -500,13 +500,14 @@ export function startServer(sockRef, sendResponse) {
     });
   }
 
-  // CORS for /api/auth
+  // CORS for /api/auth — allow credentials for httpOnly cookies
   app.use('/api/auth', (req, res, next) => {
     const origin = req.headers.origin || '';
     if (origin.includes('mastercommander.namibarden.com') || origin.includes('localhost')) {
       res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
     }
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.setHeader('Access-Control-Max-Age', '86400');
     if (req.method === 'OPTIONS') return res.sendStatus(204);
@@ -540,19 +541,33 @@ export function startServer(sockRef, sendResponse) {
     }
   }, 300_000);
 
-  // JWT helper
+  // JWT helper — 30d lifetime (was 180d — too long for browser-stored tokens)
   function signToken(user) {
-    return jwt.sign({ id: user.id, email: user.email, name: user.name, tv: user.token_version ?? 0 }, MC_JWT_SECRET, { expiresIn: '180d' });
+    return jwt.sign({ id: user.id, email: user.email, name: user.name, tv: user.token_version ?? 0 }, MC_JWT_SECRET, { expiresIn: '30d' });
+  }
+
+  // Set httpOnly cookie for MC auth
+  function setMcAuthCookie(res, token) {
+    res.cookie('mc_token', token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      path: '/',
+    });
   }
 
   // Reusable JWT auth middleware for MasterCommander
+  // Reads from httpOnly cookie first, falls back to Authorization header
   async function requireMcAuth(req, res, next) {
+    const cookieToken = req.cookies?.mc_token;
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
+    const token = cookieToken || (authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null);
+    if (!token) {
       return res.status(401).json({ error: 'Authentication required.' });
     }
     try {
-      const decoded = jwt.verify(authHeader.slice(7), MC_JWT_SECRET);
+      const decoded = jwt.verify(token, MC_JWT_SECRET);
       if (decoded.type === 'gate') {
         return res.status(401).json({ error: 'Invalid token type.' });
       }
@@ -618,6 +633,7 @@ export function startServer(sockRef, sendResponse) {
         console.log(`[mc-auth] Verification link (no SMTP): ${verifyUrl}`);
       }
       const token = signToken(user);
+      setMcAuthCookie(res, token);
       res.status(201).json({ token, user: { id: user.id, email: user.email, name: user.name, email_verified: false } });
     } catch (err) {
       console.error('[mc-auth] Signup error:', err.message);
@@ -638,6 +654,7 @@ export function startServer(sockRef, sendResponse) {
         return res.status(401).json({ error: 'Invalid email or password.' });
       }
       const token = signToken(user);
+      setMcAuthCookie(res, token);
       res.json({ token, user: { id: user.id, email: user.email, name: user.name, email_verified: !!user.email_verified } });
     } catch (err) {
       console.error('[mc-auth] Login error:', err.message);
@@ -645,14 +662,16 @@ export function startServer(sockRef, sendResponse) {
     }
   });
 
-  // GET /api/auth/session
+  // GET /api/auth/session — reads from httpOnly cookie or Authorization header
   app.get('/api/auth/session', async (req, res) => {
     try {
+      const cookieToken = req.cookies?.mc_token;
       const authHeader = req.headers.authorization;
-      if (!authHeader?.startsWith('Bearer ')) {
+      const token = cookieToken || (authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null);
+      if (!token) {
         return res.status(401).json({ error: 'No token provided.' });
       }
-      const decoded = jwt.verify(authHeader.slice(7), MC_JWT_SECRET);
+      const decoded = jwt.verify(token, MC_JWT_SECRET);
       const result = await mcPool.query('SELECT id, email, name, email_verified, phone, company FROM users WHERE id = $1', [decoded.id]);
       if (result.rows.length === 0) {
         return res.status(401).json({ error: 'User not found.' });
@@ -662,6 +681,12 @@ export function startServer(sockRef, sendResponse) {
     } catch {
       return res.status(401).json({ error: 'Invalid or expired token.' });
     }
+  });
+
+  // POST /api/auth/logout — clear httpOnly cookie
+  app.post('/api/auth/logout', (req, res) => {
+    res.clearCookie('mc_token', { httpOnly: true, secure: true, sameSite: 'lax', path: '/' });
+    res.json({ ok: true });
   });
 
   // POST /api/auth/forgot-password
@@ -780,6 +805,7 @@ export function startServer(sockRef, sendResponse) {
     const origin = req.headers.origin || '';
     if (origin.includes('mastercommander.namibarden.com') || origin.includes('localhost')) {
       res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
     }
     res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -849,6 +875,7 @@ export function startServer(sockRef, sendResponse) {
     const origin = req.headers.origin || '';
     if (origin.includes('mastercommander.namibarden.com') || origin.includes('localhost')) {
       res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
     }
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
