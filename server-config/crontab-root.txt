@@ -36,3 +36,4 @@
 
 # Google API daily health check — 5:30am
 30 5 * * * /root/.claude/skills/google-cloud/scripts/google-api-monitor.sh 2>/dev/null
+0 3 * * * /root/projects/NamiBarden/scripts/backup-db.sh >> /root/backups/namibarden/backup.log 2>&1
