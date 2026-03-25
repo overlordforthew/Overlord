@@ -68,5 +68,6 @@
   "enabledPlugins": {
     "frontend-design@claude-plugins-official": true
   },
-  "defaultView": "chat"
+  "defaultView": "chat",
+  "autoDreamEnabled": true
 }
