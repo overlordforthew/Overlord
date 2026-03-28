@@ -40,3 +40,6 @@
 
 # Nightly dream — AI memory review + consolidation (after mechanical consolidator at 3:30)
 47 3 * * * /root/overlord/scripts/dream.sh >> /root/overlord/logs/dream.log 2>&1
+
+# X/Twitter monitor — @intocryptoverse digest at 9am + 5pm AST
+0 13,21 * * * cd /root/overlord && /usr/bin/node scripts/x-monitor.mjs >> logs/x-monitor.log 2>&1

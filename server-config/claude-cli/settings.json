@@ -1,5 +1,8 @@
 {
+  "model": "opus[1m]",
+  "effortLevel": "high",
   "env": {
+    "CLAUDE_CODE_EFFORT_LEVEL": "max",
     "CLAUDE_CODE_ATTRIBUTION_HEADER": "0",
     "CLAUDE_CODE_ENABLE_TELEMETRY": "0"
   },

@@ -277,7 +277,7 @@ http:
     onlyhulls:
       loadBalancer:
         servers:
-          - url: "http://qkggs84cs88o0gww4wc80gwo-184905842428:80"
+          - url: "http://onlyhulls-app:80"
 
     hl-dashboard:
       loadBalancer:
