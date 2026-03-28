@@ -4,6 +4,7 @@
  */
 
 import express from 'express';
+import cookieParser from 'cookie-parser';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -24,6 +25,8 @@ export function startServer(sockRef, sendResponse) {
 
   // Trust first proxy (Traefik) so req.ip is the real client IP
   app.set('trust proxy', 1);
+
+  app.use(cookieParser());
 
   // Capture raw body for webhook signature validation, then parse JSON
   app.use(express.json({
