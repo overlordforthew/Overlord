@@ -50,14 +50,15 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     browserforge \
     playwright
 
-# Install Claude CLI and Codex CLI globally
-RUN npm install -g @anthropic-ai/claude-code @openai/codex
+# Install Claude CLI, Codex CLI, and MCP servers globally
+RUN npm install -g @anthropic-ai/claude-code @openai/codex \
+    @modelcontextprotocol/server-github @henkey/postgres-mcp-server
 
 WORKDIR /app
 
 # Install app dependencies
 COPY package.json ./
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 # Copy app files
 COPY index.js server.js scheduler.js meta-learning.js router.js session-guard.js heartbeat.js CLAUDE.md traefik-watcher.sh task-store.js state-store.js executor.js policy.js conversation-store.js memory-curator.js memory-consolidator.js work-queue.js ssrf-guard.js usage-tracker.js fix-patterns.js error-watcher.js claude-sdk.js knowledge-base.js predictive-infra.js web-intel.js revenue-intel.js git-reviewer.js client-comms.js bot-fleet.js pulse.js cortex.js skill-learner.js multi-server.js postmortem.js ./
@@ -78,4 +79,4 @@ RUN echo '#!/bin/sh\nnode /tools/yt/yt.mjs "$@"' > /usr/local/bin/yt && chmod +x
 
 EXPOSE 3001
 
-CMD ["sh", "-c", "cp /tmp/.gitconfig-host /root/.gitconfig 2>/dev/null; cp /tmp/.git-credentials-host /root/.git-credentials 2>/dev/null; if [ -n \"$OPENROUTER_KEY\" ]; then llm keys set openrouter --value \"$OPENROUTER_KEY\" 2>/dev/null; fi; node -e \"try{const f='/root/.claude.json';const c=JSON.parse(require('fs').readFileSync(f));delete c.mcpServers;require('fs').writeFileSync(f,JSON.stringify(c,null,2))}catch{}\" 2>/dev/null; ./traefik-watcher.sh >> /app/logs/traefik-watcher.log 2>&1 & exec node index.js"]
+CMD ["sh", "-c", "cp /tmp/.gitconfig-host /root/.gitconfig 2>/dev/null; cp /tmp/.git-credentials-host /root/.git-credentials 2>/dev/null; if [ -n \"$OPENROUTER_KEY\" ]; then llm keys set openrouter --value \"$OPENROUTER_KEY\" 2>/dev/null; fi; node -e \"const f='/root/.claude.json';let c={};try{c=JSON.parse(require('fs').readFileSync(f))}catch{};c.mcpServers={'github':{'command':'npx','args':['-y','@modelcontextprotocol/server-github'],'env':{'GITHUB_PERSONAL_ACCESS_TOKEN':process.env.GH_TOKEN||''}},'postgres':{'command':'npx','args':['-y','@henkey/postgres-mcp-server'],'env':{'DATABASE_URL':'postgresql://overlord:'+(process.env.CONV_DB_PASS||'')+'@overlord-db:5432/overlord'}}};require('fs').writeFileSync(f,JSON.stringify(c,null,2))\" 2>/dev/null; ./traefik-watcher.sh >> /app/logs/traefik-watcher.log 2>&1 & exec node index.js"]
