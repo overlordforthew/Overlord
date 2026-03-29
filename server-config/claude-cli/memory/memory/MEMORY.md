@@ -1,11 +1,4 @@
-# Memory Index
-
-## User
-- [Gil — Owner Profile](user_gil.md) — Developer, playful style, prefers bold/fun design, action-first
-
-## Feedback
-- [Research before building](feedback_research_before_building.md) — Do deep competitive/design research before implementing visual changes
-
-## Projects
-- [OnlyHulls Redesign](project_onlyhulls_redesign.md) — Dark OnlyFans-inspired theme, plan created 2026-03-27, 14 files
-- [SurfaBabe Replication](project_surfababe_sync.md) — Sync www.surfababe.com to namibarden version, started 2026-03-27
+- [SurfaBabe Design Reference](feedback_surfababe_design.md) — Gil likes this design style, use as baseline for future web projects
+- [MasterCommander Handoff](session-handoff-mastercommander.md) — Demo system done, perfecting individual owner persona next
+- [SurfaBabe Status](project_surfababe_status.md) — Pixel-perfect Wix replication + Stripe payments (same account, VND, no subs)
+- [OnlyHulls Status](project_onlyhulls_status.md) — Subscription billing tiers defined, auth migrated to Auth.js, Stripe ~70% built
