@@ -35,6 +35,9 @@ services:
       - /root/.codex:/root/.codex
       # Docker socket — allows container management from inside
       - /var/run/docker.sock:/var/run/docker.sock
+      # Host tools (yt CLI, etc.) + YouTube OAuth tokens
+      - /root/tools:/tools:ro
+      - /root/.config/yt:/root/.config/yt
       # Project directories — mount root (has .git for Claude sandbox) + Overlord override
       - /root/projects:/projects
       - /root/overlord:/projects/Overlord

@@ -18,8 +18,8 @@ for LOG_FILE in "$LOG_DIR"/*.jsonl; do
     CHAT_ID=$(basename "$LOG_FILE" .jsonl)
 
     # Count messages from today
-    TODAY_MSGS=$(grep "\"t\":\"${DATE}" "$LOG_FILE" 2>/dev/null | wc -l || echo "0")
-    TODAY_BOT=$(grep "\"t\":\"${DATE}" "$LOG_FILE" 2>/dev/null | grep '"role":"bot"' | wc -l || echo "0")
+    TODAY_MSGS=$(grep -c "\"t\":\"${DATE}" "$LOG_FILE" 2>/dev/null || echo 0)
+    TODAY_BOT=$(grep "\"t\":\"${DATE}" "$LOG_FILE" 2>/dev/null | grep -c '"role":"bot"' 2>/dev/null || echo 0)
 
     if [ "$TODAY_MSGS" -gt 0 ]; then
         TOTAL_MESSAGES=$((TOTAL_MESSAGES + TODAY_MSGS))
@@ -31,6 +31,9 @@ done
 # Only write if there was activity
 if [ "$TOTAL_MESSAGES" -eq 0 ]; then
     echo "No activity today — skipping journal entry"
+    # Still write heartbeat so cron monitor knows we ran
+    mkdir -p /root/overlord/data/cron-heartbeats
+    date +%s > /root/overlord/data/cron-heartbeats/auto-journal
     exit 0
 fi
 

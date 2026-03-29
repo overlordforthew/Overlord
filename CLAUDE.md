@@ -38,6 +38,9 @@ See /projects/CLAUDE.md for infrastructure rules, projects list, and permissions
 - `/restart <container>` — Restart (admin)
 - `/db <name> <SQL>` — Query database (admin)
 - `/router alpha|beta|charlie` — Switch model mode (admin)
+- `/audiovoice <text>` — Kokoro TTS (high quality, self-hosted on ElmoServer)
+- `/voice <text>` — Alias for /audiovoice
+- `/audiovoice voices` — List available voices
 - `/help` — Show all commands
 
 ## POWER USERS
@@ -65,6 +68,21 @@ See /projects/CLAUDE.md for infrastructure rules, projects list, and permissions
 - **llm CLI** — `llm -m openrouter/openrouter/free "prompt"` (26+ free models)
 - **Coolify API** — `curl -H "Authorization: Bearer $COOLIFY_API_TOKEN" http://localhost:8000/api/v1/...`
 - **Cloudflare API** — Full access (DNS, R2, zones) via CLOUDFLARE_GLOBAL_API_KEY in .env
+- **yt CLI** — YouTube channel management for @namibarden (ナミの瞑想 癒しの空間). Full OAuth read/write access.
+  - `yt videos [--max N]` — List recent uploads
+  - `yt video <id>` — Get video details
+  - `yt video update <id> --title "..." --description "..." --tags "t1,t2"` — Update video metadata
+  - `yt seo <id> --title "..." --description "..." --tags "..."` — Update video SEO
+  - `yt bulk seo <updates.json>` — Batch update video metadata
+  - `yt channel` — Show channel info
+  - `yt channel update` — Update channel metadata
+  - `yt playlist` / `yt playlist create/update/delete/show/add/remove` — Playlist management
+  - `yt search <query>` — Search YouTube
+  - `yt upload <file>` — Upload video
+  - `yt thumbnail <videoId> <image>` — Set video thumbnail
+  - `yt captions` — Manage captions
+  - `yt auth status` — Check OAuth status
+  - Token auto-refreshes. OAuth credentials at `/root/.config/yt/token.json`
 - **mem CLI** — Interact with the semantic/procedural memory database
   - `mem search <query>` — Full-text search across all memory types
   - `mem recall <category> [topic]` — Browse by category (tool, project, infrastructure, security, preference, person, pattern, integration)

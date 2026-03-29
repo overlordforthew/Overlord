@@ -68,15 +68,7 @@ export const MODEL_REGISTRY = {
     strengths: 'Strong multilingual, 131K context, steady availability',
     via: 'openrouter-api',
   },
-  'solar-pro': {
-    id: 'upstage/solar-pro-3:free',
-    provider: 'openrouter',
-    tier: 'mid',
-    speed: 'fast',
-    cost: 'free',
-    strengths: 'Good general-purpose, reliable uptime',
-    via: 'openrouter-api',
-  },
+  // solar-pro: removed 2026-03-22 — free tier ended (404)
   'nemotron-30b': {
     id: 'nvidia/nemotron-3-nano-30b-a3b:free',
     provider: 'openrouter',
@@ -257,8 +249,13 @@ function resolveAdminShorthand(parsed, opts = {}) {
   }
 
   if (ADMIN_CONFIRMATION_PATTERNS.test(text) && (botAskedForConfirmation || botMadeSubstantiveStatement)) {
+    // Only escalate to complex if the bot explicitly asked AND current msg has operational context
+    // Implicit confirmations ("Yes" to a statement) inherit previous task type, capped at medium
+    const confirmTaskType = botAskedForConfirmation && hasOperationalContext
+      ? 'complex'
+      : (inheritedTaskType || 'medium');
     return {
-      taskType: hasOperationalContext ? 'complex' : inheritedTaskType,
+      taskType: confirmTaskType === 'complex' && !botAskedForConfirmation ? 'medium' : confirmTaskType,
       classifiedBy: botAskedForConfirmation ? 'admin_shorthand_confirm' : 'admin_shorthand_confirm_implicit',
     };
   }
@@ -309,7 +306,7 @@ export function classifyTask(parsed, isAdmin) {
 
   // Length heuristics
   if (text.length > 200) return 'complex';
-  if (text.length < 40) return 'simple';
+  if (text.length < 40) return isAdmin ? 'medium' : 'simple';
 
   // Multi-sentence → likely medium+
   const sentences = (text.match(/[.!?]+/g) || []).length;
@@ -498,7 +495,10 @@ export async function routeMessage(parsed, opts = {}) {
   // Power users always get Opus — they need full tool access for code edits
   if (isPower) {
     const recentMessages = Array.isArray(opts.recentMessages) ? opts.recentMessages : [];
-    const taskType = shorthand?.taskType || (mode === 'alpha' ? classifyTask(parsed, isAdmin) : await classifyWithOpus(parsed, isAdmin, recentMessages));
+    let taskType = shorthand?.taskType || (mode === 'alpha' ? classifyTask(parsed, isAdmin) : await classifyWithOpus(parsed, isAdmin, recentMessages));
+    // Power users send substantive messages (often non-English) that need code edits —
+    // never use the 'simple' fast-fail timeout; floor to 'medium' like admin
+    if (taskType === 'simple') taskType = 'medium';
     return {
       model: MODEL_REGISTRY.opus,
       tools: null,
@@ -521,6 +521,12 @@ export async function routeMessage(parsed, opts = {}) {
   } else if (mode === 'alpha') {
     taskType = classifyTask(parsed, isAdmin);
     classifiedBy = 'regex';
+    // Admin DMs should never be classified as simple — minimum is medium
+    // (matches the guard already present for beta/charlie opus classification)
+    if (isAdmin && !opts.isGroup && taskType === 'simple') {
+      taskType = 'medium';
+      classifiedBy = 'regex+admin_floor';
+    }
   } else {
     taskType = await classifyWithOpus(parsed, isAdmin, recentMessages);
     classifiedBy = 'opus';
@@ -673,21 +679,29 @@ export function routeTriage(mode) {
  * When one model 429s, try the next in the chain before escalating to Opus.
  */
 export const FREE_FALLBACK_CHAINS = {
-  simple: ['nemotron-9b', 'glm-air', 'solar-pro', 'mistral-small', 'gemini-flash-lite', 'qwen-4b'],
-  medium: ['step-flash', 'glm-air', 'trinity', 'solar-pro', 'nemotron-30b', 'llama-70b', 'gemini-flash'],
+  simple: ['step-flash', 'nemotron-30b', 'glm-air', 'trinity', 'nemotron-9b', 'qwen-coder', 'llama-70b', 'mistral-small', 'gemini-flash-lite', 'qwen-4b'],
+  medium: ['step-flash', 'glm-air', 'trinity', 'qwen-coder', 'nemotron-30b', 'llama-70b', 'gemini-flash'],
 };
 
 /**
  * Try calling free models in order. Returns { response, modelUsed } or throws if all fail.
  */
-export async function callWithFallback(chain, systemPrompt, userPrompt, maxTokens = 2000) {
+export async function callWithFallback(chain, systemPrompt, userPrompt, maxTokens = 2000, { jsonMode = false } = {}) {
   const errors = [];
   for (const modelKey of chain) {
     const model = MODEL_REGISTRY[modelKey];
     if (!model) continue;
     try {
       const caller = model.via === 'gemini-api' ? callGemini : callOpenRouter;
-      const response = await caller(model.id, systemPrompt, userPrompt, maxTokens);
+      const response = await caller(model.id, systemPrompt, userPrompt, maxTokens, { jsonMode });
+      // When JSON is required, validate the response is parseable before accepting
+      if (jsonMode && response) {
+        const { parseJsonFromLLM } = await import('./lib/parse-json-llm.js');
+        if (!parseJsonFromLLM(response)) {
+          errors.push(`${modelKey}: response not valid JSON`);
+          continue;
+        }
+      }
       return { response, modelUsed: model };
     } catch (err) {
       errors.push(`${modelKey}: ${err.message}`);
@@ -704,9 +718,21 @@ export async function callWithFallback(chain, systemPrompt, userPrompt, maxToken
 /**
  * Call OpenRouter API directly (text in → text out, no tools).
  */
-export async function callOpenRouter(modelId, systemPrompt, userPrompt, maxTokens = 2000) {
+export async function callOpenRouter(modelId, systemPrompt, userPrompt, maxTokens = 2000, { jsonMode = false } = {}) {
   const key = process.env.OPENROUTER_KEY;
   if (!key) throw new Error('OPENROUTER_KEY not set');
+
+  const body = {
+    model: modelId,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    max_tokens: maxTokens,
+  };
+  if (jsonMode) {
+    body.response_format = { type: 'json_object' };
+  }
 
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
@@ -716,14 +742,7 @@ export async function callOpenRouter(modelId, systemPrompt, userPrompt, maxToken
       'HTTP-Referer': 'https://overlord.bot',
       'X-Title': 'Overlord WhatsApp Bot',
     },
-    body: JSON.stringify({
-      model: modelId,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      max_tokens: maxTokens,
-    }),
+    body: JSON.stringify(body),
     signal: AbortSignal.timeout(45_000),
   });
 
@@ -745,9 +764,14 @@ export async function callOpenRouter(modelId, systemPrompt, userPrompt, maxToken
 /**
  * Call Google Gemini API directly.
  */
-export async function callGemini(modelId, systemPrompt, userPrompt, maxTokens = 2000) {
+export async function callGemini(modelId, systemPrompt, userPrompt, maxTokens = 2000, { jsonMode = false } = {}) {
   const key = process.env.GOOGLE_API_KEY;
   if (!key) throw new Error('GOOGLE_API_KEY not set');
+
+  const generationConfig = { maxOutputTokens: maxTokens };
+  if (jsonMode) {
+    generationConfig.responseMimeType = 'application/json';
+  }
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${key}`,
@@ -757,7 +781,7 @@ export async function callGemini(modelId, systemPrompt, userPrompt, maxTokens = 
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemPrompt }] },
         contents: [{ parts: [{ text: userPrompt }] }],
-        generationConfig: { maxOutputTokens: maxTokens },
+        generationConfig,
       }),
       signal: AbortSignal.timeout(45_000),
     }

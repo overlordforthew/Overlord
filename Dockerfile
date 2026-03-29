@@ -60,9 +60,10 @@ COPY package.json ./
 RUN npm install
 
 # Copy app files
-COPY index.js server.js scheduler.js meta-learning.js router.js session-guard.js heartbeat.js CLAUDE.md traefik-watcher.sh task-store.js state-store.js executor.js policy.js conversation-store.js memory-store.js memory-curator.js semantic-store.js memory-consolidator.js work-queue.js ssrf-guard.js usage-tracker.js fix-patterns.js error-watcher.js claude-sdk.js knowledge-base.js predictive-infra.js web-intel.js revenue-intel.js git-reviewer.js client-comms.js bot-fleet.js skill-learner.js multi-server.js postmortem.js ./
+COPY index.js server.js scheduler.js meta-learning.js router.js session-guard.js heartbeat.js CLAUDE.md traefik-watcher.sh task-store.js state-store.js executor.js policy.js conversation-store.js memory-curator.js memory-consolidator.js work-queue.js ssrf-guard.js usage-tracker.js fix-patterns.js error-watcher.js claude-sdk.js knowledge-base.js predictive-infra.js web-intel.js revenue-intel.js git-reviewer.js client-comms.js bot-fleet.js pulse.js cortex.js skill-learner.js multi-server.js postmortem.js ./
 
-# Copy skills and scripts into container
+# Copy lib, skills, and scripts into container
+COPY lib/ ./lib/
 COPY skills/ ./skills/
 COPY scripts/ ./scripts/
 
@@ -71,6 +72,9 @@ RUN mkdir -p auth data logs media
 
 # Install mem CLI symlink
 RUN echo '#!/bin/sh\nnode /app/scripts/mem.mjs "$@"' > /usr/local/bin/mem && chmod +x /usr/local/bin/mem
+
+# Install yt CLI wrapper (actual script mounted at /tools/yt/yt.mjs)
+RUN echo '#!/bin/sh\nnode /tools/yt/yt.mjs "$@"' > /usr/local/bin/yt && chmod +x /usr/local/bin/yt
 
 EXPOSE 3001
 

@@ -45,6 +45,7 @@ import {
 import {
   logRegression, getRegressionSummary, logFriction,
   getFrictionReport, getTrendAnalysis, getYesterdaySynthesisContext,
+  recordOutcome,
 } from './meta-learning.js';
 import {
   routeMessage, routeTriage, planWithOpus, callOpenRouter, callGemini, callWithFallback,
@@ -74,7 +75,7 @@ import {
   getMemoryStats, scoreRelevance, getSemanticContext,
 } from './skills/memory-v2/lib/v1-compat.mjs';
 import { extractAndStore } from './memory-curator.js';
-import { heavyQueue, spawnWithMemoryLimit, getMemoryLimit, shouldQueue, getMemoryPressure } from './work-queue.js';
+import { heavyQueue, spawnWithMemoryLimit, getMemoryLimit, shouldQueue, getMemoryPressure, withGlobalClaudeLock } from './work-queue.js';
 import { initUsageTracker, logUsage, getTodayUsage, getWeekUsage, getCostTrend, formatCostReport } from './usage-tracker.js';
 import { askClaudeSDK, isSDKEnabled, loadSDK } from './claude-sdk.js';
 import { initKnowledgeBase, ingest as kbIngest, search as kbSearch, getRecent as kbRecent, getStats as kbStats, formatSearchResults as kbFormatResults, formatStats as kbFormatStats } from './knowledge-base.js';
@@ -89,6 +90,16 @@ import { getAllServersStatus, formatAllServersStatus, runRemoteCommand, getServe
 import { searchPostmortems, formatPostmortemList } from './postmortem.js';
 
 const execAsync = promisify(exec);
+
+// ---- SUPPRESS LIBSIGNAL SESSION LOG NOISE ----
+// libsignal/src/session_record.js uses console.info to dump raw SessionEntry objects
+// (with full Buffer data) on every reconnect. Filter them out.
+const _origConsoleInfo = console.info;
+console.info = (...args) => {
+  if (typeof args[0] === 'string' &&
+      (args[0].startsWith('Closing session') || args[0].startsWith('Removing old closed session'))) return;
+  _origConsoleInfo.apply(console, args);
+};
 
 // ---- MESSAGE DEDUP: Prevent processing same message twice (Baileys reconnect duplicates) ----
 const PROCESSED_MSG_IDS = new Set();
@@ -207,16 +218,16 @@ class ProgressTimer {
 
   start() {
     if (!CONFIG.typingIndicator) return;
-    // At 15s: send "Working on it..." text
+    // At 30s: send first interim message
     this.timers.push(setTimeout(() => {
       if (this.stopped) return;
       this.sock.sendMessage(this.chatJid, { text: '⏳ Working on it...' }).catch(() => {});
-    }, 15000));
-    // At 90s: send "Still working on this..."
+    }, 30000));
+    // At 3 min: send second interim message if still no response
     this.timers.push(setTimeout(() => {
       if (this.stopped) return;
-      this.sock.sendMessage(this.chatJid, { text: '⏳ Still working on this...' }).catch(() => {});
-    }, 90000));
+      this.sock.sendMessage(this.chatJid, { text: '⏳ Still working on this — hang tight...' }).catch(() => {});
+    }, 180000));
     // Refresh composing indicator every 20s (WhatsApp auto-expires at ~25s)
     const refreshComposing = () => {
       if (this.stopped) return;
@@ -276,7 +287,7 @@ const CONFIG = {
   routerMode: process.env.ROUTER_MODE || 'alpha',
   maxResponseTime: 300_000,  // 5 min — matches session guard timeout; longer tasks should be done from Claude Code
   chatResponseTimeout: 300_000, // 5 min — matched to maxResponseTime
-  simpleResponseTimeout: 120_000, // 2 min — simple messages shouldn't take long; fail fast to avoid 605s double-timeout
+  simpleResponseTimeout: 180_000, // 3 min — bumped from 2 min; Opus with tool use needs breathing room even for light tasks
 
   // ---- RESPONSE BEHAVIOR ----
   // Mode: 'all' = respond to every message
@@ -376,6 +387,28 @@ STRIPE — FULL ACCESS: You manage Nami's Stripe account for coaching payments. 
 - Webhook endpoint: https://namibarden.com/api/stripe/webhook
 - DB tables: nb_customers, nb_subscriptions, nb_payments (in namibarden-db)
 You have full authority to manage billing, issue refunds, cancel/modify subscriptions, and check payment status. When Nami asks about payments, customers, or billing — handle it directly.
+
+YOUTUBE — FULL ACCESS: You manage Nami's YouTube channel (@namibarden / ナミの瞑想 癒しの空間) using the \`yt\` CLI tool (Bash tool). Full read/write access to the channel.
+- Channel info: yt channel
+- Update channel SEO: yt channel update --description "..." --keywords "k1,k2"
+- List videos: yt videos [--max 50]
+- Video details: yt video <videoId>
+- Update video SEO: yt seo <videoId> --title "..." --description "..." --tags "t1,t2,t3"
+- Bulk update SEO: yt bulk seo <updates.json>
+- List playlists: yt playlist list
+- Create playlist: yt playlist create --title "..." --description "..." --privacy public
+- Update playlist: yt playlist update <playlistId> --title "..." --description "..."
+- Show playlist contents: yt playlist show <playlistId>
+- Add video to playlist: yt playlist add <playlistId> <videoId>
+- Remove video from playlist: yt playlist remove <playlistId> <videoId>
+- Delete playlist: yt playlist delete <playlistId>
+- Upload video: yt upload <file> --title "..." --description "..." --tags "t1,t2" --privacy private
+- Set thumbnail: yt thumbnail <videoId> <imagePath>
+- List captions: yt captions list <videoId>
+- Upload captions: yt captions upload <videoId> <file> --language en
+- View comments: yt comments <videoId> [--max 20]
+- Search channel: yt search <query>
+You have full authority to edit video metadata, manage playlists, update SEO, and organize channel content. When Nami asks about YouTube — handle it directly.
 
 DEBUGGING APPROACH:
 1. Read the relevant files first — understand before touching
@@ -695,6 +728,36 @@ async function generateTTS(text, voice = 'en-US-GuyNeural') {
 }
 
 // ============================================================
+// KOKORO TTS (self-hosted on ElmoServer)
+// ============================================================
+
+const KOKORO_API_URL = process.env.KOKORO_API_URL || 'http://100.89.16.27:8880';
+const KOKORO_DEFAULT_VOICE = process.env.KOKORO_DEFAULT_VOICE || 'af_bella';
+
+async function generateKokoroTTS(text, voice = KOKORO_DEFAULT_VOICE) {
+  const outFile = `/tmp/kokoro_${Date.now()}.mp3`;
+  try {
+    const resp = await fetch(`${KOKORO_API_URL}/v1/audio/speech`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'kokoro', voice, input: text }),
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!resp.ok) {
+      const errText = await resp.text();
+      logger.error({ status: resp.status, err: errText }, 'Kokoro API error');
+      return null;
+    }
+    const buffer = Buffer.from(await resp.arrayBuffer());
+    await fs.writeFile(outFile, buffer);
+    return outFile;
+  } catch (err) {
+    logger.error({ err: err.message }, 'Kokoro TTS generation failed');
+    return null;
+  }
+}
+
+// ============================================================
 // DEPLOY HELPERS
 // ============================================================
 
@@ -783,7 +846,8 @@ function extractOverlordRequest(text) {
   const incomingMatch = text.trim().match(/^overlord[,:\s]+(.{10,})/is);
   if (incomingMatch) return incomingMatch[1].trim();
   // Outgoing: Ai Chan response contains "Overlord, [request]"
-  const outgoingMatch = text.match(/\bOverlord[,:\s]+([^\n]{15,})/i);
+  // Capture everything after "Overlord, ..." to end of message (multi-line lists, etc.)
+  const outgoingMatch = text.match(/\bOverlord[,:\s]+(.{15,})/is);
   if (outgoingMatch) return outgoingMatch[1].trim();
   return null;
 }
@@ -816,7 +880,7 @@ async function runOverlordEscalation(requestText, powerProfile, chatJid, sock) {
   ];
 
   try {
-    const resultText = await new Promise((resolve, reject) => {
+    const resultText = await withGlobalClaudeLock(() => new Promise((resolve, reject) => {
       let stdout = '';
       const proc = spawnWithMemoryLimit(CONFIG.claudePath, args, {
         cwd: '/projects',
@@ -827,13 +891,13 @@ async function runOverlordEscalation(requestText, powerProfile, chatJid, sock) {
       proc.stdin.write(`Escalated from Ai Chan on behalf of ${powerProfile.name}:\n\n${requestText}`);
       proc.stdin.end();
       proc.stdout.on('data', d => { stdout += d.toString(); });
-      proc.on('close', code => {
-        if (code !== 0 && !stdout) { reject(new Error(`Escalation exited ${code}`)); return; }
+      proc.on('close', (code, signal) => {
+        if (code !== 0 && !stdout) { reject(new Error(`Escalation exited code=${code} signal=${signal}`)); return; }
         try { resolve((JSON.parse(stdout.trim()).result || '').trim()); }
         catch { resolve(stdout.trim()); }
       });
       proc.on('error', reject);
-    });
+    }));
 
     const reply = resultText || 'Done.';
     await sendResponse(sock, chatJid, `✅ Overlord:\n\n${reply}`).catch(() => {});
@@ -2370,6 +2434,10 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
     }
   }
 
+  // Serialize Claude CLI spawns globally — only one Opus process at a time
+  // to prevent concurrent processes from exceeding the 4GB container limit
+  return withGlobalClaudeLock(async () => {
+
   // Pre-flight memory check — skip spawning if system is critically low
   const freeMem = os.freemem();
   const MIN_FREE = 300 * 1024 * 1024; // 300 MB
@@ -2439,11 +2507,23 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
               const resumeIdx = args.indexOf('--resume');
               if (resumeIdx !== -1) args.splice(resumeIdx, 2);
             }
+            // OOM: escalate memory tier so retry gets more headroom
+            if (signal === 'SIGKILL' || code === 137 || code === null) {
+              const escalation = { simple: 'medium', medium: 'complex' };
+              const next = escalation[route.taskType];
+              if (next) {
+                logger.warn({ from: route.taskType, to: next, attempt }, 'Escalating memory tier after SIGKILL');
+                route.taskType = next;
+              }
+            }
             logger.warn({ code, stderr: stderr.substring(0, 300), attempt }, 'Claude transient error, retrying');
             resolve({ retry: true });
           } else {
-            logger.error({ code, stderr: stderr.substring(0, 300), attempt }, 'Claude error (all retries exhausted)');
-            resolve({ retry: false, text: `⚠️ Had a hiccup (code ${code}). Retried ${attempt}x.` });
+            const wasTimeout = killedBySignal || code === null;
+            logger.error({ code, stderr: stderr.substring(0, 300), attempt, wasTimeout }, 'Claude error (all retries exhausted)');
+            resolve({ retry: false, text: wasTimeout
+              ? '⚠️ Response timed out after retries. Try a shorter message or try again in a moment.'
+              : `⚠️ Had a hiccup (code ${code}). Retried ${attempt}x.` });
           }
           return;
         }
@@ -2569,6 +2649,8 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
     await new Promise(r => setTimeout(r, backoff));
     logger.info({ attempt: attempt + 1, backoffMs: backoff }, 'Retrying Claude subprocess...');
   }
+
+  }); // end withGlobalClaudeLock
 }
 
 // ============================================================
@@ -3002,6 +3084,50 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
       return null; // Already sent
     } catch (err) {
       return `❌ TTS failed: ${err.message}`;
+    }
+  }
+
+  // ---- AUDIOVOICE (Kokoro TTS on ElmoServer) ----
+  if (cmd.startsWith('/audiovoice') || cmd.startsWith('/voice ')) {
+    const prefix = cmd.startsWith('/audiovoice') ? '/audiovoice'.length : '/voice'.length;
+    let rawArgs = fullText.substring(prefix).trim();
+
+    // Parse optional voice: /audiovoice --voice am_adam Hello world
+    let voice = KOKORO_DEFAULT_VOICE;
+    const voiceMatch = rawArgs.match(/^--voice\s+(\S+)\s+/);
+    if (voiceMatch) {
+      voice = voiceMatch[1];
+      rawArgs = rawArgs.substring(voiceMatch[0].length);
+    }
+
+    // If /audiovoice voices — list available voices
+    if (rawArgs === 'voices' || rawArgs === '--voices') {
+      try {
+        const resp = await fetch(`${KOKORO_API_URL}/v1/audio/voices`, { signal: AbortSignal.timeout(5000) });
+        if (!resp.ok) return '❌ Could not reach Kokoro API.';
+        const data = await resp.json();
+        const voices = data.voices || data;
+        return `🎙️ *${voices.length} voices available:*\n${voices.join(', ')}`;
+      } catch (err) {
+        return `❌ Kokoro API unreachable: ${err.message}`;
+      }
+    }
+
+    if (!rawArgs) return '🎙️ Usage: /audiovoice <text>\n/audiovoice --voice am_adam <text>\n/audiovoice voices\n\nOr reply to a message with /audiovoice to narrate it.\nSend a text file with caption /audiovoice to narrate a script.';
+
+    try {
+      const audioFile = await generateKokoroTTS(rawArgs, voice);
+      if (!audioFile) return '❌ Kokoro TTS generation failed. Is ElmoServer running?';
+      const buffer = await fs.readFile(audioFile);
+      await sockRef.sock.sendMessage(chatJid, {
+        audio: buffer,
+        mimetype: 'audio/mpeg',
+        ptt: false,
+      });
+      await fs.unlink(audioFile).catch(() => {});
+      return null;
+    } catch (err) {
+      return `❌ Audiovoice failed: ${err.message}`;
     }
   }
 
@@ -3673,6 +3799,10 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
         '/qr <text> — Generate QR code',
         '/tts <text> — Text to voice note',
         '/say <text> — Alias for /tts',
+        '/audiovoice <text> — Kokoro TTS (high quality)',
+        '/voice <text> — Alias for /audiovoice',
+        '/audiovoice voices — List available voices',
+        'Send .txt file + /audiovoice — Narrate a script',
         'Send image + "sticker" — Create sticker',
         '',
         '🚀 Admin:',
@@ -3736,6 +3866,8 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
         '/qr <text> — Generate QR code',
         '/tts <text> — Text to voice note',
         '/say <text> — Alias for /tts',
+        '/audiovoice <text> — Kokoro TTS (high quality)',
+        '/voice <text> — Alias for /audiovoice',
         'Send image + "sticker" — Create sticker',
         '',
         `🚀 Projects: ${projectList}`,
@@ -4105,6 +4237,35 @@ async function startBot() {
           }
         }
 
+        // Document + /audiovoice caption: read file content and narrate it
+        if (parsed.type === 'document' && mediaResult && !mediaResult.skipped && (parsed.text || '').startsWith('/audiovoice')) {
+          try {
+            const textContent = await fs.readFile(mediaResult.filePath, 'utf-8');
+            if (!textContent.trim()) {
+              await sendResponse(sockRef.sock || sock, chatJid, '❌ The file is empty.');
+              continue;
+            }
+            // Parse voice from caption: /audiovoice --voice am_adam
+            let voice = KOKORO_DEFAULT_VOICE;
+            const vMatch = parsed.text.match(/--voice\s+(\S+)/);
+            if (vMatch) voice = vMatch[1];
+            const audioFile = await generateKokoroTTS(textContent.trim(), voice);
+            if (!audioFile) {
+              await sendResponse(sockRef.sock || sock, chatJid, '❌ Kokoro TTS generation failed.');
+              continue;
+            }
+            const buffer = await fs.readFile(audioFile);
+            await (sockRef.sock || sock).sendMessage(chatJid, { audio: buffer, mimetype: 'audio/mpeg', ptt: false });
+            await fs.unlink(audioFile).catch(() => {});
+            conversationContext.add(chatJid, { sender: 'bot', senderName: CONFIG.botName, role: 'bot', type: 'text', text: `[Narrated ${parsed.fileName} with Kokoro TTS]` });
+            continue;
+          } catch (err) {
+            logger.error({ err }, 'Audiovoice document narration failed');
+            await sendResponse(sockRef.sock || sock, chatJid, `❌ Audiovoice failed: ${err.message}`);
+            continue;
+          }
+        }
+
         // Special commands
         if (parsed.type === 'text' && parsed.text?.startsWith('/')) {
           const cmdResp = await handleSpecialCommand(parsed.text, chatJid, senderJid, sockRef);
@@ -4295,6 +4456,19 @@ async function startBot() {
               routeVia: claudeResult._training?.routeVia,
               responseTimeMs: _claudeDuration,
             }).catch(() => {});
+
+            // Record outcome for Agent Lightning (prompt optimization)
+            recordOutcome(
+              Buffer.from(last.parsed.text || '').toString('base64').slice(0, 16),
+              {
+                modelId: routeModelId,
+                taskType: claudeResult._training?.taskType || 'medium',
+                responseTimeMs: _claudeDuration,
+                responseLength: (response || '').length,
+                timedOut: response?.includes('timed out') || false,
+                error: response?.startsWith('⚠️') || false,
+              }
+            ).catch(() => {});
 
             // Log usage for cost tracking
             logUsage({

@@ -430,6 +430,29 @@ async function generateReport() {
     lines.push('');
   }
 
+  // Section 5: Agent Lightning — Prompt Optimization
+  try {
+    const { getOutcomeStats, generatePromptSuggestions } = await import('../meta-learning.js');
+    const outcomeStats = await getOutcomeStats(7);
+    if (outcomeStats && outcomeStats.total > 0) {
+      lines.push(`OUTCOME TRACKING (7 days):`);
+      lines.push(`  Total: ${outcomeStats.total} responses`);
+      if (outcomeStats.avgResponseTime) lines.push(`  Avg response: ${Math.round(outcomeStats.avgResponseTime / 1000)}s`);
+      if (outcomeStats.errorRate !== undefined) lines.push(`  Error rate: ${(outcomeStats.errorRate * 100).toFixed(1)}%`);
+      if (outcomeStats.timeoutRate !== undefined) lines.push(`  Timeout rate: ${(outcomeStats.timeoutRate * 100).toFixed(1)}%`);
+      lines.push('');
+
+      const suggestions = await generatePromptSuggestions();
+      if (suggestions && suggestions.length > 0) {
+        lines.push(`PROMPT OPTIMIZATION SUGGESTIONS:`);
+        for (const s of suggestions.slice(0, 3)) {
+          lines.push(`  - ${s}`);
+        }
+        lines.push('');
+      }
+    }
+  } catch { /* outcome tracking not ready yet */ }
+
   // Section 4: Actionable Recommendations
   lines.push('TONIGHT\'S TOP 3:');
   lines.push('');
