@@ -94,12 +94,35 @@ export async function reviewProject(projectName, commitRange = 'HEAD~1..HEAD') {
       { timeout: 5000 }
     );
 
+    // Run semgrep on changed files for static analysis
+    let semgrepFindings = '';
+    try {
+      const { stdout: changedFiles } = await execAsync(
+        `cd "${path}" && git diff ${commitRange} --name-only --diff-filter=ACMR 2>/dev/null`,
+        { timeout: 5000 }
+      );
+      const files = changedFiles.trim().split('\n').filter(f => /\.(js|ts|py|jsx|tsx|mjs)$/.test(f));
+      if (files.length > 0 && files.length <= 20) {
+        const { stdout: semgrepOut } = await execAsync(
+          `cd "${path}" && semgrep --config auto --json --timeout 30 ${files.join(' ')} 2>/dev/null`,
+          { timeout: 60000 }
+        );
+        const parsed = JSON.parse(semgrepOut);
+        if (parsed.results?.length > 0) {
+          semgrepFindings = `\n\nSemgrep static analysis found ${parsed.results.length} issue(s):\n`;
+          for (const r of parsed.results.slice(0, 10)) {
+            semgrepFindings += `- [${r.extra?.severity || 'INFO'}] ${r.extra?.message || r.check_id} at ${r.path}:${r.start?.line}\n`;
+          }
+        }
+      }
+    } catch { /* semgrep not critical */ }
+
     const prompt = `Review this git diff for the ${projectName} project. Focus on:
 
 1. SECURITY: SQL injection, XSS, command injection, credential leaks, path traversal
 2. BUGS: Logic errors, null refs, race conditions, off-by-ones
 3. QUALITY: Dead code, duplicated logic, missing error handling at boundaries
-
+${semgrepFindings ? `\nStatic analysis (Semgrep):\n${semgrepFindings}` : ''}
 Return a concise review with severity ratings (P0=critical, P1=important, P2=minor).
 If the code looks clean, just say "Clean — no issues found."
 
@@ -111,8 +134,8 @@ ${diff.substring(0, 8000)}`;
     return new Promise((resolve, reject) => {
       let stdout = '';
       const proc = spawnWithMemoryLimit(CLAUDE_PATH, [
-        '-p', '--output-format', 'json', '--max-turns', '1', '--model', 'claude-opus-4-6',
-        '--allowedTools', 'Read,Grep,Glob',
+        '-p', '--output-format', 'json', '--model', 'claude-opus-4-6',
+        '--max-turns', '1',
       ], {
         cwd: path,
         timeout: 120000,
@@ -125,7 +148,13 @@ ${diff.substring(0, 8000)}`;
       proc.on('close', () => {
         try {
           const parsed = JSON.parse(stdout.trim());
-          resolve(parsed.result?.trim() || stdout.trim());
+          if (parsed.result?.trim()) {
+            resolve(parsed.result.trim());
+          } else if (parsed.subtype === 'error_max_turns') {
+            resolve('Review incomplete — model hit turn limit. Diff may need manual review.');
+          } else {
+            resolve(parsed.result || 'Review produced no output.');
+          }
         } catch {
           resolve(stdout.trim() || 'Review produced no output.');
         }

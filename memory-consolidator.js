@@ -8,8 +8,11 @@
 
 import { initSchema } from './skills/memory-v2/lib/schema.mjs';
 import { getDb, closeDb } from './skills/memory-v2/lib/db.mjs';
-import { purgeOldEvents } from './skills/memory-v2/lib/events.mjs';
+import { purgeOldEvents, getUncompressedCount } from './skills/memory-v2/lib/events.mjs';
 import { writeFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 async function decay(db, now) {
   const thirtyDaysAgo = now - 30 * 24 * 3600 * 1000;
@@ -36,6 +39,75 @@ async function prune(db, now) {
     WHERE status = 'active' AND importance < 0.15 AND access_count = 0 AND created_at < ?
   `).run(now, thirtyDaysAgo);
   return changes;
+}
+
+/**
+ * Auto-merge near-duplicate episodic memories.
+ * Groups by JID, finds pairs with high word overlap in title/narrative,
+ * keeps the newer one and merges facts from the older.
+ */
+async function dedup(db, now) {
+  // Get all active episodic memories grouped by JID
+  const jids = db.prepare(
+    "SELECT DISTINCT jid FROM observations WHERE status = 'active' AND type = 'episodic' AND jid IS NOT NULL"
+  ).all();
+
+  let merged = 0;
+
+  for (const { jid } of jids) {
+    const memories = db.prepare(
+      "SELECT id, title, narrative, importance, created_at FROM observations WHERE status = 'active' AND type = 'episodic' AND jid = ? ORDER BY created_at DESC"
+    ).all(jid);
+
+    // Build word sets for each memory
+    const wordSets = memories.map(m => {
+      const text = `${m.title} ${m.narrative || ''}`.toLowerCase();
+      return new Set(text.split(/\W+/).filter(w => w.length > 3));
+    });
+
+    // Find pairs with >60% word overlap (Jaccard similarity)
+    const toMerge = new Set();
+    for (let i = 0; i < memories.length && merged < 20; i++) {
+      if (toMerge.has(memories[i].id)) continue;
+      for (let j = i + 1; j < memories.length; j++) {
+        if (toMerge.has(memories[j].id)) continue;
+
+        const setA = wordSets[i];
+        const setB = wordSets[j];
+        let intersection = 0;
+        for (const w of setA) { if (setB.has(w)) intersection++; }
+        const union = setA.size + setB.size - intersection;
+        const jaccard = union > 0 ? intersection / union : 0;
+
+        if (jaccard > 0.6) {
+          // Keep the newer one (i), archive the older (j)
+          const keeper = memories[i];
+          const loser = memories[j];
+
+          // If loser has higher importance, boost keeper
+          if (loser.importance > keeper.importance) {
+            db.prepare('UPDATE observations SET importance = ?, updated_at = ? WHERE id = ?')
+              .run(loser.importance, now, keeper.id);
+          }
+
+          // If loser narrative is longer, take it
+          if ((loser.narrative || '').length > (keeper.narrative || '').length) {
+            db.prepare('UPDATE observations SET narrative = ?, updated_at = ? WHERE id = ?')
+              .run(loser.narrative, now, keeper.id);
+          }
+
+          // Archive loser
+          db.prepare("UPDATE observations SET status = 'merged', superseded_by = ?, updated_at = ? WHERE id = ?")
+            .run(keeper.id, now, loser.id);
+
+          toMerge.add(loser.id);
+          merged++;
+        }
+      }
+    }
+  }
+
+  return merged;
 }
 
 async function rebuildMemoryMd(db) {
@@ -77,13 +149,36 @@ async function rebuildMemoryMd(db) {
     lines.push('');
   }
 
+  // Standing orders (high-importance episodic)
+  const standingOrders = db.prepare(
+    "SELECT title, narrative FROM observations WHERE status = 'active' AND type = 'episodic' AND importance >= 0.8 ORDER BY importance DESC LIMIT 10"
+  ).all();
+  if (standingOrders.length) {
+    lines.push('## Standing Orders & Rules');
+    for (const o of standingOrders) lines.push(`- ${(o.narrative || o.title).split('\n')[0].slice(0, 150)}`);
+    lines.push('');
+  }
+
+  // Recent episodic context
+  const recentEpisodic = db.prepare(
+    "SELECT title, narrative, created_at FROM observations WHERE status = 'active' AND type = 'episodic' AND importance < 0.8 ORDER BY created_at DESC LIMIT 8"
+  ).all();
+  if (recentEpisodic.length) {
+    lines.push('## Recent Context');
+    for (const e of recentEpisodic) {
+      const date = new Date(e.created_at).toISOString().slice(0, 10);
+      lines.push(`- ${(e.narrative || e.title).split('\n')[0].slice(0, 120)} (${date})`);
+    }
+    lines.push('');
+  }
+
   const output = lines.slice(0, 190).join('\n');
   const memPath = '/root/.claude/projects/-root/memory/MEMORY.md';
   try {
     writeFileSync(memPath, output, 'utf-8');
     return { path: memPath, lines: lines.length };
   } catch {
-    const altPath = '/app/data/MEMORY.md';
+    const altPath = resolve(__dirname, 'data/MEMORY.md');
     try {
       writeFileSync(altPath, output, 'utf-8');
       return { path: altPath, lines: lines.length };
@@ -102,9 +197,27 @@ export async function consolidate() {
   const report = {};
 
   try {
+    report.deduped = await dedup(db, now);
     report.decayed = await decay(db, now);
     report.boosted = await boost(db, now);
     report.pruned = await prune(db, now);
+    // Compress unprocessed tool events into observations before purging
+    const pending = getUncompressedCount();
+    if (pending >= 50) {
+      try {
+        const { execSync } = await import('child_process');
+        const compressScript = resolve(__dirname, 'skills/memory-v2/scripts/auto-compress.mjs');
+        const out = execSync(`node "${compressScript}"`, {
+          timeout: 60000, encoding: 'utf-8', cwd: __dirname
+        });
+        const match = out.match(/\{.*\}/);
+        report.compressed = match ? JSON.parse(match[0]) : { compressed: pending };
+      } catch (err) {
+        report.compressError = err.message;
+      }
+    } else {
+      report.compressed = { compressed: 0, skipped: `${pending} events below threshold` };
+    }
     report.purged = purgeOldEvents(7);  // Delete compressed events older than 7 days
     report.rebuild = await rebuildMemoryMd(db);
 
@@ -129,9 +242,18 @@ if (process.argv[1] && (process.argv[1].endsWith('memory-consolidator.js') || pr
   try {
     const report = await consolidate();
     console.log('=== Memory Consolidation Report (v2) ===');
+    console.log(`Deduped:      ${report.deduped} merged duplicates`);
     console.log(`Decayed:      ${report.decayed} memories`);
     console.log(`Boosted:      ${report.boosted} memories`);
     console.log(`Pruned:       ${report.pruned} memories`);
+    if (report.compressed?.observations) {
+      console.log(`Compressed:   ${report.compressed.compressed} events -> ${report.compressed.observations} observations`);
+    } else if (report.compressed?.skipped) {
+      console.log(`Compressed:   ${report.compressed.skipped}`);
+    }
+    if (report.compressError) {
+      console.log(`Compress err: ${report.compressError}`);
+    }
     console.log(`Purged:       ${report.purged} old compressed events`);
     if (report.rebuild?.path) {
       console.log(`MEMORY.md:    ${report.rebuild.lines} lines -> ${report.rebuild.path}`);

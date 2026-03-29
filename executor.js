@@ -19,7 +19,7 @@ import { logRegression } from './meta-learning.js';
 import { spawnWithMemoryLimit, getMemoryLimit } from './work-queue.js';
 import { initFixPatterns, findMatchingPatterns, storeFixPattern, extractFixPattern, formatPatternsForPrompt, recordPatternFailure } from './fix-patterns.js';
 import { runTaskWithSDK, isSDKEnabled } from './claude-sdk.js';
-import { detectCapabilityGap, markSkillInProgress, buildSkillAcquisitionPrompt } from './skill-learner.js';
+import { detectCapabilityGap, markSkillInProgress, buildSkillAcquisitionPrompt, record as pulseRecord } from './pulse.js';
 import { generateAndStorePostmortem } from './postmortem.js';
 
 const ADMIN_JID = `${process.env.ADMIN_NUMBER}@s.whatsapp.net`;
@@ -207,10 +207,7 @@ export async function executeTaskAutonomously(task, sockRef) {
     });
     await addTaskEvent(task.id, { type: 'started', description: 'Autonomous execution started' });
 
-    // Notify for observer-triggered tasks
-    if (task.source === 'observer') {
-      await safeSend(sockRef, chatJid, `🔧 Auto-investigating: ${task.title}`);
-    }
+    // Observer tasks run silently — Gil only wants to hear about failures after retries exhausted
 
     // Inject known fix patterns for similar issues
     let patternContext = '';
@@ -256,6 +253,7 @@ export async function executeTaskAutonomously(task, sockRef) {
       }
 
       await closeTask(task.id, TaskStatus.BLOCKED, `Claude failed: ${err.message}`);
+      pulseRecord(`task:${task.kind}`, 'down', `${task.title} — ${err.message.substring(0, 150)}`, ['broken-script']);
       logRegression(
         'claude_error',
         `Task "${task.title}": ${err.message.substring(0, 150)}`,
@@ -320,6 +318,7 @@ export async function executeTaskAutonomously(task, sockRef) {
         'Task marked blocked, needs manual intervention or clearer context',
         `For "${task.kind}" tasks that block: provide more specific success criteria or break into smaller steps`
       ).catch(() => {});
+      pulseRecord(`task:${task.kind}`, 'down', `${task.title} — blocked`, []);
       await safeSend(sockRef, chatJid,
         `🚫 *Task blocked:* ${task.title}\n\n${responseText}`
       );
@@ -373,6 +372,7 @@ export async function executeTaskAutonomously(task, sockRef) {
           'Task exhausted retry budget without successful URL verification',
           `After deploy of "${task.title}" fails verification: check container startup time, port binding, or Traefik routing before retrying`
         ).catch(() => {});
+        pulseRecord(`deploy:${task.project || task.title}`, 'down', `verification failed: ${verified.error}`, ['broken-script']);
         await safeSend(sockRef, chatJid,
           `❌ *Task failed:* ${task.title}\n\nVerification: ${task.verificationUrl} → ${verified.error}\nAfter ${retryCount} attempts.`
         );
@@ -386,6 +386,8 @@ export async function executeTaskAutonomously(task, sockRef) {
     }
 
     // Done
+    pulseRecord(`task:${task.kind}`, 'up', `${task.title} — completed`);
+    if (task.project) pulseRecord(`deploy:${task.project}`, 'up', task.title);
     await closeTask(task.id, TaskStatus.DONE, responseText.substring(0, 400));
 
     // Extract fix pattern + generate postmortem (async, fire-and-forget)
@@ -422,12 +424,11 @@ export async function executeTaskAutonomously(task, sockRef) {
       });
     }
 
-    // Notify on background/observer tasks
+    // Observer/auto-repair tasks: ALWAYS silent on success.
+    // Gil only wants to hear about FAILURES after retry budget is exhausted.
+    // (Failure notifications are already handled in the blocked/error paths above.)
     if (task.source === 'observer' || task.source === 'scheduler') {
-      const verifyNote = task.verificationUrl ? `\n✅ ${task.verificationUrl} verified` : '';
-      await safeSend(sockRef, chatJid,
-        `✅ *Done:* ${task.title}${verifyNote}\n\n${responseText}`
-      );
+      console.log(`[Executor] Silent completion (auto-repair): ${task.title}`);
     }
 
     return { status: 'done', result: responseText };

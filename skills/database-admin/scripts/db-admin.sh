@@ -469,9 +469,9 @@ EXAMPLES:
   db-admin.sh health
   db-admin.sh tables overlord-db
   db-admin.sh sizes overlord-db overlord
-  db-admin.sh schema overlord-db semantic_memories overlord
+  db-admin.sh schema overlord-db conversations overlord
   db-admin.sh slow overlord-db overlord
-  db-admin.sh query overlord-db "SELECT COUNT(*) FROM semantic_memories" overlord
+  db-admin.sh query overlord-db "SELECT COUNT(*) FROM conversations" overlord
   db-admin.sh backup overlord-db
 USAGE
 }

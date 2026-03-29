@@ -6,47 +6,60 @@
 import { storeManyMemories, storeMemory, saveSemantic } from './skills/memory-v2/lib/v1-compat.mjs';
 import { callOpenRouter, callWithFallback, FREE_FALLBACK_CHAINS } from './router.js';
 
-const EXTRACT_SYSTEM = `You are a memory extraction system for an AI assistant called Overlord.
-Your job: extract durable, reusable facts from conversations that should be remembered for future interactions.
+const EXTRACT_SYSTEM = `You are the memory extraction engine for Overlord, an AI assistant that manages Gil's server and projects.
+Your job: extract durable, actionable knowledge from conversations that will improve future interactions.
 
-Extract TWO types of facts:
+Extract TWO types of memories:
 
-1. EPISODIC — Facts about the person, their preferences, decisions, people they mention (stored per-user)
-2. SEMANTIC — System knowledge: tools, APIs, configs, infrastructure, capabilities discovered during the conversation (stored globally)
+1. EPISODIC — Per-person knowledge that shapes how Overlord interacts with them:
+   - **Decisions made** — "Gil decided to use Stripe for NamiBarden payments" (not "Gil is thinking about payments")
+   - **Preferences revealed** — "Gil wants terse responses, no trailing summaries"
+   - **Relationships & people** — "Emiel is Gil's Dutch friend, potential CTO for MasterCommander"
+   - **Standing orders** — "Always run codex review after significant commits"
+   - **Project context** — "NamiBarden targets Japanese-first audience, English secondary"
+   - **Corrections** — "Gil said don't mock the database in integration tests"
 
-Extract ONLY facts that are:
-- Stable and durable (not just this conversation — things that will matter next week)
-- Actionable or meaningful for future responses
+2. SEMANTIC — Global system knowledge (tools, APIs, configs, patterns):
+   - **New capabilities discovered** — tool installed, API enabled, config changed
+   - **Patterns that worked** — approaches that solved problems (reusable across projects)
+   - **Infrastructure changes** — DNS, containers, services added/removed/modified
+
+QUALITY RULES:
+- Extract the WHY, not just the WHAT. "Gil chose Stripe because the audience is 99% Japanese LINE users" > "Gil chose Stripe"
+- Be specific and actionable. "Nami's hero copy approved: 「結果を出してきた。でも、なぜか満たされない。」" > "Hero copy was discussed"
+- Include names, URLs, versions, flags — concrete details that a future AI needs
+- If a fact UPDATES something in existing_memories, extract it with the same summary so it overwrites
+- If a fact is already in existing_memories and unchanged, DO NOT extract it
 
 DO NOT extract:
-- Current task status or one-off questions
-- Things already obvious from the conversation itself
-- Temporary states ("user seems frustrated")
-- Anything that duplicates what's already in existing_memories
+- Greetings, small talk, or one-off questions
+- Temporary states ("working on X right now")
+- Vague observations ("user seems interested in AI")
+- Anything already captured in existing_memories (check carefully!)
 
-Output ONLY a valid JSON object with two arrays:
+Output ONLY a valid JSON object:
 {
   "episodic": [
     {
-      "content": "Full sentence stating the fact clearly",
-      "summary": "Short label under 60 chars",
-      "tags": ["preference"|"project"|"person"|"decision"|"rule"|"fact"|"error"|"boat"|"content"],
+      "content": "Full sentence with specific details and context",
+      "summary": "Short label under 60 chars (used as dedup key)",
+      "tags": ["preference"|"project"|"person"|"decision"|"rule"|"fact"|"error"|"boat"|"content"|"correction"],
       "importance": 1-10
     }
   ],
   "semantic": [
     {
       "category": "tool"|"project"|"infrastructure"|"security"|"preference"|"person"|"pattern"|"integration",
-      "topic": "specific subject (e.g., 'gws', 'namibarden')",
-      "content": "Full description of the system knowledge",
+      "topic": "specific subject (e.g., 'gws CLI', 'namibarden SEO')",
+      "content": "Full description with concrete details",
       "importance": 0.1-1.0,
       "tags": ["relevant", "tags"]
     }
   ]
 }
 
-Episodic importance guide: 9-10: Standing orders, 7-8: Strong preferences, 5-6: Useful context, 3-4: Minor details
-Semantic importance guide: 0.8-1.0: Critical tools/infra, 0.5-0.7: Useful knowledge, 0.3-0.4: Minor details
+Importance guide (episodic): 9-10: Standing orders/rules, 7-8: Decisions/strong preferences, 5-6: Useful context, 3-4: Minor details
+Importance guide (semantic): 0.8-1.0: Critical tools/infra, 0.5-0.7: Useful patterns, 0.3-0.4: Minor discoveries
 
 Return {"episodic":[],"semantic":[]} if nothing new. Do NOT wrap in markdown code fences.`;
 
@@ -58,16 +71,24 @@ export async function extractAndStore(jid, { userMessage, assistantResponse, exi
   try {
     if (!userMessage || userMessage.length < 15) return 0; // Skip tiny messages
 
+    // Build a concise existing memory digest for dedup
+    const memDigest = existingMemories
+      .split('\n')
+      .filter(l => l.trim().startsWith('-'))
+      .map(l => l.trim())
+      .slice(0, 40)
+      .join('\n');
+
     const prompt = `<existing_memories>
-${existingMemories.slice(0, 800)}
+${memDigest.slice(0, 2500) || '(none yet)'}
 </existing_memories>
 
 <conversation>
-User: ${userMessage.slice(0, 1500)}
-Assistant: ${assistantResponse.slice(0, 1500)}
+User: ${userMessage.slice(0, 3000)}
+Assistant: ${assistantResponse.slice(0, 3000)}
 </conversation>
 
-Extract new facts worth remembering. Return [] if nothing new.`;
+Extract new or updated facts. If a fact updates an existing memory, use the SAME summary so it overwrites. Return {"episodic":[],"semantic":[]} if nothing new.`;
 
     // Use free models — this is background work, doesn't need premium
     let result;
@@ -76,7 +97,8 @@ Extract new facts worth remembering. Return [] if nothing new.`;
         FREE_FALLBACK_CHAINS.triage || ['step-flash', 'gemini-flash'],
         EXTRACT_SYSTEM,
         prompt,
-        800
+        1200,
+        { jsonMode: true }
       );
       result = response;
     } catch (err) {
@@ -153,11 +175,47 @@ Extract new facts worth remembering. Return [] if nothing new.`;
       }
     }
 
+    // Fire-and-forget: also store in mem0ai for vector search
+    if (stored > 0) {
+      storeMem0(jid, userMessage, assistantResponse).catch(() => {});
+    }
+
     return stored;
   } catch (err) {
     console.error('[memory-curator] Extract error:', err.message);
     return 0;
   }
 }
+
+// mem0ai secondary memory layer — vector-based semantic search
+let _mem0 = null;
+async function getMem0() {
+  if (_mem0) return _mem0;
+  try {
+    const { MemoryClient } = await import('mem0ai');
+    // Use mem0 cloud if API key available, otherwise skip
+    if (!process.env.MEM0_API_KEY) return null;
+    _mem0 = new MemoryClient({ apiKey: process.env.MEM0_API_KEY });
+    return _mem0;
+  } catch {
+    return null;
+  }
+}
+
+async function storeMem0(jid, userMessage, assistantResponse) {
+  try {
+    const mem0 = await getMem0();
+    if (!mem0) return;
+    const userId = jid.split('@')[0].replace(/[^a-zA-Z0-9]/g, '_');
+    await mem0.add([
+      { role: 'user', content: (userMessage || '').slice(0, 2000) },
+      { role: 'assistant', content: (assistantResponse || '').slice(0, 2000) },
+    ], { user_id: userId });
+  } catch (err) {
+    console.error('[mem0] Background store failed:', err.message);
+  }
+}
+
+export { getMem0 };
 
 // scoreRelevance moved to skills/memory-v2/lib/v1-compat.mjs

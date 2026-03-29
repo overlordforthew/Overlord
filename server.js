@@ -20,7 +20,7 @@ const WEBHOOK_PORT = parseInt(process.env.WEBHOOK_PORT || '3001');
 const ADMIN_JID = `${process.env.ADMIN_NUMBER}@s.whatsapp.net`;
 
 // sockRef is a mutable wrapper { sock } so the server always uses the latest socket after reconnects
-export function startServer(sockRef, sendResponse) {
+export function startServer(sockRef, sendResponse, connectionHealth) {
   const app = express();
 
   // Trust first proxy (Traefik) so req.ip is the real client IP
@@ -51,16 +51,29 @@ export function startServer(sockRef, sendResponse) {
     next();
   }
 
-  // GET /health — no auth needed
+  // GET /health — connection-aware health check
   app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', uptime: Math.floor(process.uptime()) });
+    const silentMs = Date.now() - connectionHealth.lastMessageAt;
+    const healthy = silentMs < 15 * 60 * 1000;
+    res.status(healthy ? 200 : 503).json({
+      status: healthy ? 'ok' : 'degraded',
+      uptime: Math.floor(process.uptime()),
+      whatsapp: {
+        connected: !!sockRef.sock?.user,
+        lastMessageAgo: Math.floor(silentMs / 1000) + 's',
+        messagesReceived: connectionHealth.messagesReceived,
+        reconnectCount: connectionHealth.reconnectCount,
+      },
+    });
   });
 
   // POST /api/send — send message to any chat (requires token)
   app.post('/api/send', requireToken, async (req, res) => {
     try {
       const { to, text, media } = req.body;
-      const jid = to === 'admin' ? ADMIN_JID : to;
+      const jid = to === 'admin' ? ADMIN_JID
+        : to.includes('@') ? to
+        : `${to.replace(/[^0-9]/g, '')}@s.whatsapp.net`;
       if (!jid || (!text && !media)) {
         return res.status(400).json({ error: 'Missing to, text, or media' });
       }

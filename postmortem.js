@@ -7,7 +7,8 @@
  * /postmortems command to search/list.
  */
 
-import { callOpenRouter, MODEL_REGISTRY } from './router.js';
+import { callWithFallback, FREE_FALLBACK_CHAINS } from './router.js';
+import { parseJsonFromLLM } from './lib/parse-json-llm.js';
 import { ingest, search as kbSearch } from './knowledge-base.js';
 import { getTaskEvents } from './task-store.js';
 import pino from 'pino';
@@ -54,14 +55,16 @@ ${timeline ? `Event Timeline:\n${timeline}\n` : ''}
 Resolution:\n${responseText.substring(0, 1500)}`;
 
   try {
-    const result = await callOpenRouter(
-      MODEL_REGISTRY['step-flash'].id,
+    const { response: result } = await callWithFallback(
+      FREE_FALLBACK_CHAINS.simple,
       'You generate structured incident postmortems from repair logs. Return ONLY valid JSON, no markdown.',
       prompt,
-      800
+      800,
+      { jsonMode: true }
     );
 
-    const parsed = JSON.parse(result.trim());
+    const parsed = parseJsonFromLLM(result);
+    if (!parsed) throw new Error('No valid JSON found in LLM response');
     return parsed;
   } catch (err) {
     logger.warn({ err: err.message }, 'Postmortem generation failed');

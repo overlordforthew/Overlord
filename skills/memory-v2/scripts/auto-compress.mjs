@@ -20,6 +20,8 @@ import { markCompressed } from '../lib/events.mjs';
 
 const THRESHOLD = parseInt(process.argv.find((_, i, a) => a[i - 1] === '--threshold') || '50');
 const DRY_RUN = process.argv.includes('--dry-run');
+const MAX_LLM_ATTEMPTS = 3;
+let llmFailCount = 0;
 
 function log(msg) {
   console.log(`[auto-compress] ${msg}`);
@@ -77,6 +79,11 @@ function buildRuleSummary(group) {
 }
 
 function tryLlmSummary(group) {
+  // Skip LLM if we've already failed or exceeded max attempts
+  if (llmFailCount >= MAX_LLM_ATTEMPTS) {
+    return null;
+  }
+
   const sampleSize = Math.min(group.events.length, 20);
   const step = Math.max(1, Math.floor(group.events.length / sampleSize));
   const samples = [];
@@ -99,7 +106,7 @@ Return ONLY valid JSON:
   try {
     const result = execSync(
       'llm -m openrouter/openrouter/free',
-      { timeout: 60000, encoding: 'utf-8', input: prompt }
+      { timeout: 20000, encoding: 'utf-8', input: prompt }
     );
 
     // Extract JSON from response (may have markdown fences)
@@ -121,7 +128,9 @@ Return ONLY valid JSON:
       importance: 0.35,
     };
   } catch (err) {
-    log(`LLM failed for session ${group.session_id.slice(0, 8)}: ${err.message}`);
+    llmFailCount++;
+    const skipMsg = llmFailCount >= MAX_LLM_ATTEMPTS ? ' — skipping LLM for remaining groups' : '';
+    log(`LLM failed (${llmFailCount}/${MAX_LLM_ATTEMPTS}) for session ${group.session_id.slice(0, 8)}: ${err.message}${skipMsg}`);
     return null;
   }
 }

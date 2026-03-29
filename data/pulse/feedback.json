@@ -1,0 +1,1616 @@
+{
+  "task:repair": {
+    "up": 273,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected — completed",
+        "at": "2026-03-28T01:45:50.859Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected — completed",
+        "at": "2026-03-28T01:55:50.519Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected — completed",
+        "at": "2026-03-28T03:30:49.748Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected — completed",
+        "at": "2026-03-28T03:50:43.353Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected — completed",
+        "at": "2026-03-28T04:32:02.151Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected — completed",
+        "at": "2026-03-28T04:55:41.251Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected — completed",
+        "at": "2026-03-28T06:05:38.933Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected — completed",
+        "at": "2026-03-28T08:00:47.760Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected — completed",
+        "at": "2026-03-28T10:00:44.709Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected — completed",
+        "at": "2026-03-28T10:20:40.962Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected — completed",
+        "at": "2026-03-28T11:15:37.327Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected — completed",
+        "at": "2026-03-28T14:30:47.819Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: distracted_yalow die (exit 1) — completed",
+        "at": "2026-03-28T14:51:52.685Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: lightpanda error detected — completed",
+        "at": "2026-03-28T15:07:03.574Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Repair: 🔍 *Auto Code Review: MasterCommander*\n\nCommits:\n189635c Add demo persona system — completed",
+        "at": "2026-03-28T16:06:38.393Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: MasterCommander error detected — completed",
+        "at": "2026-03-28T16:09:10.503Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: MasterCommander error detected — completed",
+        "at": "2026-03-28T16:41:32.924Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected — completed",
+        "at": "2026-03-28T17:30:48.454Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: o4kw0kwgkcgggggogwssoko4 die (exit 143) — completed",
+        "at": "2026-03-28T17:33:11.091Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: o0gccc4s844w40gwscgkgc4o die (exit 143) — completed",
+        "at": "2026-03-28T17:47:02.254Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: cw84ccosco4w44ogc8cwcswk die (exit 143) — completed",
+        "at": "2026-03-28T19:17:26.715Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: MasterCommander error detected — completed",
+        "at": "2026-03-28T19:17:27.922Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: dk4kgg8ggkw44gskgw0co88o die (exit 143) — completed",
+        "at": "2026-03-28T19:30:39.383Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected — completed",
+        "at": "2026-03-28T20:40:42.069Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected — completed",
+        "at": "2026-03-28T21:00:36.354Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected — completed",
+        "at": "2026-03-28T21:15:33.114Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: namibarden-db error detected — completed",
+        "at": "2026-03-29T00:41:18.867Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: namibarden error detected — completed",
+        "at": "2026-03-29T00:41:37.021Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: namibarden-db error detected — completed",
+        "at": "2026-03-29T00:45:30.781Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: namibarden-db error detected — completed",
+        "at": "2026-03-29T00:50:32.976Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: namibarden-db error detected — completed",
+        "at": "2026-03-29T00:55:40.358Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected — completed",
+        "at": "2026-03-29T04:25:35.688Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: Overlord (WhatsApp Bot) error detected — completed",
+        "at": "2026-03-29T11:16:20.077Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected — completed",
+        "at": "2026-03-29T13:40:34.577Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected — completed",
+        "at": "2026-03-29T13:45:42.078Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Repair: ⚠️ Log alerts detected:\n\n🐳 seneca-site:\n10.0.1.22 - - [29/Mar/2026:13:43:32 +00 — completed",
+        "at": "2026-03-29T13:46:02.320Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Repair: ⚠️ Log alerts detected:\n\n🐳 seneca-site:\n2026/03/29 13:35:05 [error] 31#31: *97  — completed",
+        "at": "2026-03-29T13:46:22.795Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: searxng die (exit 127) — completed",
+        "at": "2026-03-29T18:22:50.485Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: searxng die (exit 127) — completed",
+        "at": "2026-03-29T18:22:54.758Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: searxng die (exit 127) — completed",
+        "at": "2026-03-29T18:23:00.423Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: searxng die (exit 127) — completed",
+        "at": "2026-03-29T18:23:00.458Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: searxng die (exit 127) — completed",
+        "at": "2026-03-29T18:23:06.680Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: searxng die (exit 127) — completed",
+        "at": "2026-03-29T18:23:20.488Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: searxng die (exit 127) — completed",
+        "at": "2026-03-29T18:23:48.907Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: Overlord (WhatsApp Bot) error detected — completed",
+        "at": "2026-03-29T19:33:13.209Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: overlord-db error detected — completed",
+        "at": "2026-03-29T20:10:31.914Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: beszel-agent error detected — completed",
+        "at": "2026-03-29T20:15:45.151Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: searxng error detected — completed",
+        "at": "2026-03-29T20:16:05.800Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: searxng error detected — completed",
+        "at": "2026-03-29T20:21:52.167Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: searxng error detected — completed",
+        "at": "2026-03-29T20:27:51.312Z"
+      }
+    ]
+  },
+  "deploy:Overlord (WhatsApp Bot)": {
+    "up": 10,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: Overlord (WhatsApp Bot) error detected",
+        "at": "2026-03-18T04:32:27.966Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: Overlord (WhatsApp Bot) error detected",
+        "at": "2026-03-18T10:37:19.017Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: Overlord (WhatsApp Bot) error detected",
+        "at": "2026-03-18T12:12:56.130Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: Overlord (WhatsApp Bot) error detected",
+        "at": "2026-03-18T12:39:15.998Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: Overlord (WhatsApp Bot) error detected",
+        "at": "2026-03-19T04:32:31.937Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: Overlord (WhatsApp Bot) error detected",
+        "at": "2026-03-21T23:45:36.618Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: Overlord (WhatsApp Bot) error detected",
+        "at": "2026-03-22T13:25:38.913Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: Overlord (WhatsApp Bot) error detected",
+        "at": "2026-03-27T04:34:12.709Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: Overlord (WhatsApp Bot) error detected",
+        "at": "2026-03-29T11:16:20.083Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: Overlord (WhatsApp Bot) error detected",
+        "at": "2026-03-29T19:33:13.215Z"
+      }
+    ]
+  },
+  "deploy:hl-grid-btc": {
+    "up": 2,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: hl-grid-btc die (exit 137)",
+        "at": "2026-03-18T09:48:04.691Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: hl-grid-btc die (exit 137)",
+        "at": "2026-03-18T10:27:31.441Z"
+      }
+    ]
+  },
+  "deploy:hl-grid-sol": {
+    "up": 1,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: hl-grid-sol die (exit 137)",
+        "at": "2026-03-18T09:48:05.783Z"
+      }
+    ]
+  },
+  "deploy:hl-grid-doge": {
+    "up": 1,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: hl-grid-doge die (exit 137)",
+        "at": "2026-03-18T09:48:16.906Z"
+      }
+    ]
+  },
+  "deploy:hl-dashboard": {
+    "up": 1,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: hl-dashboard die (exit 137)",
+        "at": "2026-03-18T09:53:24.452Z"
+      }
+    ]
+  },
+  "deploy:overlord-db": {
+    "up": 4,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: overlord-db error detected",
+        "at": "2026-03-20T11:16:25.931Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: overlord-db error detected",
+        "at": "2026-03-20T11:22:53.978Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: overlord-db error detected",
+        "at": "2026-03-20T11:25:59.005Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: overlord-db error detected",
+        "at": "2026-03-29T20:10:31.919Z"
+      }
+    ]
+  },
+  "deploy:MasterCommander": {
+    "up": 7,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: MasterCommander error detected",
+        "at": "2026-03-20T21:08:53.088Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: MasterCommander error detected",
+        "at": "2026-03-21T01:21:05.461Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: MasterCommander error detected",
+        "at": "2026-03-21T23:40:23.257Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: MasterCommander error detected",
+        "at": "2026-03-22T16:49:39.549Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: MasterCommander error detected",
+        "at": "2026-03-28T16:09:10.507Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: MasterCommander error detected",
+        "at": "2026-03-28T16:41:32.929Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: MasterCommander error detected",
+        "at": "2026-03-28T19:17:27.925Z"
+      }
+    ]
+  },
+  "deploy:NamiBarden": {
+    "up": 20,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "auto-deploy by Nami",
+        "at": "2026-03-20T21:59:56.901Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "auto-deploy by Nami",
+        "at": "2026-03-20T23:09:24.360Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "auto-deploy by Nami",
+        "at": "2026-03-20T23:33:08.146Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "auto-deploy by Nami",
+        "at": "2026-03-20T23:36:55.886Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "auto-deploy by Nami",
+        "at": "2026-03-20T23:39:34.250Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "auto-deploy by Nami",
+        "at": "2026-03-20T23:44:55.155Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "auto-deploy by Nami",
+        "at": "2026-03-20T23:52:30.273Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "auto-deploy by Nami",
+        "at": "2026-03-20T23:55:40.173Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "auto-deploy by Nami",
+        "at": "2026-03-20T23:58:00.485Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "auto-deploy by Nami",
+        "at": "2026-03-20T23:59:47.362Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "auto-deploy by Nami",
+        "at": "2026-03-21T00:05:32.768Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "auto-deploy by Nami",
+        "at": "2026-03-21T00:08:00.737Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "auto-deploy by Nami",
+        "at": "2026-03-21T00:09:34.000Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "auto-deploy by Nami",
+        "at": "2026-03-21T12:40:51.686Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "auto-deploy by Nami",
+        "at": "2026-03-21T12:57:04.097Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "auto-deploy by Nami",
+        "at": "2026-03-21T13:06:37.247Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "auto-deploy by Nami",
+        "at": "2026-03-21T13:10:17.264Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "auto-deploy by Nami",
+        "at": "2026-03-21T19:00:44.806Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "auto-deploy by Nami",
+        "at": "2026-03-21T22:13:29.201Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "auto-deploy by Nami",
+        "at": "2026-03-28T01:13:46.977Z"
+      }
+    ]
+  },
+  "deploy:hl-blessings": {
+    "up": 6,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: hl-blessings error detected",
+        "at": "2026-03-21T09:35:52.770Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: hl-blessings error detected",
+        "at": "2026-03-21T09:40:39.940Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: hl-blessings error detected",
+        "at": "2026-03-25T07:53:42.785Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: hl-blessings error detected",
+        "at": "2026-03-25T07:55:28.339Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: hl-blessings error detected",
+        "at": "2026-03-25T08:05:18.259Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: hl-blessings error detected",
+        "at": "2026-03-25T08:10:22.815Z"
+      }
+    ]
+  },
+  "deploy:sad_matsumoto": {
+    "up": 1,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: sad_matsumoto error detected",
+        "at": "2026-03-21T11:50:03.722Z"
+      }
+    ]
+  },
+  "deploy:Lumina": {
+    "up": 4,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "auto-deploy by Nami",
+        "at": "2026-03-21T22:13:30.938Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: Lumina error detected",
+        "at": "2026-03-21T22:15:39.703Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: Lumina error detected",
+        "at": "2026-03-21T22:20:58.697Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "auto-deploy by Nami",
+        "at": "2026-03-24T00:06:13.490Z"
+      }
+    ]
+  },
+  "deploy:qsocw44kkwogw88o0k8o0os0": {
+    "up": 1,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: qsocw44kkwogw88o0k8o0os0 die (exit 143)",
+        "at": "2026-03-21T22:17:49.288Z"
+      }
+    ]
+  },
+  "deploy:app-okw0cwwgskcow8k8o08gsok0-221349060618": {
+    "up": 1,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: app-okw0cwwgskcow8k8o08gsok0-221349060618 die (exit 1)",
+        "at": "2026-03-21T22:17:53.353Z"
+      }
+    ]
+  },
+  "deploy:Lumina-db": {
+    "up": 1,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: Lumina-db error detected",
+        "at": "2026-03-21T22:20:23.464Z"
+      }
+    ]
+  },
+  "deploy:lumina-db-1": {
+    "up": 1,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: lumina-db-1 error detected",
+        "at": "2026-03-21T22:25:18.488Z"
+      }
+    ]
+  },
+  "deploy:shannon-browser-1": {
+    "up": 159,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T00:10:17.902Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T00:15:54.352Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T00:20:15.930Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T00:25:16.870Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T00:30:25.049Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T00:35:19.339Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T00:40:15.620Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T00:45:17.687Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T00:50:15.258Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T00:55:16.723Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T01:05:19.378Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T01:10:16.430Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T01:15:23.956Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T01:23:13.979Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T01:26:05.770Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T01:36:21.988Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T01:40:15.363Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T01:48:14.726Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T01:50:18.719Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T01:55:13.928Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T02:05:16.553Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T02:10:22.757Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T02:15:15.595Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T02:20:17.699Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T02:25:19.543Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T02:30:17.651Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T02:35:15.303Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T02:40:15.548Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T02:45:17.314Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T02:50:18.069Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T02:55:16.105Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T03:05:27.334Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T03:10:21.051Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T03:15:28.265Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T03:20:28.163Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T03:26:13.192Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T03:30:17.153Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T03:35:16.210Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T03:40:18.488Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T03:45:31.284Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T03:50:16.607Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T03:55:14.435Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T04:05:20.649Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T04:10:20.678Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T04:15:15.346Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T04:20:17.381Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T04:25:16.471Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 error detected",
+        "at": "2026-03-23T04:32:18.976Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 die (exit 143)",
+        "at": "2026-03-23T16:12:51.772Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: shannon-browser-1 die (exit 143)",
+        "at": "2026-03-23T16:20:03.914Z"
+      }
+    ]
+  },
+  "deploy:namibarden": {
+    "up": 3,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: namibarden error detected",
+        "at": "2026-03-22T14:25:57.305Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: namibarden error detected",
+        "at": "2026-03-23T01:45:29.114Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: namibarden error detected",
+        "at": "2026-03-29T00:41:37.027Z"
+      }
+    ]
+  },
+  "deploy:Traefik Proxy": {
+    "up": 3,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: Traefik Proxy error detected",
+        "at": "2026-03-22T19:38:17.619Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: Traefik Proxy error detected",
+        "at": "2026-03-22T23:26:07.234Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: Traefik Proxy error detected",
+        "at": "2026-03-23T01:06:09.795Z"
+      }
+    ]
+  },
+  "deploy:Onlyhulls": {
+    "up": 4,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: Onlyhulls error detected",
+        "at": "2026-03-22T20:26:24.438Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: Onlyhulls error detected",
+        "at": "2026-03-23T01:56:56.773Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: Onlyhulls error detected",
+        "at": "2026-03-24T10:46:13.702Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: Onlyhulls error detected",
+        "at": "2026-03-27T19:29:48.087Z"
+      }
+    ]
+  },
+  "deploy:app-okw0cwwgskcow8k8o08gsok0-221622435780": {
+    "up": 1,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: app-okw0cwwgskcow8k8o08gsok0-221622435780 die (exit 137)",
+        "at": "2026-03-24T00:08:17.465Z"
+      }
+    ]
+  },
+  "deploy:ccgk4wk0w4co00sgo4cg8c4k": {
+    "up": 1,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: ccgk4wk0w4co00sgo4cg8c4k die (exit 143)",
+        "at": "2026-03-24T00:08:39.366Z"
+      }
+    ]
+  },
+  "deploy:seneca-site": {
+    "up": 27,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-26T20:30:34.075Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-26T20:35:35.697Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-26T20:55:31.863Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-27T23:40:56.683Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-28T00:21:24.648Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-28T00:36:43.029Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-28T00:50:41.810Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-28T01:41:34.256Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-28T01:45:50.864Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-28T01:55:50.524Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-28T03:30:49.753Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-28T03:50:43.358Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-28T04:32:02.154Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-28T04:55:41.256Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-28T06:05:38.936Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-28T08:00:47.762Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-28T10:00:44.711Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-28T10:20:40.967Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-28T11:15:37.332Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-28T14:30:47.824Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-28T17:30:48.459Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-28T20:40:42.074Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-28T21:00:36.360Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-28T21:15:33.119Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-29T04:25:35.694Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-29T13:40:34.581Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: seneca-site error detected",
+        "at": "2026-03-29T13:45:42.083Z"
+      }
+    ]
+  },
+  "deploy:x8sg844wos88o0oggoo4cg4g": {
+    "up": 1,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: x8sg844wos88o0oggoo4cg4g die (exit 143)",
+        "at": "2026-03-27T19:17:03.006Z"
+      }
+    ]
+  },
+  "deploy:amazing_hypatia": {
+    "up": 1,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: amazing_hypatia error detected",
+        "at": "2026-03-27T19:20:24.860Z"
+      }
+    ]
+  },
+  "deploy:iog0k8g4kco48oowssc8o4ck": {
+    "up": 1,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: iog0k8g4kco48oowssc8o4ck die (exit 143)",
+        "at": "2026-03-27T19:28:57.066Z"
+      }
+    ]
+  },
+  "deploy:uc8ococ0k4k4coswkgwsco0g": {
+    "up": 1,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: uc8ococ0k4k4coswkgwsco0g die (exit 143)",
+        "at": "2026-03-27T20:06:15.619Z"
+      }
+    ]
+  },
+  "deploy:onlyhulls-app": {
+    "up": 5,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: onlyhulls-app die (exit 1)",
+        "at": "2026-03-27T21:28:48.223Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: onlyhulls-app die (exit 1)",
+        "at": "2026-03-27T21:29:38.288Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: onlyhulls-app error detected",
+        "at": "2026-03-27T22:19:16.616Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: onlyhulls-app error detected",
+        "at": "2026-03-27T22:38:05.033Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: onlyhulls-app die (exit 137)",
+        "at": "2026-03-28T00:02:16.345Z"
+      }
+    ]
+  },
+  "deploy:pw000880k88cwgcscks4gg0k": {
+    "up": 1,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: pw000880k88cwgcscks4gg0k die (exit 143)",
+        "at": "2026-03-27T22:08:38.132Z"
+      }
+    ]
+  },
+  "deploy:distracted_yalow": {
+    "up": 1,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: distracted_yalow die (exit 1)",
+        "at": "2026-03-28T14:51:52.691Z"
+      }
+    ]
+  },
+  "deploy:lightpanda": {
+    "up": 1,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: lightpanda error detected",
+        "at": "2026-03-28T15:07:03.582Z"
+      }
+    ]
+  },
+  "deploy:o4kw0kwgkcgggggogwssoko4": {
+    "up": 1,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: o4kw0kwgkcgggggogwssoko4 die (exit 143)",
+        "at": "2026-03-28T17:33:11.097Z"
+      }
+    ]
+  },
+  "deploy:o0gccc4s844w40gwscgkgc4o": {
+    "up": 1,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: o0gccc4s844w40gwscgkgc4o die (exit 143)",
+        "at": "2026-03-28T17:47:02.257Z"
+      }
+    ]
+  },
+  "deploy:cw84ccosco4w44ogc8cwcswk": {
+    "up": 1,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: cw84ccosco4w44ogc8cwcswk die (exit 143)",
+        "at": "2026-03-28T19:17:26.718Z"
+      }
+    ]
+  },
+  "deploy:dk4kgg8ggkw44gskgw0co88o": {
+    "up": 1,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: dk4kgg8ggkw44gskgw0co88o die (exit 143)",
+        "at": "2026-03-28T19:30:39.386Z"
+      }
+    ]
+  },
+  "deploy:namibarden-db": {
+    "up": 4,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: namibarden-db error detected",
+        "at": "2026-03-29T00:41:18.869Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: namibarden-db error detected",
+        "at": "2026-03-29T00:45:30.786Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: namibarden-db error detected",
+        "at": "2026-03-29T00:50:32.979Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: namibarden-db error detected",
+        "at": "2026-03-29T00:55:40.365Z"
+      }
+    ]
+  },
+  "deploy:searxng": {
+    "up": 10,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: searxng die (exit 127)",
+        "at": "2026-03-29T18:22:50.491Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: searxng die (exit 127)",
+        "at": "2026-03-29T18:22:54.762Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: searxng die (exit 127)",
+        "at": "2026-03-29T18:23:00.433Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: searxng die (exit 127)",
+        "at": "2026-03-29T18:23:00.462Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: searxng die (exit 127)",
+        "at": "2026-03-29T18:23:06.686Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: searxng die (exit 127)",
+        "at": "2026-03-29T18:23:20.493Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: searxng die (exit 127)",
+        "at": "2026-03-29T18:23:48.913Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: searxng error detected",
+        "at": "2026-03-29T20:16:05.806Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: searxng error detected",
+        "at": "2026-03-29T20:21:52.173Z"
+      },
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: searxng error detected",
+        "at": "2026-03-29T20:27:51.319Z"
+      }
+    ]
+  },
+  "deploy:beszel-agent": {
+    "up": 1,
+    "down": 0,
+    "entries": [
+      {
+        "rating": "up",
+        "labels": [],
+        "comment": "Auto-repair: beszel-agent error detected",
+        "at": "2026-03-29T20:15:45.158Z"
+      }
+    ]
+  }
+}

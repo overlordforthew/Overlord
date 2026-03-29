@@ -1,0 +1,2 @@
+*   **Additions & Naming:** Added "Couples Coaching" (カップルコーチング) and "心の相談室" (Private Consultation) service cards and footer links to the homepage in both English and Japanese.
+*   **Design Consistency Request:** N

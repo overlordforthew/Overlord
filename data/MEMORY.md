@@ -1,59 +1,65 @@
 # Overlord Memory Index
 
-> Auto-generated from semantic memory DB. For deeper knowledge: `mem search <query>` or `mem recall <category>`
+> Auto-generated from memory v2 DB. Use `mem search <query>` or `mem recall <category>` for deeper knowledge.
 
 ## Tools
-- **gws**: Google Workspace CLI (gws v0.8.0) — fully authenticated as overlord.gil.ai@gmail.com. Scopes: Gmail, Calendar, Drive, Sh
-- **claude-cli**: Claude CLI — Anthropic Claude Code CLI. Uses OAuth (no API key needed). Auth refresh cron every 6h. Installed globally i
-- **codex-cli**: Codex CLI (codex review --commit HEAD) — free code review via ChatGPT auth (NOT API). Auth stored at /root/.codex/auth.j
-- **chrome-gui**: Headful Chrome browser — systemd service chrome-gui. Access: http://100.83.80.116:6080/vnc.html (Tailscale-only, no pass
-- **gh-cli**: GitHub CLI (gh) — available in container. GH_TOKEN in /root/overlord/.env for push access. For git push: git remote set-
-- **docker**: Docker CLI available in Overlord container via mounted /var/run/docker.sock. Can manage all containers on the host. Use 
-- **llm-cli**: llm CLI (v0.28) — universal LLM interface via OpenRouter plugin. 26+ free models: DeepSeek R1, Llama 3.3 70B, Gemma 3, Q
-- **discord-mcp**: Discord MCP — bot app ID 1479963348228636894. Token in /root/.claude.json mcpServers.discord.env. Tools: list servers, r
-- **veo**: Google Veo video generation (/veo skill). API key: GOOGLE_API_KEY in /root/.env, free tier with daily limits.
-- **shannon**: Shannon AI Pentest Framework at /root/projects/shannon/. Run: ./shannon start URL=<url> REPO=<name>. Resume: ./shannon s
-- **yt-dlp**: yt-dlp installed at /usr/local/bin/yt-dlp for downloading videos/audio from YouTube and other platforms.
+- **github repository filter system**: Two-layer API key filtering system implemented: 1) Pre-filter in github-trending.js fetches first 3K of each repo's READ
+- **gws CLI — Google Workspace**: Fully authenticated as overlord.gil.ai@gmail.com. Supports Gmail, Calendar, Drive, Sheets, Docs, Tasks. Credentials at ~
+- **Chrome GUI + CDP**: Headful browser at http://100.83.80.116:6080/vnc.html (Tailscale-only). CDP port 9223 for programmatic control via chrom
+- **Codex CLI — free code review**: codex review --commit HEAD. Free via ChatGPT auth. Run after every significant code commit (codex-review.sh). Catches re
+- **llm CLI — free model access**: llm -m openrouter/openrouter/free "prompt". 26+ free models via OpenRouter. Useful for quick queries without burning Opu
 
 ## Projects
-- **overlord**: WhatsApp AI Bot + Workspace at /root/overlord/. Stack: Node.js, Baileys (WhatsApp Web), Claude CLI. Runs in Docker on co
-- **namibarden**: Main site + Newsletter + Course Platform at /root/projects/NamiBarden/. URL: namibarden.com. Stack: Node.js 20 + Express
-- **mastercommander**: AI Boat Monitor Landing Page at /root/projects/MasterCommander/. URL: mastercommander.namibarden.com. Stack: Static HTML
-- **surfababe**: SurfaBabe Wellness WhatsApp AI at /root/projects/SurfaBabe/. URL: surfababe.namibarden.com. Stack: Node.js/Baileys/Claud
-- **lumina**: Auth/Account System. URL: lumina.namibarden.com. Stack: Node.js + Express + React (esbuild), PG 17, JWT. Deploy: Coolify
-- **beastmode**: Web App + API at /root/projects/BeastMode/. URL: beastmode.namibarden.com. Coolify app UUID ug80oocw84scswk084kcw0ok. De
-- **elmo**: OnlyDrafting at /root/projects/Elmo/. Domain: onlydrafting.com. Coolify token zkk0k8gcgcss4osggs4k0kw4. Deploy: Coolify 
-- **onlyhulls**: AI Boat Matchmaking at /root/projects/OnlyHulls/. Domain: onlyhulls.com. Stack: Next.js 16, PG 17. Coolify token qkggs84
-- **elsalvador**: ElSalvador Land Scout — OFFLINE. Stack: Python 3.12, FastAPI, Playwright. Coolify app ID q0wcsgo0wccsgkows08gocks. Auto-
+- **Project deploy methods**: BeastMode/Lumina/Elmo/OnlyHulls: Coolify auto-deploy on git push. SurfaBabe: GitHub webhook (deploy-listener.js port 900
+- **Overlord — WhatsApp bot**: Node.js + Baileys at /root/overlord/. Multi-model router (Alpha/Beta/Charlie). Memory v2 SQLite backend. Scheduler with 
+- **beastmode**: BeastMode is intentionally kept offline. Do not attempt to redeploy or flag as an issue.
 
 ## Infrastructure
-- **server**: Hetzner CX33 — Ubuntu 24.04, 4-core AMD EPYC, 8GB RAM, 80GB SSD. IP: 89.167.12.82. Tailscale: 100.83.80.116. Coolify (co
-- **traefik**: Traefik v3.6 reverse proxy. Config source of truth: /data/coolify/proxy/dynamic/namibarden.yaml. Access log: /data/cooli
-- **coolify**: Coolify deployment platform at coolify.namibarden.com (Tailscale-restricted). API: curl -H "Authorization: Bearer $COOLI
-- **cloudflare**: Cloudflare full API access. Zones: namibarden.com (51ea8958dc949e1793c0d31435cfa699), onlydrafting.com (5a4473673d3df140
-- **tailscale**: Tailscale network (gilbarden@): Overlord 100.83.80.116, Elmoserver 100.89.16.27 (shared from elmoherrera2014@), Laptop 1
-- **cron-jobs**: Root crontab: health-check (6h), backup (midnight), morning-brief (6am), Claude auth refresh (6h), auto-journal (11:55pm
+- **Container memory limit: 2GB**: Overlord container has a 2GB memory limit. Heavy tasks cause SIGTERM/code 143. Must break up heavy operations — one majo
+- **Server: Hetzner CX33**: Ubuntu 24.04, 4-core AMD EPYC, 8GB RAM, 80GB SSD. Coolify for orchestration, Traefik v3.6 reverse proxy, PostgreSQL 17, 
+- **Cloudflare DNS + Traefik routing**: Cloudflare wildcard *.namibarden.com. New subdomains only need a Traefik route in /data/coolify/proxy/dynamic/namibarden
+- **website multilingual structure**: Website uses separate HTML files for Japanese (e.g., consultation.html) and English versions (e.g., consultation-en.html
+- **gws-oauth-lifecycle**: GWS OAuth tokens expire in 7 days when app is in Testing mode (project overlord-488220). Fix: publish app to In Producti
+- **google-auth-workaround**: Google blocks OAuth sign-in from Chrome instances with --remote-debugging-port. Solution: launch a temporary Chrome WITH
 
 ## Security
-- **fail2ban**: Fail2ban 4 active jails: sshd (3 retries/10min → 3h ban), traefik-auth (5/5min → 6h), traefik-botsearch (3/1min → 24h, w
-- **ssh**: SSH key-only auth. Restricted to private ranges (10.0.0.0/8, 172.16.0.0/12) + Tailscale. Users: root (primary), gil (UID
-- **mc-auth**: MasterCommander auth: MC_JWT_SECRET rotated. Rate limiters use req.ip. requireMcAuth rejects gate tokens. Gate OTP uses 
+- **Fail2ban: 4 active jails**: sshd (3 retries/10min, 3h ban), traefik-auth (5 retries/5min, 6h ban for 401 brute force), traefik-botsearch (3 retries/
+- **SSH key-only, network bindings**: All app containers bound to 127.0.0.1 only — nothing exposed directly, all traffic via Traefik. SSH restricted to privat
 
 ## Integrations
-- **cloudflare-api**: Cloudflare full access: Global API Key + email auth (X-Auth-Key/X-Auth-Email) in /root/overlord/.env. Account ID: 099cbd
-- **stripe**: Stripe (NamiBarden): account gilbarden@gmail.com, US. CLI: stripe-nb. Keys in /root/projects/NamiBarden/.env. Webhook: h
-- **coolify-api**: Coolify API token "15|overlord-41ed95a28669181758a73dd1901ef812" in /root/overlord/.env (COOLIFY_API_TOKEN). Use http://
-
-## Key Procedures
-- **deploying overlord**: 1. cd /root/overlord
-- **deploying namibarden**: 1. cd /root/projects/NamiBarden
-- **deploying mastercommander**: 1. cd /root/projects/MasterCommander
-- **adding new subdomain**: 1. Cloudflare wildcard handles DNS (no changes needed)
-- **checking email**: 1. gws gmail users messages list --params '{"userId":"me","maxResults":10,"q":"in:inbox is:unread"}'
+- **Coolify API**: Tokens in personal_access_tokens table are SHA-256 hashed. Env vars updated via PATCH /api/v1/applications/{uuid}/envs. 
+- **Cloudflare API**: Full access via CLOUDFLARE_GLOBAL_API_KEY in .env. Supports DNS, R2 storage, zones. Used for DNS management and CDN.
+- **google-cloud-apis**: Updated 2026-03-21: Full --full auth completed. 11 OAuth scopes including cloud-platform and pubsub. 30 APIs enabled on 
+- **youtube-cli**: yt CLI tool installed at /usr/local/bin/yt. Full OAuth read/write access to @namibarden YouTube channel (namiokamura@gma
 
 ## Preferences
-- Gil wants action, not advice. Execute first, explain after. Gil is a developer.
-- Codex review is MANDATORY for all significant code changes — always run codex review --commit HEAD before final push.
-- Error auto-fix protocol: When error detected, research and understand it, attempt autonomous fix, run codex review, noti
-- New projects: Always init git, create GitHub repo under bluemele/, push, and set up Coolify webhook.
-- Always unsubscribe from marketing/promo emails during inbox cleanup. Archive informational noise (security alerts alread
+- Action not advice. Execute first, explain after. Always use Opus (claude-opus-4-6). Minimal targeted changes. Paralleliz
+- Phone: 13055601031 (WhatsApp admin). GitHub: bluemele. Domain: namibarden.com. Email: overlord.gil.ai@gmail.com. X: @ove
+
+## Key Procedures
+- **Deploy Overlord**: 1. Edit code in /root/overlord/. 2. git add + commit + push. 3. docker compose up -d --build. 4. doc
+- **Git push authentication**: gh auth token lacks push scope. Use GH_TOKEN from /root/overlord/.env: git remote set-url origin "ht
+- **Add new subdomain**: 1. Edit /data/coolify/proxy/dynamic/namibarden.yaml — add router + service. 2. Traefik picks up chan
+- **Rotate Cloudflare API token**: Automated via /root/overlord/scripts/rotate-cf-token.sh (cron: quarterly, 1st of Jan/Apr/Jul/Oct at 
+
+## Standing Orders & Rules
+- Gil's personal email: gilbarden@gmail.com (Overlord does NOT have access)
+- overlord.gil.ai@gmail.com is OVERLORD'S email, not Gil's — Overlord owns it and can use freely
+- Owns a Catana 581 sailing catamaran (58ft, Christophe Barreau design)
+- Home port: Chaguaramas, Trinidad
+- Building "Commander" — AI boat monitor that connects marine electronics (SignalK) to WhatsApp
+- Project uses Node.js, Baileys (WhatsApp), WebSocket for SignalK
+- Elmo's server (onlydrafting.com): has a 6GB NVIDIA GPU — capable of LLM training runs (nanochat scale), suitable for autoresearch loop
+- autoresearch (Karpathy) already running on Elmo's server
+- STANDING ORDER: When Ai Chan (NamiBarden bot) escalates requests (e.g., rebuild namibarden container), Overlord should execute them autonomously witho
+- STANDING ORDER (SELF-HEALING): RKHunter warnings, server errors, and other automated alerts — Overlord MUST auto-repair immediately without notifying 
+
+## Recent Context
+- Gil is interested in daily tracking of MSTR price, $180 strike LEAP pricing, and BTC correlation. (2026-03-28)
+- Gil believes the MSTR market is in a downmarket, expecting recovery as early as May, but more certainly by October, poss (2026-03-28)
+- Overlord has an unidentified contact WhatsApp number: 243898425299000. (2026-03-28)
+- Overlord has Nami's WhatsApp number stored in its contacts. (2026-03-28)
+- Overlord does not currently have Elmo's WhatsApp number. (2026-03-28)
+- The strategy for creating clickable YouTube short titles involves using '〇〇' for curiosity, directly addressing the view (2026-03-28)
+- User instructed to rename YouTube video #9 from '価値観が合わないときはどうすれば？(A)' to '価値観が合わないときはどうすれば？' (removing the (A) suffix)  (2026-03-27)
+- Gil requested swapping the YouTube video order: moved 'セックスがうまくいかないワケ(1)' before 'セックスがうまくいかないワケ (2)' on Nami Barden's c (2026-03-27)

@@ -39,11 +39,20 @@ python3 /app/skills/social-media/generate-post.py --platform youtube --topic "gu
 - First line is the hook (shown before "see more")
 - Tag relevant people/companies
 
-## Future: API Integration
-When API keys are configured:
+## Active API Integrations
+
+### YouTube — LIVE (yt CLI)
+Full OAuth read/write access to @namibarden channel via `yt` CLI (`/usr/local/bin/yt`).
+- Update video SEO: `yt seo <videoId> --title "..." --description "..." --tags "t1,t2"`
+- Manage playlists: `yt playlist list/create/update/delete/show/add/remove`
+- Upload videos: `yt upload <file> --title "..." --privacy private`
+- Bulk SEO updates: `yt bulk seo <updates.json>`
+- Channel settings: `yt channel update --description "..." --keywords "..."`
+- Full docs: `yt help`
+
+### Future
 - Twitter: OAuth 2.0 via tweepy
 - Instagram: Meta Graph API
-- YouTube: Google API (already have GOOGLE_API_KEY)
 
 ## When to Use
 - User asks to create social media content

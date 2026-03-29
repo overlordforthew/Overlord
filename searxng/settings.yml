@@ -1,0 +1,82 @@
+# SearXNG settings
+
+use_default_settings:
+  engines:
+    remove:
+      - ahmia
+      - torch
+
+general:
+  debug: false
+  instance_name: "SearXNG"
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "en"
+  formats:
+    - html
+    - json
+
+server:
+  secret_key: "8877b3875712c7e112fc477d666112271084174fa89df4d575ea857829295f69"
+  limiter: false
+  image_proxy: false
+  port: 8080
+  bind_address: "0.0.0.0"
+
+ui:
+  static_use_hash: true
+  default_locale: ""
+  query_in_title: false
+  infinite_scroll: false
+  center_alignment: false
+  default_theme: simple
+  theme_args:
+    simple_style: auto
+
+# Disable all tracking/metrics
+enabled_plugins:
+  - Hash_plugin
+  - Self_Informations
+  - Tracker_URL_remover
+
+# Disable cookies/user tracking
+outgoing:
+  request_timeout: 3.0
+  max_request_timeout: 10.0
+  useragent_suffix: ""
+  pool_connections: 100
+  pool_maxsize: 20
+
+engines:
+  - name: google
+    engine: google
+    shortcut: g
+    disabled: false
+
+  - name: bing
+    engine: bing
+    shortcut: bi
+    disabled: false
+
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: ddg
+    disabled: true
+
+  - name: karmasearch
+    engine: karmasearch
+    shortcut: ks
+    disabled: true
+
+  - name: karmasearch videos
+    engine: karmasearch
+    shortcut: ksv
+    disabled: true
+
+  - name: wikipedia
+    engine: wikipedia
+    shortcut: wp
+    disabled: false
+    base_url: "https://en.wikipedia.org/"

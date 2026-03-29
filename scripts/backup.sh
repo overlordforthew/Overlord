@@ -83,6 +83,10 @@ for CONTAINER in $(docker ps --format '{{.Names}}' 2>/dev/null); do
     log "Dumping database from $CONTAINER..."
     PG_USER=$(docker inspect "$CONTAINER" --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^POSTGRES_USER=' | cut -d= -f2)
     PG_USER="${PG_USER:-postgres}"
+    if ! docker exec "$CONTAINER" pg_isready -U "$PG_USER" -q 2>/dev/null; then
+        log "SKIP: $CONTAINER (pg not ready)"
+        continue
+    fi
     docker exec "$CONTAINER" pg_dumpall -U "$PG_USER" 2>/dev/null | gzip > "$BACKUP_DIR/db-$CONTAINER-$DATE.sql.gz" || log "WARN: Failed to dump $CONTAINER"
 done
 

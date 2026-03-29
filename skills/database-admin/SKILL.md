@@ -61,15 +61,15 @@ db-admin.sh sizes overlord-db overlord
 db-admin.sh tables overlord-db overlord
 ```
 
-**Inspect memory system schema:**
+**Inspect table schema:**
 ```bash
-db-admin.sh schema overlord-db semantic_memories overlord
-db-admin.sh schema overlord-db episodic_memories overlord
+db-admin.sh schema overlord-db conversations overlord
+db-admin.sh schema overlord-db usage_stats overlord
 ```
 
 **Run a query:**
 ```bash
-db-admin.sh query overlord-db "SELECT COUNT(*) FROM semantic_memories WHERE is_active = TRUE" overlord
+db-admin.sh query overlord-db "SELECT COUNT(*) FROM conversations" overlord
 ```
 
 **Backup a container:**

@@ -1,0 +1,7 @@
+- **Issue**: Planned `yt
+
+(Earlier) - **Google Voice API Opportunity**: Google AI Studio's real-time voice API (sub-second latency, 90+ languages) enables AI receptionists for phone-heavy niches (dental, real estate). Pitch: $500/mo vs
+
+(Earlier) - **Key topics**: Skill Harvester tool deployment (repo-analyzer.sh, skill-extract.sh, harvest.sh, SKILL.md
+
+(Earlier) - **GitNexus evaluation**: Deemed overkill for current small codebases (~5k LOC), but bookmark-worthy for future scaling (OnlyHulls/M

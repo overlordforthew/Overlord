@@ -1,0 +1,624 @@
+{
+  "period": {
+    "start": "2026-03-20",
+    "end": "2026-03-27",
+    "generatedAt": "2026-03-27T22:00:00.393Z"
+  },
+  "skillInventory": {
+    "totalCount": 60,
+    "skills": [
+      "action-normalizer",
+      "agent-cognitive-architecture",
+      "agent-event-loop",
+      "amadeus-travel",
+      "api-gateway",
+      "api-integrations",
+      "automation",
+      "backup-verifier",
+      "browse",
+      "calendar-manager",
+      "code-review",
+      "content-writer",
+      "data-analysis",
+      "database-admin",
+      "dns-manager",
+      "document-reader",
+      "email-composer",
+      "ffmpeg",
+      "ffmpeg-cli",
+      "ffmpeg-video-editor",
+      "gemini",
+      "git-intelligence",
+      "grid-trader",
+      "humanizer",
+      "image-generator",
+      "incident-response",
+      "log-analyzer",
+      "luxtts",
+      "mcporter",
+      "memory-v2",
+      "mobile-dev",
+      "monitoring",
+      "nano-banana-pro",
+      "nano-pdf",
+      "notification-hub",
+      "openai-whisper",
+      "performance-profiler",
+      "polymarket-odds",
+      "proactive-agent",
+      "prompt-composer",
+      "prompt-guard",
+      "research",
+      "scrapling",
+      "security-scanner",
+      "server-admin",
+      "session-briefing",
+      "skill-harvester",
+      "social-media",
+      "stock-analysis",
+      "stock-market-pro",
+      "trading",
+      "twitter",
+      "video-pipeline",
+      "web-dev",
+      "web-scraper",
+      "whatsapp",
+      "x-trends",
+      "youtube-analytics",
+      "youtube-ultimate",
+      "youtube-watcher"
+    ]
+  },
+  "pulseFeedback": [
+    {
+      "name": "task:repair",
+      "allTimeUp": 214,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 50,
+      "weekDown": 0,
+      "weekTotal": 50,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:shannon-browser-1",
+      "allTimeUp": 159,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 50,
+      "weekDown": 0,
+      "weekTotal": 50,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:NamiBarden",
+      "allTimeUp": 19,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 18,
+      "weekDown": 0,
+      "weekTotal": 18,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:hl-blessings",
+      "allTimeUp": 6,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 6,
+      "weekDown": 0,
+      "weekTotal": 6,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:Lumina",
+      "allTimeUp": 4,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 4,
+      "weekDown": 0,
+      "weekTotal": 4,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:Onlyhulls",
+      "allTimeUp": 4,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 4,
+      "weekDown": 0,
+      "weekTotal": 4,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:Overlord (WhatsApp Bot)",
+      "allTimeUp": 8,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 3,
+      "weekDown": 0,
+      "weekTotal": 3,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:MasterCommander",
+      "allTimeUp": 4,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 3,
+      "weekDown": 0,
+      "weekTotal": 3,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:Traefik Proxy",
+      "allTimeUp": 3,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 3,
+      "weekDown": 0,
+      "weekTotal": 3,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:seneca-site",
+      "allTimeUp": 3,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 3,
+      "weekDown": 0,
+      "weekTotal": 3,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:namibarden",
+      "allTimeUp": 2,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 2,
+      "weekDown": 0,
+      "weekTotal": 2,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:onlyhulls-app",
+      "allTimeUp": 2,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 2,
+      "weekDown": 0,
+      "weekTotal": 2,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:sad_matsumoto",
+      "allTimeUp": 1,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 1,
+      "weekDown": 0,
+      "weekTotal": 1,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:qsocw44kkwogw88o0k8o0os0",
+      "allTimeUp": 1,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 1,
+      "weekDown": 0,
+      "weekTotal": 1,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:app-okw0cwwgskcow8k8o08gsok0-221349060618",
+      "allTimeUp": 1,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 1,
+      "weekDown": 0,
+      "weekTotal": 1,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:Lumina-db",
+      "allTimeUp": 1,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 1,
+      "weekDown": 0,
+      "weekTotal": 1,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:lumina-db-1",
+      "allTimeUp": 1,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 1,
+      "weekDown": 0,
+      "weekTotal": 1,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:app-okw0cwwgskcow8k8o08gsok0-221622435780",
+      "allTimeUp": 1,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 1,
+      "weekDown": 0,
+      "weekTotal": 1,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:ccgk4wk0w4co00sgo4cg8c4k",
+      "allTimeUp": 1,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 1,
+      "weekDown": 0,
+      "weekTotal": 1,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:x8sg844wos88o0oggoo4cg4g",
+      "allTimeUp": 1,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 1,
+      "weekDown": 0,
+      "weekTotal": 1,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:amazing_hypatia",
+      "allTimeUp": 1,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 1,
+      "weekDown": 0,
+      "weekTotal": 1,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:iog0k8g4kco48oowssc8o4ck",
+      "allTimeUp": 1,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 1,
+      "weekDown": 0,
+      "weekTotal": 1,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:uc8ococ0k4k4coswkgwsco0g",
+      "allTimeUp": 1,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 1,
+      "weekDown": 0,
+      "weekTotal": 1,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:hl-grid-btc",
+      "allTimeUp": 2,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 0,
+      "weekDown": 0,
+      "weekTotal": 0,
+      "weekScore": null,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:hl-grid-sol",
+      "allTimeUp": 1,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 0,
+      "weekDown": 0,
+      "weekTotal": 0,
+      "weekScore": null,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:hl-grid-doge",
+      "allTimeUp": 1,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 0,
+      "weekDown": 0,
+      "weekTotal": 0,
+      "weekScore": null,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:hl-dashboard",
+      "allTimeUp": 1,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 0,
+      "weekDown": 0,
+      "weekTotal": 0,
+      "weekScore": null,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:overlord-db",
+      "allTimeUp": 3,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 0,
+      "weekDown": 0,
+      "weekTotal": 0,
+      "weekScore": null,
+      "recentLabels": []
+    }
+  ],
+  "pulseEvents": {
+    "totalEvents": 200,
+    "byType": {
+      "deploy": 101,
+      "task": 99
+    },
+    "performance": {
+      "slowResponseCount": 0,
+      "avgResponseMs": 0,
+      "maxResponseMs": 0
+    },
+    "apiErrors": 0,
+    "allTimeSummary": {
+      "total": 200
+    }
+  },
+  "cortexRegistry": {
+    "entities": [],
+    "inProgress": [],
+    "failed": []
+  },
+  "cortexAnnotations": [],
+  "cortexUnderperforming": [],
+  "friction": {
+    "totalEvents": 25,
+    "byType": {
+      "slow_response": {
+        "count": 22,
+        "totalMs": 3444752,
+        "avgMs": 156580
+      },
+      "api_error": {
+        "count": 3,
+        "totalMs": 1095331,
+        "avgMs": 365110
+      }
+    },
+    "allTimeSummary": {
+      "slow_response": 50,
+      "api_error": 8
+    }
+  },
+  "regressions": {
+    "weekCount": 0,
+    "entries": [],
+    "allTimeStats": {
+      "config": 1
+    }
+  },
+  "dailySyntheses": [
+    {
+      "date": "2026-03-21",
+      "generatedAt": "2026-03-21T00:00:00.203Z",
+      "regressions": {
+        "count": 0,
+        "categories": [],
+        "items": []
+      },
+      "friction": {
+        "totalEvents": 0,
+        "byType": {},
+        "topIssue": "none"
+      },
+      "insights": []
+    },
+    {
+      "date": "2026-03-22",
+      "generatedAt": "2026-03-22T00:00:00.760Z",
+      "regressions": {
+        "count": 0,
+        "categories": [],
+        "items": []
+      },
+      "friction": {
+        "totalEvents": 0,
+        "byType": {},
+        "topIssue": "none"
+      },
+      "insights": []
+    },
+    {
+      "date": "2026-03-23",
+      "generatedAt": "2026-03-23T00:00:00.855Z",
+      "regressions": {
+        "count": 0,
+        "categories": [],
+        "items": []
+      },
+      "friction": {
+        "totalEvents": 0,
+        "byType": {},
+        "topIssue": "none"
+      },
+      "insights": []
+    },
+    {
+      "date": "2026-03-24",
+      "generatedAt": "2026-03-24T00:00:00.673Z",
+      "regressions": {
+        "count": 0,
+        "categories": [],
+        "items": []
+      },
+      "friction": {
+        "totalEvents": 0,
+        "byType": {},
+        "topIssue": "none"
+      },
+      "insights": []
+    },
+    {
+      "date": "2026-03-25",
+      "generatedAt": "2026-03-25T00:00:00.370Z",
+      "regressions": {
+        "count": 0,
+        "categories": [],
+        "items": []
+      },
+      "friction": {
+        "totalEvents": 0,
+        "byType": {},
+        "topIssue": "none"
+      },
+      "insights": []
+    },
+    {
+      "date": "2026-03-26",
+      "generatedAt": "2026-03-26T00:00:01.081Z",
+      "regressions": {
+        "count": 0,
+        "categories": [],
+        "items": []
+      },
+      "friction": {
+        "totalEvents": 0,
+        "byType": {},
+        "topIssue": "none"
+      },
+      "insights": []
+    },
+    {
+      "date": "2026-03-27",
+      "generatedAt": "2026-03-27T00:00:00.507Z",
+      "regressions": {
+        "count": 0,
+        "categories": [],
+        "items": []
+      },
+      "friction": {
+        "totalEvents": 0,
+        "byType": {},
+        "topIssue": "none"
+      },
+      "insights": []
+    }
+  ],
+  "trends": {
+    "metrics": {
+      "diskUsagePct": {
+        "avg": 50.7,
+        "min": 48,
+        "max": 59,
+        "trend": "UP"
+      },
+      "memoryUsagePct": {
+        "avg": 42.2,
+        "min": 28.8,
+        "max": 54.9,
+        "trend": "DOWN"
+      },
+      "containersRunning": {
+        "avg": 26.3,
+        "min": 24,
+        "max": 29,
+        "trend": "UP"
+      },
+      "frictionEvents": {
+        "avg": 3.8,
+        "min": 0,
+        "max": 13,
+        "trend": "DOWN"
+      }
+    },
+    "data": [
+      {
+        "date": "2026-03-21",
+        "timestamp": "2026-03-21T00:15:00.869Z",
+        "diskUsagePct": 48,
+        "memoryUsagePct": 48.9,
+        "containersRunning": 24,
+        "frictionEvents": 13
+      },
+      {
+        "date": "2026-03-22",
+        "timestamp": "2026-03-22T00:15:00.716Z",
+        "diskUsagePct": 49,
+        "memoryUsagePct": 54.9,
+        "containersRunning": 26,
+        "frictionEvents": 9
+      },
+      {
+        "date": "2026-03-23",
+        "timestamp": "2026-03-23T00:15:31.797Z",
+        "diskUsagePct": 59,
+        "memoryUsagePct": 32.9,
+        "containersRunning": 29,
+        "frictionEvents": 0
+      },
+      {
+        "date": "2026-03-24",
+        "timestamp": "2026-03-24T00:15:00.641Z",
+        "diskUsagePct": 49,
+        "memoryUsagePct": 28.8,
+        "containersRunning": 26,
+        "frictionEvents": 1
+      },
+      {
+        "date": "2026-03-25",
+        "timestamp": "2026-03-25T00:15:00.372Z",
+        "diskUsagePct": 49,
+        "memoryUsagePct": 45.5,
+        "containersRunning": 26,
+        "frictionEvents": 0
+      },
+      {
+        "date": "2026-03-27",
+        "timestamp": "2026-03-27T00:15:00.465Z",
+        "diskUsagePct": 50,
+        "memoryUsagePct": 42.2,
+        "containersRunning": 27,
+        "frictionEvents": 0
+      }
+    ]
+  },
+  "gotchas": [],
+  "recommendations": [
+    {
+      "priority": "medium",
+      "area": "infrastructure",
+      "recommendation": "Disk usage trending up (avg 50.7%, peak 59%). Consider cleanup."
+    }
+  ]
+}

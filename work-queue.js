@@ -119,6 +119,57 @@ class WorkQueue {
 export const heavyQueue = new WorkQueue();
 
 // ============================================================
+// GLOBAL CLAUDE CONCURRENCY GATE
+// ============================================================
+// Memory-aware concurrency: allow 2 concurrent Claude processes when
+// there's enough headroom, but serialize when memory is tight.
+// On a 4GB container, two simple/medium processes (~512-768MB each)
+// fit fine, but two complex ones (~1.2GB each) or a spike will OOM.
+
+let _activeClaudeCount = 0;
+const _claudeWaiters = [];
+const MAX_CONCURRENT = 2;
+const MIN_FREE_FOR_SECOND = 1500 * 1024 * 1024; // 1.5 GB free required to allow a second process
+
+export function withGlobalClaudeLock(fn) {
+  return new Promise((outerResolve, outerReject) => {
+    const tryRun = async () => {
+      _activeClaudeCount++;
+      try {
+        const result = await fn();
+        outerResolve(result);
+      } catch (err) {
+        outerReject(err);
+      } finally {
+        _activeClaudeCount--;
+        // Wake next waiter if any
+        if (_claudeWaiters.length > 0) {
+          const next = _claudeWaiters.shift();
+          next();
+        }
+      }
+    };
+
+    if (_activeClaudeCount < MAX_CONCURRENT && os.freemem() >= MIN_FREE_FOR_SECOND) {
+      // Enough slots and memory — run immediately
+      tryRun();
+    } else if (_activeClaudeCount === 0) {
+      // Nothing running — always allow the first process
+      tryRun();
+    } else {
+      // Wait for a slot to open
+      logger.info({ active: _activeClaudeCount, freeMB: Math.round(os.freemem() / 1024 / 1024) },
+        'Claude concurrency gate: waiting for slot');
+      _claudeWaiters.push(tryRun);
+    }
+  });
+}
+
+export function getClaudeConcurrencyStatus() {
+  return { active: _activeClaudeCount, waiting: _claudeWaiters.length };
+}
+
+// ============================================================
 // MEMORY-LIMITED SPAWN
 // ============================================================
 

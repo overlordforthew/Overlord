@@ -32,12 +32,14 @@ async function searchGitHub(query, sort = 'stars', created = null) {
   const dateFilter = created ? `+created:>${created}` : '';
   const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(query)}${dateFilter}&sort=${sort}&order=desc&per_page=10`;
 
-  const resp = await fetch(url, {
-    headers: {
-      'Accept': 'application/vnd.github.v3+json',
-      'User-Agent': 'Overlord-Bot/1.0',
-    },
-  });
+  const headers = {
+    'Accept': 'application/vnd.github.v3+json',
+    'User-Agent': 'Overlord-Bot/1.0',
+  };
+  if (process.env.GH_TOKEN) {
+    headers['Authorization'] = `token ${process.env.GH_TOKEN}`;
+  }
+  const resp = await fetch(url, { headers });
 
   if (!resp.ok) {
     if (resp.status === 403) return { items: [], rateLimited: true };
@@ -54,6 +56,31 @@ function daysSince(dateStr) {
 function starsPerDay(stars, created) {
   const days = daysSince(created) || 1;
   return Math.round(stars / days);
+}
+
+// API key requirement detection — repos needing external API keys get excluded
+const API_KEY_INDICATORS = [
+  'api key', 'api_key', 'apikey', 'api-key',
+  'api token', 'api_token',
+  'secret key', 'secret_key',
+  'access token', 'access_token',
+  'bearer token',
+  'oauth token',
+  'requires.*key', 'need.*api.*key',
+  'sign up for', 'register for.*api',
+  'get your.*key', 'obtain.*key',
+  'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY',
+  'SERPAPI', 'SCRAPE_API', 'TWITTER_API', 'X_API',
+];
+
+function requiresApiKey(repo) {
+  const text = `${repo.description || ''} ${repo.readme_hint || ''}`.toLowerCase();
+  return API_KEY_INDICATORS.some(indicator => {
+    if (indicator.includes('.*')) {
+      return new RegExp(indicator, 'i').test(text);
+    }
+    return text.includes(indicator.toLowerCase());
+  });
 }
 
 function relevanceScore(repo) {
@@ -128,8 +155,27 @@ async function generateReport() {
     console.error('GitHub API rate limited — report may be incomplete');
   }
 
-  // Score and sort all repos
-  const scored = [...allRepos.values()]
+  // Fetch README hints for API key detection on top candidates
+  const candidates = [...allRepos.values()];
+  for (const repo of candidates) {
+    try {
+      const readmeUrl = `https://raw.githubusercontent.com/${repo.full_name}/${repo.default_branch || 'main'}/README.md`;
+      const resp = await fetch(readmeUrl, { headers: { 'User-Agent': 'Overlord-Bot/1.0' } });
+      if (resp.ok) {
+        const text = await resp.text();
+        repo.readme_hint = text.substring(0, 3000); // first 3K chars is enough
+      }
+      await new Promise(r => setTimeout(r, 200)); // gentle rate limit
+    } catch { /* best effort */ }
+  }
+
+  // Score and sort all repos, then filter out API-key-required ones
+  let apiKeyFiltered = 0;
+  const scored = candidates
+    .filter(r => {
+      if (requiresApiKey(r)) { apiKeyFiltered++; return false; }
+      return true;
+    })
     .map(r => ({ ...r, relevance: relevanceScore(r), velocity: starsPerDay(r.stargazers_count, r.created_at) }))
     .sort((a, b) => b.relevance - a.relevance || b.velocity - a.velocity);
 
@@ -213,6 +259,10 @@ async function generateReport() {
     lines.push('- No standout picks this week');
   }
 
+  if (apiKeyFiltered > 0) {
+    lines.push('', `(Filtered: ${apiKeyFiltered} repo(s) excluded — require external API keys)`);
+  }
+
   if (rateLimited) {
     lines.push('', '(Note: GitHub API rate limited — some categories may be incomplete)');
   }
@@ -243,8 +293,20 @@ async function generateReport() {
         });
 
         if (existsSync(analysisPath)) {
-          // Parse key stats from analysis
           const analysis = readFileSync(analysisPath, 'utf-8');
+
+          // Post-harvest API key check — skip if analyzer found key requirements
+          const needsApiKey = analysis.match(/API_KEY_REQUIRED:\s*true/);
+          if (needsApiKey) {
+            apiKeyFiltered++;
+            lines.push(`  ${repo.full_name} — SKIPPED (requires API keys)`);
+            lines.push('');
+            // Clean up cloned repo
+            try { execSync(`rm -rf "${repoSlug}"`, { cwd: '/tmp/repos' }); } catch {}
+            continue;
+          }
+
+          // Parse key stats from analysis
           const totalFiles = analysis.match(/TOTAL_FILES:\s*(\d+)/)?.[1] || '?';
           const lang = analysis.match(/PRIMARY_LANGUAGE:\s*(.+)/)?.[1]?.trim() || '?';
           const toolCount = (analysis.match(/=== TOOLS.*?===/s)?.[0]?.split('\n').filter(l => l.startsWith('./')).length) || 0;

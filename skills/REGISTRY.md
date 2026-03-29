@@ -30,8 +30,12 @@ Quick reference of all available skills and their tools. Read the SKILL.md in ea
 
 | Skill | Directory | Description |
 |-------|-----------|-------------|
+| **Prompt Composer** | `skills/prompt-composer/` | Compose complex prompts from reusable blocks — div/span/vif/vChoice/ul (from AIRI, 34k stars) |
+| **Action Normalizer** | `skills/action-normalizer/` | Normalize LLM JSON actions — alias maps, parameter flattening, field normalization (from AIRI) |
 | **Code Review** | `skills/code-review/` | Structured reviews with priority markers (BLOCKER/SUGGESTION/NIT/PRAISE), security focus |
 | **Incident Response** | `skills/incident-response/` | Severity classification, self-healing escalation, post-mortem templates, runbooks |
+| **Agent Cognitive Architecture** | `skills/agent-cognitive-architecture/` | 3-layer brain patterns, action registry, context management, attention handler (from AIRI, 34k stars) |
+| **Agent Event Loop** | `skills/agent-event-loop/` | Safe agentic loops — queue/schedule/dispatch with iteration caps, abort control, context trimming (from AIRI) |
 | **Server Admin** | `skills/server-admin/` | Docker, Coolify, UFW, Tailscale, backups, security procedures |
 | **WhatsApp** | `skills/whatsapp/` | Chat behavior, group rules, admin commands, media handling |
 | **Video Pipeline** | `skills/video-pipeline/` | Nami's meditation videos: script → voice → visuals → publish |
@@ -40,6 +44,7 @@ Quick reference of all available skills and their tools. Read the SKILL.md in ea
 | **Trading** | `skills/trading/` | Crypto trading bot development (ccxt, strategy, backtesting) |
 | **Content Writer** | `skills/content-writer/` | Blog posts, scripts, social media copy |
 | **Research** | `skills/research/` | Deep research methodology and tools |
+| **Session Briefing** | `skills/session-briefing/` | Pre-computed situational briefing for Claude Code SessionStart hook |
 | **Automation** | `skills/automation/` | Cron jobs, webhooks, scheduled tasks |
 | **Social Media** | `skills/social-media/` | Content creation, platform optimization (API posting TBD) |
 
@@ -99,3 +104,11 @@ dns-manager.sh list namibarden.com
 # Send an email
 email-compose.sh send "client@example.com" "Subject" "Body text"
 ```
+
+## Claude Code Project Skills (at `/root/projects/.claude/skills/`)
+
+These are Claude Code session skills (not Overlord bot skills). They have their own registry at `/root/projects/.claude/skills/REGISTRY.md`.
+
+**Upgraded folder skills (scripts + gotchas):** deploy, coolify, logs, db-ops, dns, audit, github
+**Methodology skills (gotchas):** systematic-debugging, test-site, scrape
+**Tool skills (scripts + references):** playwright-skill, scraper-2, visualise

@@ -1,0 +1,427 @@
+{
+  "period": {
+    "start": "2026-03-13",
+    "end": "2026-03-20",
+    "generatedAt": "2026-03-20T22:00:00.768Z"
+  },
+  "skillInventory": {
+    "totalCount": 59,
+    "skills": [
+      "action-normalizer",
+      "agent-cognitive-architecture",
+      "agent-event-loop",
+      "amadeus-travel",
+      "api-gateway",
+      "api-integrations",
+      "automation",
+      "backup-verifier",
+      "browse",
+      "calendar-manager",
+      "code-review",
+      "content-writer",
+      "data-analysis",
+      "database-admin",
+      "dns-manager",
+      "document-reader",
+      "email-composer",
+      "ffmpeg",
+      "ffmpeg-cli",
+      "ffmpeg-video-editor",
+      "gemini",
+      "git-intelligence",
+      "grid-trader",
+      "humanizer",
+      "image-generator",
+      "incident-response",
+      "log-analyzer",
+      "luxtts",
+      "mcporter",
+      "memory-v2",
+      "mobile-dev",
+      "monitoring",
+      "nano-banana-pro",
+      "nano-pdf",
+      "notification-hub",
+      "openai-whisper",
+      "performance-profiler",
+      "polymarket-odds",
+      "proactive-agent",
+      "prompt-composer",
+      "prompt-guard",
+      "research",
+      "scrapling",
+      "security-scanner",
+      "server-admin",
+      "skill-harvester",
+      "social-media",
+      "stock-analysis",
+      "stock-market-pro",
+      "trading",
+      "twitter",
+      "video-pipeline",
+      "web-dev",
+      "web-scraper",
+      "whatsapp",
+      "x-trends",
+      "youtube-analytics",
+      "youtube-ultimate",
+      "youtube-watcher"
+    ]
+  },
+  "pulseFeedback": [
+    {
+      "name": "task:repair",
+      "allTimeUp": 16,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 16,
+      "weekDown": 0,
+      "weekTotal": 16,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:Overlord (WhatsApp Bot)",
+      "allTimeUp": 5,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 5,
+      "weekDown": 0,
+      "weekTotal": 5,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:overlord-db",
+      "allTimeUp": 3,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 3,
+      "weekDown": 0,
+      "weekTotal": 3,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:hl-grid-btc",
+      "allTimeUp": 2,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 2,
+      "weekDown": 0,
+      "weekTotal": 2,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:hl-grid-sol",
+      "allTimeUp": 1,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 1,
+      "weekDown": 0,
+      "weekTotal": 1,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:hl-grid-doge",
+      "allTimeUp": 1,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 1,
+      "weekDown": 0,
+      "weekTotal": 1,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:hl-dashboard",
+      "allTimeUp": 1,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 1,
+      "weekDown": 0,
+      "weekTotal": 1,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:MasterCommander",
+      "allTimeUp": 1,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 1,
+      "weekDown": 0,
+      "weekTotal": 1,
+      "weekScore": 100,
+      "recentLabels": []
+    },
+    {
+      "name": "deploy:NamiBarden",
+      "allTimeUp": 1,
+      "allTimeDown": 0,
+      "allTimeScore": 100,
+      "weekUp": 1,
+      "weekDown": 0,
+      "weekTotal": 1,
+      "weekScore": 100,
+      "recentLabels": []
+    }
+  ],
+  "pulseEvents": {
+    "totalEvents": 31,
+    "byType": {
+      "task": 16,
+      "deploy": 15
+    },
+    "performance": {
+      "slowResponseCount": 0,
+      "avgResponseMs": 0,
+      "maxResponseMs": 0
+    },
+    "apiErrors": 0,
+    "allTimeSummary": {
+      "total": 31
+    }
+  },
+  "cortexRegistry": {
+    "entities": [],
+    "inProgress": [],
+    "failed": []
+  },
+  "cortexAnnotations": [],
+  "cortexUnderperforming": [],
+  "friction": {
+    "totalEvents": 33,
+    "byType": {
+      "slow_response": {
+        "count": 28,
+        "totalMs": 3896114,
+        "avgMs": 139147
+      },
+      "api_error": {
+        "count": 5,
+        "totalMs": 3025491,
+        "avgMs": 605098
+      }
+    },
+    "allTimeSummary": {
+      "slow_response": 28,
+      "api_error": 5
+    }
+  },
+  "regressions": {
+    "weekCount": 0,
+    "entries": [],
+    "allTimeStats": {
+      "config": 1
+    }
+  },
+  "dailySyntheses": [
+    {
+      "date": "2026-03-14",
+      "generatedAt": "2026-03-14T00:00:00.845Z",
+      "regressions": {
+        "count": 0,
+        "categories": [],
+        "items": []
+      },
+      "friction": {
+        "totalEvents": 0,
+        "byType": {},
+        "topIssue": "none"
+      },
+      "insights": []
+    },
+    {
+      "date": "2026-03-15",
+      "generatedAt": "2026-03-15T00:00:00.318Z",
+      "regressions": {
+        "count": 0,
+        "categories": [],
+        "items": []
+      },
+      "friction": {
+        "totalEvents": 0,
+        "byType": {},
+        "topIssue": "none"
+      },
+      "insights": []
+    },
+    {
+      "date": "2026-03-16",
+      "generatedAt": "2026-03-16T00:00:00.895Z",
+      "regressions": {
+        "count": 0,
+        "categories": [],
+        "items": []
+      },
+      "friction": {
+        "totalEvents": 0,
+        "byType": {},
+        "topIssue": "none"
+      },
+      "insights": []
+    },
+    {
+      "date": "2026-03-17",
+      "generatedAt": "2026-03-17T00:00:00.414Z",
+      "regressions": {
+        "count": 0,
+        "categories": [],
+        "items": []
+      },
+      "friction": {
+        "totalEvents": 0,
+        "byType": {},
+        "topIssue": "none"
+      },
+      "insights": []
+    },
+    {
+      "date": "2026-03-18",
+      "generatedAt": "2026-03-18T00:00:00.336Z",
+      "regressions": {
+        "count": 0,
+        "categories": [],
+        "items": []
+      },
+      "friction": {
+        "totalEvents": 0,
+        "byType": {},
+        "topIssue": "none"
+      },
+      "insights": []
+    },
+    {
+      "date": "2026-03-19",
+      "generatedAt": "2026-03-19T00:00:00.984Z",
+      "regressions": {
+        "count": 0,
+        "categories": [],
+        "items": []
+      },
+      "friction": {
+        "totalEvents": 0,
+        "byType": {},
+        "topIssue": "none"
+      },
+      "insights": []
+    },
+    {
+      "date": "2026-03-20",
+      "generatedAt": "2026-03-20T00:00:00.486Z",
+      "regressions": {
+        "count": 0,
+        "categories": [],
+        "items": []
+      },
+      "friction": {
+        "totalEvents": 0,
+        "byType": {},
+        "topIssue": "none"
+      },
+      "insights": []
+    }
+  ],
+  "trends": {
+    "metrics": {
+      "diskUsagePct": {
+        "avg": 51.7,
+        "min": 49,
+        "max": 55,
+        "trend": "UP"
+      },
+      "memoryUsagePct": {
+        "avg": 43.1,
+        "min": 27.9,
+        "max": 63.4,
+        "trend": "UP"
+      },
+      "containersRunning": {
+        "avg": 24.3,
+        "min": 21,
+        "max": 28,
+        "trend": "UP"
+      },
+      "frictionEvents": {
+        "avg": 8,
+        "min": 0,
+        "max": 23,
+        "trend": "DOWN"
+      }
+    },
+    "data": [
+      {
+        "date": "2026-03-14",
+        "timestamp": "2026-03-14T00:15:00.745Z",
+        "diskUsagePct": 49,
+        "memoryUsagePct": 27.9,
+        "containersRunning": 21,
+        "frictionEvents": 23
+      },
+      {
+        "date": "2026-03-15",
+        "timestamp": "2026-03-15T00:15:00.403Z",
+        "diskUsagePct": 51,
+        "memoryUsagePct": 41.4,
+        "containersRunning": 24,
+        "frictionEvents": 3
+      },
+      {
+        "date": "2026-03-16",
+        "timestamp": "2026-03-16T00:15:00.575Z",
+        "diskUsagePct": 55,
+        "memoryUsagePct": 40.4,
+        "containersRunning": 22,
+        "frictionEvents": 6
+      },
+      {
+        "date": "2026-03-17",
+        "timestamp": "2026-03-17T00:15:00.530Z",
+        "diskUsagePct": 54,
+        "memoryUsagePct": 55.8,
+        "containersRunning": 28,
+        "frictionEvents": 14
+      },
+      {
+        "date": "2026-03-18",
+        "timestamp": "2026-03-18T00:15:00.926Z",
+        "diskUsagePct": 51,
+        "memoryUsagePct": 63.4,
+        "containersRunning": 28,
+        "frictionEvents": 4
+      },
+      {
+        "date": "2026-03-19",
+        "timestamp": "2026-03-19T00:15:01.024Z",
+        "diskUsagePct": 51,
+        "memoryUsagePct": 32.8,
+        "containersRunning": 24,
+        "frictionEvents": 6
+      },
+      {
+        "date": "2026-03-20",
+        "timestamp": "2026-03-20T00:15:00.407Z",
+        "diskUsagePct": 51,
+        "memoryUsagePct": 39.8,
+        "containersRunning": 23,
+        "frictionEvents": 0
+      }
+    ]
+  },
+  "gotchas": [],
+  "recommendations": [
+    {
+      "priority": "medium",
+      "area": "infrastructure",
+      "recommendation": "Disk usage trending up (avg 51.7%, peak 55%). Consider cleanup."
+    },
+    {
+      "priority": "high",
+      "area": "performance",
+      "recommendation": "33 friction events this week. Investigate recurring patterns in slow_response and api_error types."
+    }
+  ]
+}

@@ -7,7 +7,8 @@
 
 import pg from 'pg';
 import pino from 'pino';
-import { callOpenRouter, MODEL_REGISTRY } from './router.js';
+import { callWithFallback, FREE_FALLBACK_CHAINS } from './router.js';
+import { parseJsonFromLLM } from './lib/parse-json-llm.js';
 
 const logger = pino({ level: 'info' });
 
@@ -136,7 +137,12 @@ export async function findMatchingPatterns(symptomText, project = null) {
 }
 
 export async function storeFixPattern({ project, category, symptomPattern, rootCause, fixDescription, keywords = [] }) {
+  if (!fixDescription) {
+    logger.warn('Skipping fix pattern storage: fixDescription is null');
+    return;
+  }
   if (!initialized || !pool) return;
+  if (!symptomPattern || !fixDescription) return;
 
   try {
     // Check for existing similar pattern
@@ -199,14 +205,16 @@ export async function extractFixPattern(taskTitle, responseText) {
 Task: ${taskTitle}
 Response: ${responseText.substring(0, 1000)}`;
 
-    const result = await callOpenRouter(
-      MODEL_REGISTRY['step-flash'].id,
+    const { response: result } = await callWithFallback(
+      FREE_FALLBACK_CHAINS.simple,
       'You extract structured fix patterns from repair logs. Return ONLY valid JSON.',
       prompt,
-      500
+      500,
+      { jsonMode: true }
     );
 
-    const parsed = JSON.parse(result.trim());
+    const parsed = parseJsonFromLLM(result);
+    if (!parsed) throw new Error('No valid JSON found in LLM response');
     return parsed;
   } catch (err) {
     logger.warn({ err: err.message }, 'Fix pattern extraction failed');

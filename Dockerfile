@@ -48,7 +48,18 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     scrapling \
     curl_cffi \
     browserforge \
-    playwright
+    playwright \
+    semgrep \
+    faster-whisper \
+    deepfilternet
+
+# Install PyTorch CPU-only (required by deepfilternet, smaller than full torch)
+RUN pip3 install --no-cache-dir --break-system-packages \
+    torch==2.5.1+cpu torchaudio==2.5.1+cpu \
+    --index-url https://download.pytorch.org/whl/cpu
+
+# Warm faster-whisper model cache (downloads ~150MB base model at build time)
+RUN python3 -c "from faster_whisper import WhisperModel; WhisperModel('base', device='cpu', compute_type='int8')" 2>/dev/null || true
 
 # Install Claude CLI, Codex CLI, and MCP servers globally
 RUN npm install -g @anthropic-ai/claude-code @openai/codex \

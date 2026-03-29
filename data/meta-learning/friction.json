@@ -2,91 +2,19 @@
   "events": [
     {
       "type": "slow_response",
-      "details": "63803ms for 109457291874478@lid",
-      "durationMs": 63803,
-      "timestamp": "2026-03-14T19:45:26.577Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "388250ms for 84267677782098@lid",
-      "durationMs": 388250,
-      "timestamp": "2026-03-14T20:41:30.988Z"
+      "details": "177120ms for 109457291874478@lid",
+      "durationMs": 177120,
+      "timestamp": "2026-03-29T18:29:24.558Z"
     },
     {
       "type": "api_error",
-      "details": "⚠️ Had a hiccup (code null). Retried 2x.",
-      "durationMs": 1205111,
-      "timestamp": "2026-03-14T23:08:39.497Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "210672ms for 84267677782098@lid",
-      "durationMs": 210672,
-      "timestamp": "2026-03-15T01:04:31.532Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "131322ms for 84267677782098@lid",
-      "durationMs": 131322,
-      "timestamp": "2026-03-15T01:06:45.908Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "114872ms for 84267677782098@lid",
-      "durationMs": 114872,
-      "timestamp": "2026-03-15T01:08:43.099Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "129564ms for 109457291874478@lid",
-      "durationMs": 129564,
-      "timestamp": "2026-03-15T11:33:42.377Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "318439ms for 109457291874478@lid",
-      "durationMs": 318439,
-      "timestamp": "2026-03-15T12:53:06.888Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "393823ms for 109457291874478@lid",
-      "durationMs": 393823,
-      "timestamp": "2026-03-15T13:02:54.484Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "138919ms for 109457291874478@lid",
-      "durationMs": 138919,
-      "timestamp": "2026-03-15T13:07:27.535Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "140661ms for 109457291874478@lid",
-      "durationMs": 140661,
-      "timestamp": "2026-03-15T13:37:54.509Z"
-    },
-    {
-      "type": "api_error",
-      "details": "⚠️ Had a hiccup (code 1). Retried 1x.",
-      "durationMs": 1251,
-      "timestamp": "2026-03-15T14:05:52.868Z"
-    },
-    {
-      "type": "api_error",
-      "details": "⚠️ Had a hiccup (code 1). Retried 1x.",
-      "durationMs": 1326,
-      "timestamp": "2026-03-15T14:07:59.655Z"
-    },
-    {
-      "type": "slow_response",
-      "details": "175204ms for 109457291874478@lid",
-      "durationMs": 175204,
-      "timestamp": "2026-03-15T14:23:34.491Z"
+      "details": "⚠️ Response timed out after retries. Try a shorter message or try again in a moment.",
+      "durationMs": 605096,
+      "timestamp": "2026-03-29T19:29:21.783Z"
     }
   ],
   "summary": {
-    "slow_response": 11,
-    "api_error": 3
+    "slow_response": 1,
+    "api_error": 1
   }
 }

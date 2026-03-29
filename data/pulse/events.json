@@ -1,0 +1,1202 @@
+[
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected",
+    "at": "2026-03-23T02:35:15.300Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected — completed",
+    "at": "2026-03-23T02:40:15.544Z"
+  },
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected",
+    "at": "2026-03-23T02:40:15.546Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected — completed",
+    "at": "2026-03-23T02:45:17.312Z"
+  },
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected",
+    "at": "2026-03-23T02:45:17.314Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected — completed",
+    "at": "2026-03-23T02:50:18.064Z"
+  },
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected",
+    "at": "2026-03-23T02:50:18.069Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected — completed",
+    "at": "2026-03-23T02:55:16.099Z"
+  },
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected",
+    "at": "2026-03-23T02:55:16.103Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected — completed",
+    "at": "2026-03-23T03:05:27.326Z"
+  },
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected",
+    "at": "2026-03-23T03:05:27.331Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected — completed",
+    "at": "2026-03-23T03:10:21.046Z"
+  },
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected",
+    "at": "2026-03-23T03:10:21.050Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected — completed",
+    "at": "2026-03-23T03:15:28.261Z"
+  },
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected",
+    "at": "2026-03-23T03:15:28.264Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected — completed",
+    "at": "2026-03-23T03:20:28.157Z"
+  },
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected",
+    "at": "2026-03-23T03:20:28.162Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected — completed",
+    "at": "2026-03-23T03:26:13.189Z"
+  },
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected",
+    "at": "2026-03-23T03:26:13.191Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected — completed",
+    "at": "2026-03-23T03:30:17.148Z"
+  },
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected",
+    "at": "2026-03-23T03:30:17.151Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected — completed",
+    "at": "2026-03-23T03:35:16.205Z"
+  },
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected",
+    "at": "2026-03-23T03:35:16.209Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected — completed",
+    "at": "2026-03-23T03:40:18.481Z"
+  },
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected",
+    "at": "2026-03-23T03:40:18.486Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected — completed",
+    "at": "2026-03-23T03:45:31.277Z"
+  },
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected",
+    "at": "2026-03-23T03:45:31.282Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected — completed",
+    "at": "2026-03-23T03:50:16.600Z"
+  },
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected",
+    "at": "2026-03-23T03:50:16.605Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected — completed",
+    "at": "2026-03-23T03:55:14.426Z"
+  },
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected",
+    "at": "2026-03-23T03:55:14.432Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected — completed",
+    "at": "2026-03-23T04:05:20.640Z"
+  },
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected",
+    "at": "2026-03-23T04:05:20.646Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected — completed",
+    "at": "2026-03-23T04:10:20.670Z"
+  },
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected",
+    "at": "2026-03-23T04:10:20.675Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected — completed",
+    "at": "2026-03-23T04:15:15.339Z"
+  },
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected",
+    "at": "2026-03-23T04:15:15.344Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected — completed",
+    "at": "2026-03-23T04:20:17.373Z"
+  },
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected",
+    "at": "2026-03-23T04:20:17.378Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected — completed",
+    "at": "2026-03-23T04:25:16.464Z"
+  },
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected",
+    "at": "2026-03-23T04:25:16.469Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected — completed",
+    "at": "2026-03-23T04:32:18.970Z"
+  },
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 error detected",
+    "at": "2026-03-23T04:32:18.974Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 die (exit 143) — completed",
+    "at": "2026-03-23T16:12:51.768Z"
+  },
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 die (exit 143)",
+    "at": "2026-03-23T16:12:51.771Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 die (exit 143) — completed",
+    "at": "2026-03-23T16:20:03.906Z"
+  },
+  {
+    "name": "deploy:shannon-browser-1",
+    "outcome": "up",
+    "comment": "Auto-repair: shannon-browser-1 die (exit 143)",
+    "at": "2026-03-23T16:20:03.910Z"
+  },
+  {
+    "name": "deploy:Lumina",
+    "outcome": "up",
+    "comment": "auto-deploy by Nami",
+    "at": "2026-03-24T00:06:13.487Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: app-okw0cwwgskcow8k8o08gsok0-221622435780 die (exit 137) — completed",
+    "at": "2026-03-24T00:08:17.463Z"
+  },
+  {
+    "name": "deploy:app-okw0cwwgskcow8k8o08gsok0-221622435780",
+    "outcome": "up",
+    "comment": "Auto-repair: app-okw0cwwgskcow8k8o08gsok0-221622435780 die (exit 137)",
+    "at": "2026-03-24T00:08:17.465Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: ccgk4wk0w4co00sgo4cg8c4k die (exit 143) — completed",
+    "at": "2026-03-24T00:08:39.363Z"
+  },
+  {
+    "name": "deploy:ccgk4wk0w4co00sgo4cg8c4k",
+    "outcome": "up",
+    "comment": "Auto-repair: ccgk4wk0w4co00sgo4cg8c4k die (exit 143)",
+    "at": "2026-03-24T00:08:39.365Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: Onlyhulls error detected — completed",
+    "at": "2026-03-24T10:46:13.694Z"
+  },
+  {
+    "name": "deploy:Onlyhulls",
+    "outcome": "up",
+    "comment": "Auto-repair: Onlyhulls error detected",
+    "at": "2026-03-24T10:46:13.699Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: hl-blessings error detected — completed",
+    "at": "2026-03-25T07:53:42.775Z"
+  },
+  {
+    "name": "deploy:hl-blessings",
+    "outcome": "up",
+    "comment": "Auto-repair: hl-blessings error detected",
+    "at": "2026-03-25T07:53:42.781Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: hl-blessings error detected — completed",
+    "at": "2026-03-25T07:55:28.335Z"
+  },
+  {
+    "name": "deploy:hl-blessings",
+    "outcome": "up",
+    "comment": "Auto-repair: hl-blessings error detected",
+    "at": "2026-03-25T07:55:28.337Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: hl-blessings error detected — completed",
+    "at": "2026-03-25T08:05:18.252Z"
+  },
+  {
+    "name": "deploy:hl-blessings",
+    "outcome": "up",
+    "comment": "Auto-repair: hl-blessings error detected",
+    "at": "2026-03-25T08:05:18.257Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: hl-blessings error detected — completed",
+    "at": "2026-03-25T08:10:22.809Z"
+  },
+  {
+    "name": "deploy:hl-blessings",
+    "outcome": "up",
+    "comment": "Auto-repair: hl-blessings error detected",
+    "at": "2026-03-25T08:10:22.813Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-26T20:30:34.070Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-26T20:30:34.073Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-26T20:35:35.689Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-26T20:35:35.695Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-26T20:55:31.856Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-26T20:55:31.860Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: Overlord (WhatsApp Bot) error detected — completed",
+    "at": "2026-03-27T04:34:12.700Z"
+  },
+  {
+    "name": "deploy:Overlord (WhatsApp Bot)",
+    "outcome": "up",
+    "comment": "Auto-repair: Overlord (WhatsApp Bot) error detected",
+    "at": "2026-03-27T04:34:12.705Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: x8sg844wos88o0oggoo4cg4g die (exit 143) — completed",
+    "at": "2026-03-27T19:17:03.000Z"
+  },
+  {
+    "name": "deploy:x8sg844wos88o0oggoo4cg4g",
+    "outcome": "up",
+    "comment": "Auto-repair: x8sg844wos88o0oggoo4cg4g die (exit 143)",
+    "at": "2026-03-27T19:17:03.004Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: amazing_hypatia error detected — completed",
+    "at": "2026-03-27T19:20:24.853Z"
+  },
+  {
+    "name": "deploy:amazing_hypatia",
+    "outcome": "up",
+    "comment": "Auto-repair: amazing_hypatia error detected",
+    "at": "2026-03-27T19:20:24.857Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: iog0k8g4kco48oowssc8o4ck die (exit 143) — completed",
+    "at": "2026-03-27T19:28:57.062Z"
+  },
+  {
+    "name": "deploy:iog0k8g4kco48oowssc8o4ck",
+    "outcome": "up",
+    "comment": "Auto-repair: iog0k8g4kco48oowssc8o4ck die (exit 143)",
+    "at": "2026-03-27T19:28:57.064Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: Onlyhulls error detected — completed",
+    "at": "2026-03-27T19:29:48.081Z"
+  },
+  {
+    "name": "deploy:Onlyhulls",
+    "outcome": "up",
+    "comment": "Auto-repair: Onlyhulls error detected",
+    "at": "2026-03-27T19:29:48.085Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: uc8ococ0k4k4coswkgwsco0g die (exit 143) — completed",
+    "at": "2026-03-27T20:06:15.610Z"
+  },
+  {
+    "name": "deploy:uc8ococ0k4k4coswkgwsco0g",
+    "outcome": "up",
+    "comment": "Auto-repair: uc8ococ0k4k4coswkgwsco0g die (exit 143)",
+    "at": "2026-03-27T20:06:15.616Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: onlyhulls-app die (exit 1) — completed",
+    "at": "2026-03-27T21:28:48.209Z"
+  },
+  {
+    "name": "deploy:onlyhulls-app",
+    "outcome": "up",
+    "comment": "Auto-repair: onlyhulls-app die (exit 1)",
+    "at": "2026-03-27T21:28:48.220Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: onlyhulls-app die (exit 1) — completed",
+    "at": "2026-03-27T21:29:38.282Z"
+  },
+  {
+    "name": "deploy:onlyhulls-app",
+    "outcome": "up",
+    "comment": "Auto-repair: onlyhulls-app die (exit 1)",
+    "at": "2026-03-27T21:29:38.287Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: pw000880k88cwgcscks4gg0k die (exit 143) — completed",
+    "at": "2026-03-27T22:08:38.121Z"
+  },
+  {
+    "name": "deploy:pw000880k88cwgcscks4gg0k",
+    "outcome": "up",
+    "comment": "Auto-repair: pw000880k88cwgcscks4gg0k die (exit 143)",
+    "at": "2026-03-27T22:08:38.129Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: onlyhulls-app error detected — completed",
+    "at": "2026-03-27T22:19:16.609Z"
+  },
+  {
+    "name": "deploy:onlyhulls-app",
+    "outcome": "up",
+    "comment": "Auto-repair: onlyhulls-app error detected",
+    "at": "2026-03-27T22:19:16.614Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: onlyhulls-app error detected — completed",
+    "at": "2026-03-27T22:38:05.023Z"
+  },
+  {
+    "name": "deploy:onlyhulls-app",
+    "outcome": "up",
+    "comment": "Auto-repair: onlyhulls-app error detected",
+    "at": "2026-03-27T22:38:05.031Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-27T23:40:56.674Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-27T23:40:56.681Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: onlyhulls-app die (exit 137) — completed",
+    "at": "2026-03-28T00:02:16.336Z"
+  },
+  {
+    "name": "deploy:onlyhulls-app",
+    "outcome": "up",
+    "comment": "Auto-repair: onlyhulls-app die (exit 137)",
+    "at": "2026-03-28T00:02:16.341Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-28T00:21:24.645Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-28T00:21:24.648Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-28T00:36:43.019Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-28T00:36:43.025Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-28T00:50:41.799Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-28T00:50:41.806Z"
+  },
+  {
+    "name": "deploy:NamiBarden",
+    "outcome": "up",
+    "comment": "auto-deploy by Nami",
+    "at": "2026-03-28T01:13:46.973Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-28T01:41:34.248Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-28T01:41:34.253Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-28T01:45:50.856Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-28T01:45:50.860Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-28T01:55:50.516Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-28T01:55:50.521Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-28T03:30:49.746Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-28T03:30:49.751Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-28T03:50:43.349Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-28T03:50:43.355Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-28T04:32:02.148Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-28T04:32:02.152Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-28T04:55:41.249Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-28T04:55:41.253Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-28T06:05:38.931Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-28T06:05:38.934Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-28T08:00:47.759Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-28T08:00:47.761Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-28T10:00:44.708Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-28T10:00:44.710Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-28T10:20:40.959Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-28T10:20:40.964Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-28T11:15:37.323Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-28T11:15:37.329Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-28T14:30:47.816Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-28T14:30:47.821Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: distracted_yalow die (exit 1) — completed",
+    "at": "2026-03-28T14:51:52.681Z"
+  },
+  {
+    "name": "deploy:distracted_yalow",
+    "outcome": "up",
+    "comment": "Auto-repair: distracted_yalow die (exit 1)",
+    "at": "2026-03-28T14:51:52.687Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: lightpanda error detected — completed",
+    "at": "2026-03-28T15:07:03.570Z"
+  },
+  {
+    "name": "deploy:lightpanda",
+    "outcome": "up",
+    "comment": "Auto-repair: lightpanda error detected",
+    "at": "2026-03-28T15:07:03.578Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Repair: 🔍 *Auto Code Review: MasterCommander*\n\nCommits:\n189635c Add demo persona system — completed",
+    "at": "2026-03-28T16:06:38.389Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: MasterCommander error detected — completed",
+    "at": "2026-03-28T16:09:10.499Z"
+  },
+  {
+    "name": "deploy:MasterCommander",
+    "outcome": "up",
+    "comment": "Auto-repair: MasterCommander error detected",
+    "at": "2026-03-28T16:09:10.505Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: MasterCommander error detected — completed",
+    "at": "2026-03-28T16:41:32.918Z"
+  },
+  {
+    "name": "deploy:MasterCommander",
+    "outcome": "up",
+    "comment": "Auto-repair: MasterCommander error detected",
+    "at": "2026-03-28T16:41:32.927Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-28T17:30:48.449Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-28T17:30:48.457Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: o4kw0kwgkcgggggogwssoko4 die (exit 143) — completed",
+    "at": "2026-03-28T17:33:11.088Z"
+  },
+  {
+    "name": "deploy:o4kw0kwgkcgggggogwssoko4",
+    "outcome": "up",
+    "comment": "Auto-repair: o4kw0kwgkcgggggogwssoko4 die (exit 143)",
+    "at": "2026-03-28T17:33:11.094Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: o0gccc4s844w40gwscgkgc4o die (exit 143) — completed",
+    "at": "2026-03-28T17:47:02.252Z"
+  },
+  {
+    "name": "deploy:o0gccc4s844w40gwscgkgc4o",
+    "outcome": "up",
+    "comment": "Auto-repair: o0gccc4s844w40gwscgkgc4o die (exit 143)",
+    "at": "2026-03-28T17:47:02.256Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: cw84ccosco4w44ogc8cwcswk die (exit 143) — completed",
+    "at": "2026-03-28T19:17:26.711Z"
+  },
+  {
+    "name": "deploy:cw84ccosco4w44ogc8cwcswk",
+    "outcome": "up",
+    "comment": "Auto-repair: cw84ccosco4w44ogc8cwcswk die (exit 143)",
+    "at": "2026-03-28T19:17:26.716Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: MasterCommander error detected — completed",
+    "at": "2026-03-28T19:17:27.920Z"
+  },
+  {
+    "name": "deploy:MasterCommander",
+    "outcome": "up",
+    "comment": "Auto-repair: MasterCommander error detected",
+    "at": "2026-03-28T19:17:27.924Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: dk4kgg8ggkw44gskgw0co88o die (exit 143) — completed",
+    "at": "2026-03-28T19:30:39.380Z"
+  },
+  {
+    "name": "deploy:dk4kgg8ggkw44gskgw0co88o",
+    "outcome": "up",
+    "comment": "Auto-repair: dk4kgg8ggkw44gskgw0co88o die (exit 143)",
+    "at": "2026-03-28T19:30:39.384Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-28T20:40:42.066Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-28T20:40:42.072Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-28T21:00:36.348Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-28T21:00:36.356Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-28T21:15:33.109Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-28T21:15:33.116Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: namibarden-db error detected — completed",
+    "at": "2026-03-29T00:41:18.864Z"
+  },
+  {
+    "name": "deploy:namibarden-db",
+    "outcome": "up",
+    "comment": "Auto-repair: namibarden-db error detected",
+    "at": "2026-03-29T00:41:18.868Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: namibarden error detected — completed",
+    "at": "2026-03-29T00:41:37.017Z"
+  },
+  {
+    "name": "deploy:namibarden",
+    "outcome": "up",
+    "comment": "Auto-repair: namibarden error detected",
+    "at": "2026-03-29T00:41:37.023Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: namibarden-db error detected — completed",
+    "at": "2026-03-29T00:45:30.778Z"
+  },
+  {
+    "name": "deploy:namibarden-db",
+    "outcome": "up",
+    "comment": "Auto-repair: namibarden-db error detected",
+    "at": "2026-03-29T00:45:30.784Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: namibarden-db error detected — completed",
+    "at": "2026-03-29T00:50:32.973Z"
+  },
+  {
+    "name": "deploy:namibarden-db",
+    "outcome": "up",
+    "comment": "Auto-repair: namibarden-db error detected",
+    "at": "2026-03-29T00:50:32.977Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: namibarden-db error detected — completed",
+    "at": "2026-03-29T00:55:40.353Z"
+  },
+  {
+    "name": "deploy:namibarden-db",
+    "outcome": "up",
+    "comment": "Auto-repair: namibarden-db error detected",
+    "at": "2026-03-29T00:55:40.360Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-29T04:25:35.685Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-29T04:25:35.690Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: Overlord (WhatsApp Bot) error detected — completed",
+    "at": "2026-03-29T11:16:20.071Z"
+  },
+  {
+    "name": "deploy:Overlord (WhatsApp Bot)",
+    "outcome": "up",
+    "comment": "Auto-repair: Overlord (WhatsApp Bot) error detected",
+    "at": "2026-03-29T11:16:20.079Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-29T13:40:34.575Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-29T13:40:34.578Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected — completed",
+    "at": "2026-03-29T13:45:42.074Z"
+  },
+  {
+    "name": "deploy:seneca-site",
+    "outcome": "up",
+    "comment": "Auto-repair: seneca-site error detected",
+    "at": "2026-03-29T13:45:42.080Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Repair: ⚠️ Log alerts detected:\n\n🐳 seneca-site:\n10.0.1.22 - - [29/Mar/2026:13:43:32 +00 — completed",
+    "at": "2026-03-29T13:46:02.318Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Repair: ⚠️ Log alerts detected:\n\n🐳 seneca-site:\n2026/03/29 13:35:05 [error] 31#31: *97  — completed",
+    "at": "2026-03-29T13:46:22.791Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: searxng die (exit 127) — completed",
+    "at": "2026-03-29T18:22:50.480Z"
+  },
+  {
+    "name": "deploy:searxng",
+    "outcome": "up",
+    "comment": "Auto-repair: searxng die (exit 127)",
+    "at": "2026-03-29T18:22:50.487Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: searxng die (exit 127) — completed",
+    "at": "2026-03-29T18:22:54.756Z"
+  },
+  {
+    "name": "deploy:searxng",
+    "outcome": "up",
+    "comment": "Auto-repair: searxng die (exit 127)",
+    "at": "2026-03-29T18:22:54.759Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: searxng die (exit 127) — completed",
+    "at": "2026-03-29T18:23:00.416Z"
+  },
+  {
+    "name": "deploy:searxng",
+    "outcome": "up",
+    "comment": "Auto-repair: searxng die (exit 127)",
+    "at": "2026-03-29T18:23:00.427Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: searxng die (exit 127) — completed",
+    "at": "2026-03-29T18:23:00.455Z"
+  },
+  {
+    "name": "deploy:searxng",
+    "outcome": "up",
+    "comment": "Auto-repair: searxng die (exit 127)",
+    "at": "2026-03-29T18:23:00.459Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: searxng die (exit 127) — completed",
+    "at": "2026-03-29T18:23:06.676Z"
+  },
+  {
+    "name": "deploy:searxng",
+    "outcome": "up",
+    "comment": "Auto-repair: searxng die (exit 127)",
+    "at": "2026-03-29T18:23:06.682Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: searxng die (exit 127) — completed",
+    "at": "2026-03-29T18:23:20.485Z"
+  },
+  {
+    "name": "deploy:searxng",
+    "outcome": "up",
+    "comment": "Auto-repair: searxng die (exit 127)",
+    "at": "2026-03-29T18:23:20.490Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: searxng die (exit 127) — completed",
+    "at": "2026-03-29T18:23:48.904Z"
+  },
+  {
+    "name": "deploy:searxng",
+    "outcome": "up",
+    "comment": "Auto-repair: searxng die (exit 127)",
+    "at": "2026-03-29T18:23:48.910Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: Overlord (WhatsApp Bot) error detected — completed",
+    "at": "2026-03-29T19:33:13.206Z"
+  },
+  {
+    "name": "deploy:Overlord (WhatsApp Bot)",
+    "outcome": "up",
+    "comment": "Auto-repair: Overlord (WhatsApp Bot) error detected",
+    "at": "2026-03-29T19:33:13.213Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: overlord-db error detected — completed",
+    "at": "2026-03-29T20:10:31.904Z"
+  },
+  {
+    "name": "deploy:overlord-db",
+    "outcome": "up",
+    "comment": "Auto-repair: overlord-db error detected",
+    "at": "2026-03-29T20:10:31.916Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: beszel-agent error detected — completed",
+    "at": "2026-03-29T20:15:45.146Z"
+  },
+  {
+    "name": "deploy:beszel-agent",
+    "outcome": "up",
+    "comment": "Auto-repair: beszel-agent error detected",
+    "at": "2026-03-29T20:15:45.154Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: searxng error detected — completed",
+    "at": "2026-03-29T20:16:05.795Z"
+  },
+  {
+    "name": "deploy:searxng",
+    "outcome": "up",
+    "comment": "Auto-repair: searxng error detected",
+    "at": "2026-03-29T20:16:05.802Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: searxng error detected — completed",
+    "at": "2026-03-29T20:21:52.163Z"
+  },
+  {
+    "name": "deploy:searxng",
+    "outcome": "up",
+    "comment": "Auto-repair: searxng error detected",
+    "at": "2026-03-29T20:21:52.170Z"
+  },
+  {
+    "name": "task:repair",
+    "outcome": "up",
+    "comment": "Auto-repair: searxng error detected — completed",
+    "at": "2026-03-29T20:27:51.308Z"
+  },
+  {
+    "name": "deploy:searxng",
+    "outcome": "up",
+    "comment": "Auto-repair: searxng error detected",
+    "at": "2026-03-29T20:27:51.315Z"
+  }
+]

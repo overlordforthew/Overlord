@@ -226,13 +226,23 @@ async function runCmd(cmd, timeout = 10000) {
 }
 
 export async function generateBriefing() {
-  const [uptime, memory, disk, containers, dockerStats, fail2ban] = await Promise.all([
+  // Beszel monitoring helper
+  async function getBeszelHealth() {
+    try {
+      const resp = await fetch('http://beszel:8090/api/health', { signal: AbortSignal.timeout(3000) });
+      if (!resp.ok) return null;
+      return await resp.json();
+    } catch { return null; }
+  }
+
+  const [uptime, memory, disk, containers, dockerStats, fail2ban, beszelHealth] = await Promise.all([
     runCmd('uptime -p'),
     runCmd("free -h | awk '/Mem/{printf \"RAM: %s used / %s total (%s free)\", $3, $2, $4}; /Swap/{printf \"\\nSwap: %s used / %s total\", $3, $2}'"),
     runCmd("df -h / | tail -1 | awk '{print $3\"/\"$2\" (\"$5\" used)\"}'"),
     runCmd('docker ps --format "{{.Names}}: {{.Status}}" 2>/dev/null'),
     runCmd('docker stats --no-stream --format "{{.Name}}: CPU {{.CPUPerc}} / MEM {{.MemUsage}}" 2>/dev/null'),
     runCmd('fail2ban-client status 2>/dev/null || echo "(not running)"'),
+    getBeszelHealth(),
   ]);
 
   // Resolve container names to human-readable
@@ -282,6 +292,10 @@ export async function generateBriefing() {
 
   if (f2bSummary) {
     lines.push('', `🛡️ Fail2ban:\n${f2bSummary}`);
+  }
+
+  if (beszelHealth) {
+    lines.push('', `📈 Beszel: monitoring active (${beszelHealth.message || 'healthy'})`);
   }
 
   if (recentErrors) {
@@ -407,6 +421,7 @@ async function checkURLChanges(sockRef) {
 // Coolify internals + infrastructure that produce noisy but harmless errors
 const DEFAULT_EXCLUDE_CONTAINERS = [
   'coolify-sentinel', 'coolify-db', 'coolify-redis', 'coolify-realtime',
+  'shannon-browser-1', 'shannon-worker-1', 'shannon-temporal-1',
 ];
 
 async function loadLogConfig() {
@@ -415,7 +430,7 @@ async function loadLogConfig() {
     containers: [],
     excludeContainers: DEFAULT_EXCLUDE_CONTAINERS,
     patterns: ['ERROR', 'FATAL', 'SIGKILL', 'OOMKilled', 'panic'],
-    ignorePatterns: ['sentinel/push', 'context deadline exceeded'],
+    ignorePatterns: ['sentinel/push', 'context deadline exceeded', '"error":0', '"error": 0'],
     lastCheck: null,
     alertedHashes: [],
   });
@@ -486,7 +501,16 @@ async function checkContainerLogs(sockRef) {
               const j = JSON.parse(line);
               if (typeof j.level === 'number') return j.level >= 50;
             } catch {}
-            return true; // non-JSON lines pass through
+            // For non-JSON lines, require "error" to appear as a standalone
+            // severity indicator, not as part of a compound word or info message
+            const lower = line.toLowerCase();
+            if (lower.includes('error')) {
+              // Skip lines where "error" is part of a label/title, not an actual error
+              if (/\berror watcher\b/i.test(line)) return false;
+              if (/\b(postmortem|executor|knowledge base)\b/i.test(line)) return false;
+              if (/^\s*[🔧⏰☀️🌐📋🧠💓🛡️🔍📊🤖🔮🗜️👁️📨✅👤🤖📡🔗]\s/u.test(line)) return false;
+            }
+            return true;
           })
           .join('\n');
         if (!filtered.trim()) continue;
@@ -573,7 +597,7 @@ async function checkContainerLogs(sockRef) {
 // MAIN SCHEDULER
 // ============================================================
 
-export async function startScheduler(sockRef) {
+export async function startScheduler(sockRef, connectionHealth) {
   console.log('⏰ Starting scheduler...');
 
   // 1. Reload persisted reminders
@@ -692,6 +716,44 @@ export async function startScheduler(sockRef) {
     }
   });
   console.log('🛡️ Session guard scheduled (every 1 min)');
+
+  // 8a2. Inbound silence watchdog — every 5 minutes
+  cron.schedule('*/5 * * * *', async () => {
+    const silentMs = Date.now() - connectionHealth.lastMessageAt;
+    const silentMin = Math.floor(silentMs / 60000);
+
+    // Only trigger during waking hours (5:30am-9pm AST = 9:30-01:00 UTC)
+    const hour = new Date().getUTCHours();
+    const isWaking = (hour >= 9 && hour <= 23) || hour === 0;
+    if (!isWaking) return;
+
+    if (silentMs > 10 * 60 * 1000) {
+      // If we've reconnected 3+ times in 30 min, purge auth keys
+      const recentReconnects = connectionHealth.reconnectCount;
+      const timeSinceReconnect = Date.now() - connectionHealth.lastReconnectAt;
+
+      if (recentReconnects >= 3 && timeSinceReconnect < 30 * 60 * 1000) {
+        console.warn(`📡 Silence watchdog: ${silentMin}min silent + ${recentReconnects} reconnects — purging stale keys`);
+        try {
+          const authFiles = await fs.readdir('./auth');
+          let purged = 0;
+          for (const f of authFiles) {
+            if (f.startsWith('pre-key-') || f.startsWith('sender-key-') || f.startsWith('session-')) {
+              await fs.unlink(`./auth/${f}`).catch(() => {});
+              purged++;
+            }
+          }
+          if (purged) console.warn(`🧹 Purged ${purged} stale Baileys keys`);
+        } catch {}
+      }
+
+      console.warn(`📡 Silence watchdog: no messages for ${silentMin}min — forcing reconnect`);
+      connectionHealth.reconnectCount++;
+      connectionHealth.lastReconnectAt = Date.now();
+      try { sockRef.sock?.end(); } catch {}
+    }
+  });
+  console.log('📡 Inbound silence watchdog scheduled (every 5 min)');
 
   // 8b. Cron health monitor — every 30 minutes
   cron.schedule('*/30 * * * *', async () => {
@@ -880,7 +942,7 @@ export async function startScheduler(sockRef) {
     try {
       const { execSync } = await import('child_process');
       const output = execSync('node /app/skills/memory-v2/scripts/auto-compress.mjs', {
-        timeout: 120000,
+        timeout: 300000,
         encoding: 'utf-8',
         cwd: '/app',
       });
@@ -901,6 +963,27 @@ export async function startScheduler(sockRef) {
     }
   });
   console.log('🗜️ Memory v2 auto-compression scheduled (every 6 hours, :15 offset)');
+
+  // 18. Weekly skill review — Friday 6pm AST (= 22:00 UTC)
+  // Runs same day as tech intel report but later — review week's performance + queue improvements
+  cron.schedule('0 22 * * 5', async () => {
+    try {
+      const { execSync } = await import('child_process');
+      const report = execSync('node /app/scripts/weekly-skill-review.mjs', {
+        timeout: 120000,
+        encoding: 'utf-8',
+        env: { ...process.env },
+      }).trim();
+      if (report && report.length > 50) {
+        await sockRef.sock.sendMessage(ADMIN_JID, { text: report.substring(0, 3900) });
+        console.log('📊 Sent weekly skill review');
+      }
+      writeHeartbeat('weekly-skill-review');
+    } catch (err) {
+      console.error('Weekly skill review error:', err.message);
+    }
+  });
+  console.log('📊 Weekly skill review scheduled (Friday 6:00 PM AST / 22:00 UTC)');
 
   console.log('⏰ Scheduler ready');
 }
