@@ -198,9 +198,14 @@ export function spawnWithMemoryLimit(command, args, opts, memoryMB) {
     return spawn('systemd-run', wrappedArgs, opts);
   }
 
-  // No cgroup support — spawn without artificial memory limits.
-  // The container mem_limit is the real safety net; V8 heap caps were causing
-  // unnecessary SIGKILL failures when Claude CLI needed more memory for large prompts.
+  // No cgroup support — set V8 heap limit via NODE_OPTIONS as fallback.
+  // The container mem_limit is the real safety net; this gives V8 room
+  // proportional to the task type instead of the hardcoded 1024 default.
+  if (memoryMB) {
+    const env = { ...(opts.env || process.env) };
+    env.NODE_OPTIONS = `--max-old-space-size=${memoryMB}`;
+    opts = { ...opts, env };
+  }
   return spawn(command, args, opts);
 }
 

@@ -426,7 +426,7 @@ const DEFAULT_EXCLUDE_CONTAINERS = [
 ];
 
 async function loadLogConfig() {
-  return await readJSON(LOG_MONITOR_FILE, {
+  const config = await readJSON(LOG_MONITOR_FILE, {
     enabled: true,
     containers: [],
     excludeContainers: DEFAULT_EXCLUDE_CONTAINERS,
@@ -435,6 +435,13 @@ async function loadLogConfig() {
     lastCheck: null,
     alertedHashes: [],
   });
+  // Merge any new default exclusions into persisted config
+  for (const name of DEFAULT_EXCLUDE_CONTAINERS) {
+    if (!config.excludeContainers.includes(name)) {
+      config.excludeContainers.push(name);
+    }
+  }
+  return config;
 }
 
 async function saveLogConfig(config) {
@@ -797,9 +804,9 @@ export async function startScheduler(sockRef, connectionHealth) {
   });
   console.log('📊 Weekly AI repo intelligence scheduled (Friday 10:00 AM AST / 14:00 UTC)');
 
-  // 10. Nightly Self-Improvement Protocol — 8:30pm AST (= 00:30 UTC)
+  // 10. Nightly Self-Improvement Protocol — 8:30pm AST
   // Runs after daily synthesis (8pm), before Gil's Starlink goes off at 9pm
-  cron.schedule('30 0 * * *', async () => {
+  cron.schedule('30 20 * * *', async () => {
     try {
       const { execSync } = await import('child_process');
       const report = execSync('node /app/scripts/self-improve.mjs', {
