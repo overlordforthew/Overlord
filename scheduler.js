@@ -422,6 +422,7 @@ async function checkURLChanges(sockRef) {
 const DEFAULT_EXCLUDE_CONTAINERS = [
   'coolify-sentinel', 'coolify-db', 'coolify-redis', 'coolify-realtime',
   'shannon-browser-1', 'shannon-worker-1', 'shannon-temporal-1',
+  'searxng', 'seneca-site',
 ];
 
 async function loadLogConfig() {
@@ -533,11 +534,20 @@ async function checkContainerLogs(sockRef) {
 
   if (alerts.length > 0) {
     const msg = `⚠️ Log alerts detected:\n\n${alerts.join('\n\n')}`;
-    try {
-      await sockRef.sock.sendMessage(ADMIN_JID, { text: msg.substring(0, 3900) });
-      console.log(`⚠️ Sent ${alerts.length} log alert(s)`);
-    } catch (err) {
-      console.error('Failed to send log alert:', err.message);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        if (!sockRef.sock?.ws?.isOpen) {
+          if (attempt < 2) { await new Promise(r => setTimeout(r, 5000)); continue; }
+          console.error('Failed to send log alert: socket not open after 3 attempts');
+          break;
+        }
+        await sockRef.sock.sendMessage(ADMIN_JID, { text: msg.substring(0, 3900) });
+        console.log(`⚠️ Sent ${alerts.length} log alert(s)`);
+        break;
+      } catch (err) {
+        if (attempt === 2) console.error('Failed to send log alert:', err.message);
+        else await new Promise(r => setTimeout(r, 5000));
+      }
     }
 
     // Auto-create repair tasks for each alert and attempt autonomous fix
@@ -793,16 +803,20 @@ export async function startScheduler(sockRef, connectionHealth) {
     try {
       const { execSync } = await import('child_process');
       const report = execSync('node /app/scripts/self-improve.mjs', {
-        timeout: 120000,
+        timeout: 180000,
         encoding: 'utf-8',
         env: { ...process.env },
       }).trim();
       if (report && report.length > 50) {
-        await sockRef.sock.sendMessage(ADMIN_JID, { text: report });
-        console.log('🔬 Sent nightly self-improvement report');
+        if (sockRef.sock?.ws?.isOpen) {
+          await sockRef.sock.sendMessage(ADMIN_JID, { text: report });
+          console.log('🔬 Sent nightly self-improvement report');
+        } else {
+          console.warn('🔬 Self-improvement report ready but socket not open, skipping send');
+        }
       }
     } catch (err) {
-      console.error('Self-improvement report error:', err.message);
+      console.error('Self-improvement report error:', err?.message || err?.signal || String(err));
     }
   }, { timezone: 'America/Puerto_Rico' });
   console.log('🔬 Self-improvement protocol scheduled (8:30 PM AST / 00:30 UTC)');

@@ -16,9 +16,9 @@ const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
 // Memory limits per task type
 const MEMORY_LIMITS = {
-  simple:  512,   // 512 MB
-  medium:  768,   // 768 MB
-  complex: 1200,  // 1.2 GB — still leaves headroom for bot + OS
+  simple:  768,   // 768 MB
+  medium:  1200,  // 1.2 GB
+  complex: 1800,  // 1.8 GB — container has 4GB, leaves ~2GB for bot + OS
 };
 
 // Check if systemd-run can actually create scopes (not just if binary exists)

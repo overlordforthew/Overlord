@@ -7,7 +7,7 @@
 
 import pg from 'pg';
 import pino from 'pino';
-import { callWithFallback, FREE_FALLBACK_CHAINS } from './router.js';
+import { callWithFallback } from './router.js';
 import { parseJsonFromLLM } from './lib/parse-json-llm.js';
 
 const logger = pino({ level: 'info' });
@@ -206,7 +206,7 @@ Task: ${taskTitle}
 Response: ${responseText.substring(0, 1000)}`;
 
     const { response: result } = await callWithFallback(
-      FREE_FALLBACK_CHAINS.simple,
+      ['gemini-flash', 'gemini-flash-lite'],
       'You extract structured fix patterns from repair logs. Return ONLY valid JSON.',
       prompt,
       500,

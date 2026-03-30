@@ -7,7 +7,7 @@
  * /postmortems command to search/list.
  */
 
-import { callWithFallback, FREE_FALLBACK_CHAINS } from './router.js';
+import { callWithFallback } from './router.js';
 import { parseJsonFromLLM } from './lib/parse-json-llm.js';
 import { ingest, search as kbSearch } from './knowledge-base.js';
 import { getTaskEvents } from './task-store.js';
@@ -56,7 +56,7 @@ Resolution:\n${responseText.substring(0, 1500)}`;
 
   try {
     const { response: result } = await callWithFallback(
-      FREE_FALLBACK_CHAINS.simple,
+      ['gemini-flash', 'gemini-flash-lite'],
       'You generate structured incident postmortems from repair logs. Return ONLY valid JSON, no markdown.',
       prompt,
       800,
