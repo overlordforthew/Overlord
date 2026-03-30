@@ -43,3 +43,5 @@
 
 # X/Twitter monitor — @intocryptoverse digest at 9am + 5pm AST
 0 13,21 * * * cd /root/overlord && /usr/bin/node scripts/x-monitor.mjs >> logs/x-monitor.log 2>&1
+# CLAUDE.md audit — every 48 hours at 10:17 UTC
+17 10 */2 * * /root/scripts/claudemd-audit.sh

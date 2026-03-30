@@ -30,7 +30,8 @@
       "mcp__chrome-devtools__get_network_request",
       "mcp__chrome-devtools__close_page",
       "Skill(browse)",
-      "Skill(session-handoff)"
+      "Skill(session-handoff)",
+      "Skill(schedule)"
     ]
   }
 }
