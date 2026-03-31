@@ -6,7 +6,7 @@ See /projects/CLAUDE.md for infrastructure rules, projects list, and permissions
 
 - **Node.js + Baileys** — WhatsApp client library, runs in Docker
 - **Router:** Multi-model (Alpha/Beta/Charlie) in router.js
-- **Context:** Reuses /root/.claude/projects/-projects/memory/MEMORY.md from sessions
+- **Context:** Operational memory in `data/memory-v2.db` (SQLite). Claude Code cross-session preferences at `/root/.claude/projects/-root/memory/`
 - **Access:** Admin (Gil) full access. Power users (Ai Chan, Dex) scoped to their projects only.
 - **WhatsApp mode:** Concise, plain text, no markdown headers in messages
 - **Emoji:** Use sparingly, natural not forced
@@ -25,23 +25,76 @@ See /projects/CLAUDE.md for infrastructure rules, projects list, and permissions
 
 ## COMMANDS (WhatsApp)
 
+### Core
 - `/status` — Server health (admin)
 - `/memory` — Session memory
-- `/briefing` — Daily report
-- `/remind <time> <msg>` — Schedule reminder
-- `/reminders` — List active reminders
+- `/context` — Show recent conversation context
+- `/clear` — Clear conversation context
+- `/mode [mode]` — Show/set response mode (admin)
+- `/threshold <n>` — Set chime-in threshold (admin)
+- `/router [alpha|beta|charlie]` — Show/switch model mode (admin)
+- `/sessions` — List active Claude sessions (admin)
+- `/help` — Show all commands
+
+### Scheduling & Monitoring
+- `/briefing` — Daily report (power user)
+- `/remind <time> <msg>` — Schedule reminder (power user)
+- `/reminders` — List active reminders (power user)
+- `/cancel <id>` — Cancel reminder (power user)
 - `/watch <url>` — Monitor URL (admin)
-- `/watches` — List watches (admin)
+- `/unwatch <url>` — Remove URL watch (admin)
+- `/watches` — List watches
 - `/monitor` — Log watch status (admin)
+- `/monitor add|remove` — Add/remove log monitors (admin)
 - `/heartbeat` — Health status (admin)
-- `/deploy <project>` — Deploy (admin)
-- `/restart <container>` — Restart (admin)
+
+### Tasks & Proposals
+- `/task <action>` — Task management (admin)
+- `/tasks` — List tasks (admin)
+- `/order <desc>` — Create standing order (admin)
+- `/orders` — List orders (admin)
+- `/proposals` — List pending proposals (admin)
+- `/approve <id>` — Approve proposal (admin)
+- `/deny <id>` — Deny proposal (admin)
+- `/pending` — Show pending items (admin)
+
+### Infrastructure
+- `/deploy <project>` — Deploy project (power user)
+- `/restart <container>` — Restart container (admin)
+- `/db list` — List databases (admin)
+- `/db schema <name>` — Show DB schema (admin)
 - `/db <name> <SQL>` — Query database (admin)
-- `/router alpha|beta|charlie` — Switch model mode (admin)
+- `/server <action>` — Server management (admin)
+- `/servers` — Multi-server status (admin)
+- `/guard [on|off]` — Destructive command guard (admin)
+
+### Media & TTS
 - `/audiovoice <text>` — Kokoro TTS (high quality, self-hosted on ElmoServer)
 - `/voice <text>` — Alias for /audiovoice
 - `/audiovoice voices` — List available voices
-- `/help` — Show all commands
+- `/tts <text>` / `/say <text>` — Quick TTS
+- `/qr <text>` — Generate QR code
+
+### Intelligence & Analytics
+- `/cost` — Usage cost tracker (admin)
+- `/revenue` — Revenue tracker (admin)
+- `/predict` — Predictive infra alerts (admin)
+- `/pulse` / `/skills` — Skill health tracker (admin)
+- `/postmortems` — List postmortems (admin)
+- `/backtest` — Run backtests (admin)
+- `/fleet` — Bot fleet status (admin)
+
+### Integrations
+- `/stripe [action]` — Stripe management (admin + NamiBarden users)
+- `/cf [action]` — Cloudflare DNS/R2 management (admin)
+- `/kb <action>` — Knowledge base management (admin)
+- `/research <topic>` — Launch research task (admin)
+- `/review <target>` — Code review (admin)
+- `/draft <text>` / `/drafts` — Draft management (admin)
+- `/send <target> <msg>` — Send message to contact (admin)
+- `/newproject <name>` — Create new project (power user)
+- `/groupid` — Show current group JID (admin)
+- `/queue` — Work queue status (admin)
 
 ## POWER USERS
 
