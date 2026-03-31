@@ -7,7 +7,7 @@
 0 */6 * * * /root/projects/shannon/scripts/refresh-token.sh
 0 */6 * * * /usr/bin/claude auth status > /dev/null 2>&1
 0 8 * * 0 /root/overlord/scripts/token-dashboard.sh >> /root/overlord/logs/token-dashboard.log 2>&1
-30 3 * * * cd /root/overlord && node memory-consolidator.js >> /root/overlord/logs/memory-consolidate.log 2>&1
+30 3 * * * docker exec overlord node /app/memory-consolidator.js >> /root/overlord/logs/memory-consolidate.log 2>&1
 55 23 * * * /root/overlord/scripts/auto-journal.sh >> /root/overlord/logs/journal.log 2>&1
 55 2 * * * /root/overlord/scripts/token-aggregate.sh >> /root/overlord/logs/token-aggregate.log 2>&1
 5 */6 * * * /root/projects/shannon/sync-oauth.sh > /dev/null 2>&1
@@ -45,3 +45,9 @@
 0 13,21 * * * cd /root/overlord && /usr/bin/node scripts/x-monitor.mjs >> logs/x-monitor.log 2>&1
 # CLAUDE.md audit — every 48 hours at 10:17 UTC
 17 10 */2 * * /root/scripts/claudemd-audit.sh
+
+# Docker cleanup — prune dangling images, build cache, and orphaned volumes daily at 4:15am
+15 4 * * * docker image prune -f > /dev/null 2>&1 && docker builder prune -f > /dev/null 2>&1 && docker volume prune -f > /dev/null 2>&1
+
+# OnlyHulls daily boat scrape — 3 sources, cruisers/liveaboards only
+37 5 * * * /root/projects/OnlyHulls/scripts/daily-scrape.sh 100 >> /tmp/onlyhulls-scrape.log 2>&1

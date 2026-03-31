@@ -1,4 +1,7 @@
-- [SurfaBabe Design Reference](feedback_surfababe_design.md) — Gil likes this design style, use as baseline for future web projects
-- [MasterCommander Handoff](session-handoff-mastercommander.md) — Demo system done, perfecting individual owner persona next
-- [SurfaBabe Status](project_surfababe_status.md) — Pixel-perfect Wix replication + Stripe payments (same account, VND, no subs)
-- [OnlyHulls Status](project_onlyhulls_status.md) — Subscription billing tiers defined, auth migrated to Auth.js, Stripe ~70% built
+- [OnlyHulls brand identity](project_onlyhulls_brand.md) — "Where Tinder™ collides with OnlyFans™ — for boats"
+- [OnlyHulls current state](project_onlyhulls_state.md) — 198 boats, 5 scrapers, daily cron, content pivot, Coolify UUID
+- [OnlyHulls UX preferences](feedback_onlyhulls_ux.md) — Load More, price format, sort toggles, auth gate, image rules
+- [Boats Group monopoly](reference_boats_group.md) — 9 brands, 300K listings, antitrust lawsuit, all Cloudflare-blocked
+- [Coolify API access](feedback_coolify_api.md) — Use localhost:8000 not public URL, extract token with grep
+- [Crossreview: prefer Codex](feedback_crossreview_codex.md) — Free models are stopgap; upgrade to Codex CLI as primary external reviewer
+- [Codex co-review mandatory](feedback_codex_coreview.md) — Run /codex after major changes; gpt-5.4 + xhigh effort, verify each time

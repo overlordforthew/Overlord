@@ -1,6 +1,6 @@
 {
   "model": "opus[1m]",
-  "effortLevel": "high",
+  "effortLevel": "max",
   "env": {
     "CLAUDE_CODE_EFFORT_LEVEL": "max",
     "CLAUDE_CODE_ATTRIBUTION_HEADER": "0",
@@ -59,6 +59,17 @@
             "type": "command",
             "command": "node /root/overlord/skills/memory-v2/scripts/inject-context.mjs",
             "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/root/.claude/hooks/rtk-rewrite.sh"
           }
         ]
       }
