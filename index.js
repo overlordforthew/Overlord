@@ -4670,6 +4670,7 @@ async function startBot() {
             if (response.startsWith('⚠️')) {
               logFriction('api_error', response.substring(0, 200), _claudeDuration).catch(() => {});
               logRegression('api', `Model error from ${routeModelId}: ${response.substring(0, 100)}`, null, 'Check API credentials and rate limits').catch(() => {});
+              recordGap('performance', `API error from ${routeModelId}`, response.substring(0, 100));
             }
 
             // Stop typing (re-resolve socket in case of reconnect)
@@ -4803,9 +4804,22 @@ async function startBot() {
                 logger.error({ err: err.message }, '[memex] Post-response extraction failed');
               }
 
-              // Positive signal detection — only short messages (<30 chars) that are clearly feedback, not continuations
+              // Positive AND negative signal detection
               if (isAdmin(last.senderJid)) {
                 const userText = (last.parsed?.text || '').trim();
+
+                // Frustration/negative signals → capability gap
+                const NEGATIVE_PATTERNS = [
+                  /\b(wrong|broken|why did you|that'?s not|you (missed|forgot|ignored|broke))\b/i,
+                  /\b(no[,.]?\s*(don'?t|not|stop|never))\b/i,
+                  /\b(frustrat|annoy|useless|terrible|awful)\b/i,
+                ];
+                if (NEGATIVE_PATTERNS.some(p => p.test(userText))) {
+                  recordGap('skill', `Negative signal from admin: ${userText.substring(0, 80)}`, 'User frustration detected');
+                  logFriction('user_correction', userText.substring(0, 100), 0).catch(() => {});
+                }
+
+                // Positive signals — only short messages (<30 chars) that are clearly feedback
                 const isShortFeedback = userText.length < 30;
                 const POSITIVE_PATTERNS = [
                   /\b(perfect|exactly|great|nice|awesome|good job|well done|nailed it)\b/i,
@@ -4828,6 +4842,10 @@ async function startBot() {
                   const evoResult = await runEvolution(msgs);
                   if (evoResult.applied > 0) {
                     logger.info({ applied: evoResult.applied }, '[evolution] Learned from admin conversation');
+                  }
+                  // Record capability gaps from corrections detected by evolution
+                  if (evoResult.signals > 0) {
+                    recordGap('knowledge', `${evoResult.signals} corrections detected in conversation`, userText.substring(0, 100));
                   }
                 } catch (err) {
                   logger.error({ err: err.message }, '[evolution] Post-response evolution failed');
