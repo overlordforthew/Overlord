@@ -419,6 +419,8 @@ export async function recordOutcome(promptHash, metadata) {
     retryCount: metadata.retryCount || 0,
     responseTime: metadata.responseTime || 0,
     model: metadata.model || 'unknown',
+    taskType: metadata.taskType || 'chat',
+    topic: metadata.topic || null,
     timestamp: new Date().toISOString(),
   });
 

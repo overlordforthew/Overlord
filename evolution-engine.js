@@ -401,9 +401,9 @@ export function getLearnedContext(project = null) {
   const lines = [];
 
   if (principles.length > 0) {
-    lines.push('LEARNED PRINCIPLES (from repeated corrections):');
-    for (const p of principles.slice(0, 10)) {
-      lines.push(`  - ${p.text.substring(0, 150)} (${p.count}x)`);
+    lines.push('LEARNED PRINCIPLES (from corrections and standing orders — follow these):');
+    for (const p of principles.slice(0, 25)) {
+      lines.push(`  - [${p.type}] ${p.text.substring(0, 150)}`);
     }
   }
 

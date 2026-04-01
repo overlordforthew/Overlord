@@ -27,6 +27,28 @@ function log(msg) {
   console.log(`[auto-compress] ${msg}`);
 }
 
+// Detect project from file paths in event summaries
+const PROJECT_PATH_PATTERNS = [
+  [/\/root\/overlord\b/i, 'Overlord'],
+  [/\/root\/projects\/NamiBarden\b/i, 'NamiBarden'],
+  [/\/root\/projects\/MasterCommander\b/i, 'MasterCommander'],
+  [/\/root\/projects\/BeastMode\b/i, 'BeastMode'],
+  [/\/root\/projects\/Lumina\b/i, 'Lumina'],
+  [/\/root\/projects\/SurfaBabe\b/i, 'SurfaBabe'],
+  [/\/root\/projects\/Elmo\b/i, 'Elmo'],
+  [/\/root\/projects\/OnlyHulls\b/i, 'OnlyHulls'],
+  [/\/data\/coolify/i, 'Coolify'],
+  [/\/etc\/fail2ban/i, 'Security'],
+  [/traefik/i, 'Traefik'],
+];
+
+function detectProject(text) {
+  for (const [pattern, name] of PROJECT_PATH_PATTERNS) {
+    if (pattern.test(text)) return name;
+  }
+  return null;
+}
+
 function groupEventsBySession(events) {
   const groups = new Map();
   for (const e of events) {
@@ -37,6 +59,10 @@ function groupEventsBySession(events) {
     const g = groups.get(sid);
     g.events.push(e);
     if (e.project) g.project = e.project;
+    // Enhanced project detection from file paths in input summaries
+    if (!g.project && e.input_summary) {
+      g.project = detectProject(e.input_summary);
+    }
     g.tools[e.tool_name] = (g.tools[e.tool_name] || 0) + 1;
   }
   return groups;
@@ -64,10 +90,10 @@ function buildRuleSummary(group) {
     type: 'config',
     category: 'infrastructure',
     session_id: group.session_id,
-    title: `Auto-compressed: ${project} session (${group.events.length} events)`,
-    narrative: `Autonomous session ${group.session_id.slice(0, 8)} on ${project}. Tools: ${toolList}. Time: ${first} to ${last}.`,
+    title: `${project} session: ${group.events.length} events (${Object.keys(group.tools).join(', ')})`,
+    narrative: `Autonomous session ${group.session_id.slice(0, 8)} on ${project}. Tools: ${toolList}. Time: ${first} to ${last}.${[...files].length ? ' Files: ' + [...files].slice(0, 5).join(', ') : ''}`,
     facts: [
-      `${group.events.length} tool events`,
+      `${group.events.length} tool events on ${project}`,
       `Tools: ${toolList}`,
       `Time range: ${first} to ${last}`,
     ],

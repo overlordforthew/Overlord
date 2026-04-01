@@ -71,7 +71,7 @@ import {
 import { executeTaskAutonomously, scheduleVerification } from './executor.js';
 import { resolveProposal, getPendingProposals } from './autonomy-engine.js';
 import { startExperiment } from './experiment-engine.js';
-import { evolve as runEvolution } from './evolution-engine.js';
+import { evolve as runEvolution, getLearnedContext } from './evolution-engine.js';
 import {
   ensureSchema as ensureMemorySchema, retrieveMemories, formatMemoriesForPrompt,
   seedFromLegacyFile, storeMemory, listMemories, deleteMemory, clearMemories,
@@ -2393,10 +2393,10 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
     } catch { /* no patrol data */ }
   }
 
-  // Load learning context for admin — fire both in parallel, fail silently
-  const [regressionSummary, synthContext] = isAdminUser
-    ? await Promise.all([getRegressionSummary(), getYesterdaySynthesisContext()]).catch(() => ['', ''])
-    : ['', ''];
+  // Load learning context for admin — fire all in parallel, fail silently
+  const [regressionSummary, synthContext, learnedPrinciples] = isAdminUser
+    ? await Promise.all([getRegressionSummary(), getYesterdaySynthesisContext(), Promise.resolve(getLearnedContext())]).catch(() => ['', '', ''])
+    : ['', '', ''];
 
   if (isAdminUser) {
     sysPrompt = [
@@ -2417,6 +2417,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       cliActivityContext,
       regressionSummary,
       synthContext,
+      learnedPrinciples,
     ].filter(Boolean).join(' ');
   } else if (isPower) {
     const projectList = profile.projects.length > 0 ? profile.projects.join(', ') : 'none yet';
@@ -4757,6 +4758,7 @@ async function startBot() {
               {
                 model: routeModelId,
                 taskType: claudeResult._training?.taskType || 'medium',
+                topic: (last.parsed.text || '').substring(0, 60).replace(/[^\w\s]/g, '').trim(),
                 responseTime: _claudeDuration,
                 toolCalls: [],
                 userCorrected: false,
