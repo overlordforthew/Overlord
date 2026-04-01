@@ -29,14 +29,14 @@ function log(msg) {
 
 // Detect project from file paths in event summaries
 const PROJECT_PATH_PATTERNS = [
-  [/\/root\/overlord\b/i, 'Overlord'],
-  [/\/root\/projects\/NamiBarden\b/i, 'NamiBarden'],
-  [/\/root\/projects\/MasterCommander\b/i, 'MasterCommander'],
-  [/\/root\/projects\/BeastMode\b/i, 'BeastMode'],
-  [/\/root\/projects\/Lumina\b/i, 'Lumina'],
-  [/\/root\/projects\/SurfaBabe\b/i, 'SurfaBabe'],
-  [/\/root\/projects\/Elmo\b/i, 'Elmo'],
-  [/\/root\/projects\/OnlyHulls\b/i, 'OnlyHulls'],
+  [/(?:\/root\/overlord|\/app)\b/i, 'Overlord'],
+  [/(?:\/root\/projects|\/projects)\/NamiBarden\b/i, 'NamiBarden'],
+  [/(?:\/root\/projects|\/projects)\/MasterCommander\b/i, 'MasterCommander'],
+  [/(?:\/root\/projects|\/projects)\/BeastMode\b/i, 'BeastMode'],
+  [/(?:\/root\/projects|\/projects)\/Lumina\b/i, 'Lumina'],
+  [/(?:\/root\/projects|\/projects)\/SurfaBabe\b/i, 'SurfaBabe'],
+  [/(?:\/root\/projects|\/projects)\/Elmo\b/i, 'Elmo'],
+  [/(?:\/root\/projects|\/projects)\/OnlyHulls\b/i, 'OnlyHulls'],
   [/\/data\/coolify/i, 'Coolify'],
   [/\/etc\/fail2ban/i, 'Security'],
   [/traefik/i, 'Traefik'],

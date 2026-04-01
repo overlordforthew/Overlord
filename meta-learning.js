@@ -174,10 +174,10 @@ export async function getFrictionReport(hours = 24) {
  * Called by scheduler at 11pm.
  */
 export async function generateDailySynthesis() {
-  // Use AST (UTC-4) date since Gil is in AST and synthesis runs at 8pm AST
+  // Use AST (UTC-4) day boundaries since Gil is in AST and synthesis runs at 8pm AST (00:00 UTC)
   const now = new Date();
-  const astOffset = now.getTime() - (4 * 3600000);
-  const astDate = new Date(astOffset).toISOString().split('T')[0];
+  const astNow = new Date(now.getTime() - (4 * 3600000));
+  const astDate = astNow.toISOString().split('T')[0];
   const synthFile = path.join(SYNTHESIS_DIR, `${astDate}.json`);
 
   // Gather data from all sources
@@ -185,17 +185,18 @@ export async function generateDailySynthesis() {
   const friction = await readJSON(FRICTION_FILE, { events: [], summary: {} });
   const trends = await readJSON(TRENDS_FILE, { daily: [] });
 
-  // Last 24 hours of data (not date-prefix matching, which misses timezone boundary)
-  const cutoff24h = new Date(now.getTime() - 24 * 3600000).toISOString();
+  // AST day boundaries: astDate 04:00 UTC to astDate+1 04:00 UTC
+  const astDayStart = `${astDate}T04:00:00.000Z`;
+  const astDayEnd = new Date(new Date(astDayStart).getTime() + 24 * 3600000).toISOString();
 
-  // Today's regressions
+  // Today's regressions (within AST day)
   const todayRegressions = regressions.entries.filter(r =>
-    r.timestamp && r.timestamp >= cutoff24h
+    r.timestamp && r.timestamp >= astDayStart && r.timestamp < astDayEnd
   );
 
-  // Today's friction
+  // Today's friction (within AST day)
   const todayFriction = friction.events.filter(e =>
-    e.timestamp && e.timestamp >= cutoff24h
+    e.timestamp && e.timestamp >= astDayStart && e.timestamp < astDayEnd
   );
 
   // Friction by type
@@ -245,7 +246,7 @@ export async function generateDailySynthesis() {
   try {
     const outcomes = await readJSON(OUTCOMES_FILE, { entries: [] });
     const entries = Array.isArray(outcomes) ? outcomes : outcomes.entries || [];
-    const todayOutcomes = entries.filter(e => e.timestamp && e.timestamp >= cutoff24h);
+    const todayOutcomes = entries.filter(e => e.timestamp && e.timestamp >= astDayStart && e.timestamp < astDayEnd);
     const success = todayOutcomes.filter(e => e.taskSucceeded === true).length;
     const fail = todayOutcomes.filter(e => e.taskSucceeded === false).length;
     const avgTime = todayOutcomes.filter(e => e.responseTime > 0).reduce((a, e) => a + e.responseTime, 0) / (todayOutcomes.filter(e => e.responseTime > 0).length || 1);

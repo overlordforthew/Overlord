@@ -26,6 +26,12 @@ import { sweepZombies } from './session-guard.js';
 import { createTask, getActiveTasks, getRecentDoneTasks, formatTaskList, TaskStatus, closeTask } from './task-store.js';
 import { executeTaskAutonomously, createAndExecuteTask } from './executor.js';
 import { initErrorWatcher, watchDockerEvents, checkTraefik5xx } from './error-watcher.js';
+import { runStrategicPatrol } from './strategic-patrol.js';
+import { generateScorecard } from './portfolio-scorecard.js';
+import { runKpiCheck } from './kpi-tracker.js';
+import { runStudySession } from './idle-study.js';
+import { checkExperiments } from './experiment-engine.js';
+import { evolve } from './evolution-engine.js';
 import { writeFileSync } from 'fs';
 
 const execAsync = promisify(exec);
@@ -669,8 +675,8 @@ export async function startScheduler(sockRef, connectionHealth) {
   cron.schedule('0 0 * * *', async () => {
     try {
       const synthesis = await generateDailySynthesis();
-      // Only notify if there are meaningful events
-      if (synthesis.regressions.count > 0 || synthesis.friction.totalEvents > 5) {
+      // Notify if there are meaningful events or insights worth surfacing
+      if (synthesis.regressions.count > 0 || synthesis.friction.totalEvents > 3 || synthesis.insights?.length > 0) {
         const msg = formatSynthesisMessage(synthesis);
         await sockRef.sock.sendMessage(ADMIN_JID, { text: msg });
         console.log('🧠 Sent nightly synthesis');
@@ -735,6 +741,8 @@ export async function startScheduler(sockRef, connectionHealth) {
   console.log('🛡️ Session guard scheduled (every 1 min)');
 
   // 8a2. Inbound silence watchdog — every 5 minutes
+  // Backoff: reconnect at 10min, then wait progressively longer before retrying
+  // After 6 reconnects with no messages, back off to every 60 min
   cron.schedule('*/5 * * * *', async () => {
     const silentMs = Date.now() - connectionHealth.lastMessageAt;
     const silentMin = Math.floor(silentMs / 60000);
@@ -745,11 +753,18 @@ export async function startScheduler(sockRef, connectionHealth) {
     if (!isWaking) return;
 
     if (silentMs > 10 * 60 * 1000) {
-      // If we've reconnected 3+ times in 30 min, purge auth keys
       const recentReconnects = connectionHealth.reconnectCount;
       const timeSinceReconnect = Date.now() - connectionHealth.lastReconnectAt;
 
-      if (recentReconnects >= 3 && timeSinceReconnect < 30 * 60 * 1000) {
+      // Backoff: after 6 reconnects, only retry every 60 min instead of every 5
+      const backoffThreshold = 6;
+      const backoffIntervalMs = 60 * 60 * 1000; // 60 min
+      if (recentReconnects >= backoffThreshold && timeSinceReconnect < backoffIntervalMs) {
+        return; // Still in backoff window, skip this cycle
+      }
+
+      // Purge stale keys once at 3 reconnects, don't repeat every cycle
+      if (recentReconnects === 3) {
         console.warn(`📡 Silence watchdog: ${silentMin}min silent + ${recentReconnects} reconnects — purging stale keys`);
         try {
           const authFiles = await fs.readdir('./auth');
@@ -764,7 +779,7 @@ export async function startScheduler(sockRef, connectionHealth) {
         } catch {}
       }
 
-      console.warn(`📡 Silence watchdog: no messages for ${silentMin}min — forcing reconnect`);
+      console.warn(`📡 Silence watchdog: no messages for ${silentMin}min — forcing reconnect (attempt ${recentReconnects + 1})`);
       connectionHealth.reconnectCount++;
       connectionHealth.lastReconnectAt = Date.now();
       try { sockRef.sock?.end(); } catch {}
@@ -1005,6 +1020,69 @@ export async function startScheduler(sockRef, connectionHealth) {
     }
   });
   console.log('📊 Weekly skill review scheduled (Friday 6:00 PM AST / 22:00 UTC)');
+
+  // 19. Strategic Patrol — 11 AM and 5 PM AST (= 15:00 and 21:00 UTC)
+  // Reviews projects, deps, errors, infra. Routes findings through autonomy engine.
+  cron.schedule('0 15,21 * * *', async () => {
+    try {
+      await runStrategicPatrol(sockRef);
+      writeHeartbeat('strategic-patrol');
+    } catch (err) {
+      console.error('Strategic patrol error:', err.message);
+    }
+  });
+  console.log('🔭 Strategic patrol scheduled (11 AM & 5 PM AST / 15:00 & 21:00 UTC)');
+
+  // 20. Portfolio Scorecard — Monday 9 AM AST (= 13:00 UTC)
+  cron.schedule('0 13 * * 1', async () => {
+    try {
+      await generateScorecard(sockRef);
+      writeHeartbeat('portfolio-scorecard');
+    } catch (err) {
+      console.error('Portfolio scorecard error:', err.message);
+    }
+  });
+  console.log('📊 Portfolio scorecard scheduled (Monday 9 AM AST / 13:00 UTC)');
+
+  // 21. KPI Tracker — Daily 8 AM AST (= 12:00 UTC)
+  cron.schedule('0 12 * * *', async () => {
+    try {
+      await runKpiCheck(sockRef);
+      writeHeartbeat('kpi-tracker');
+    } catch (err) {
+      console.error('KPI tracker error:', err.message);
+    }
+  });
+  console.log('📈 KPI tracker scheduled (Daily 8 AM AST / 12:00 UTC)');
+
+  // 22. Idle Study — Check every 10 min during waking hours
+  let lastMessageAt = Date.now();
+  // Update lastMessageAt on any incoming message (set by index.js via export)
+  global.__overlordLastMessageAt = lastMessageAt;
+  cron.schedule('*/10 * * * *', async () => {
+    const idleMs = Date.now() - (global.__overlordLastMessageAt || Date.now());
+    const idleMin = idleMs / 60000;
+    if (idleMin >= 30) {
+      try {
+        await runStudySession(sockRef);
+        writeHeartbeat('idle-study');
+      } catch (err) {
+        console.error('Idle study error:', err.message);
+      }
+    }
+  });
+  console.log('📚 Idle study scheduled (every 10 min, triggers after 30 min idle)');
+
+  // 23. Experiment Monitor — Daily 9 AM AST (= 13:00 UTC, after scorecard)
+  cron.schedule('30 13 * * *', async () => {
+    try {
+      await checkExperiments(sockRef);
+      writeHeartbeat('experiment-monitor');
+    } catch (err) {
+      console.error('Experiment monitor error:', err.message);
+    }
+  });
+  console.log('🧪 Experiment monitor scheduled (Daily 9:30 AM AST / 13:30 UTC)');
 
   console.log('⏰ Scheduler ready');
 }

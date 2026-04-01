@@ -32,6 +32,7 @@ const KNOWN_PREFIXES = [
   'overlord', 'namibarden', 'surfababe', 'mastercommander', 'lumina',
   'onlyhulls', 'shannon', 'seneca', 'coolify', 'beszel', 'glances',
   'qdrant', 'searxng', 'claude-proxy', 'hl-dashboard', 'lightpanda',
+  'beastmode', 'elmo', 'surfagent', 'hl-blessings', 'hl-grid',
 ];
 
 function isKnownContainer(name) {

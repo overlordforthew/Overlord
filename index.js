@@ -2367,7 +2367,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
   let cliActivityContext = '';
   if (isAdminUser) {
     try {
-      const raw = readFileSync('/root/overlord/data/cli-activity.json', 'utf8');
+      const raw = readFileSync('/app/data/cli-activity.json', 'utf8');
       const events = JSON.parse(raw);
       const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
       const recent = events.filter(e => e.ts > twoHoursAgo);
@@ -2379,7 +2379,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
 
     // Load patrol context for ambient awareness
     try {
-      const patrolRaw = readFileSync('/root/overlord/data/patrol-latest.json', 'utf8');
+      const patrolRaw = readFileSync('/app/data/patrol-latest.json', 'utf8');
       const patrol = JSON.parse(patrolRaw);
       const patrolAge = Date.now() - new Date(patrol.timestamp).getTime();
       if (patrolAge < 24 * 60 * 60 * 1000 && patrol.totalFindings > 0) {
@@ -2874,7 +2874,7 @@ setOnSessionKilled((chatJid) => {
 
 async function withChatLock(chatJid, fn) {
   // Wait for any existing lock to release (with timeout to prevent indefinite blocking)
-  const LOCK_TIMEOUT = 330_000; // 5.5 min — slightly longer than Claude's 5 min timeout
+  const LOCK_TIMEOUT = 540_000; // 9 min — must exceed maxResponseTime (8 min) to prevent premature lock release
   const lockWaitStart = Date.now();
   while (chatLocks.has(chatJid)) {
     if (Date.now() - lockWaitStart > LOCK_TIMEOUT) {
@@ -4758,7 +4758,7 @@ async function startBot() {
               {
                 model: routeModelId,
                 taskType: claudeResult._training?.taskType || 'medium',
-                topic: (last.parsed.text || '').substring(0, 60).replace(/[^\w\s]/g, '').trim(),
+                topic: Buffer.from((last.parsed.text || '').substring(0, 60)).toString('base64').slice(0, 20),
                 responseTime: _claudeDuration,
                 toolCalls: [],
                 userCorrected: false,

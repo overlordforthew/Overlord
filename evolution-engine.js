@@ -14,7 +14,9 @@
  */
 
 import { readFileSync, writeFileSync, appendFileSync, existsSync } from 'fs';
-import { execSync } from 'child_process';
+import { execSync, exec } from 'child_process';
+import { promisify } from 'util';
+const execAsync = promisify(exec);
 
 const CONSTITUTION_PATH = '/app/data/constitution.md';
 const EVOLUTION_LOG = '/app/data/evolution-log.jsonl';
@@ -108,7 +110,7 @@ export function extractLearningSignals(messages) {
  * Step 2: CRITIQUE — Independent LLM review of proposed learnings
  * Uses free model via llm CLI to avoid self-serving bias
  */
-export function critiqueSignals(signals) {
+export async function critiqueSignals(signals) {
   if (signals.corrections.length === 0 && signals.preferences.length === 0) {
     return { approved: [], rejected: [], reason: 'No signals to critique' };
   }
@@ -130,10 +132,10 @@ export function critiqueSignals(signals) {
 
     const prompt = `Review ${sanitized.corrections.length} correction signals and ${sanitized.preferences.length} preference signals from a user-AI conversation. Correction patterns detected: ${sanitized.corrections.map(c => c.pattern).join(', ')}. Respond with JSON: { "approved": [...indices], "rejected": [...indices] }. Approve clear actionable patterns, reject vague ones.`;
 
-    const result = execSync(
+    const { stdout: result } = await execAsync(
       `echo ${JSON.stringify(prompt)} | llm -m openrouter/openrouter/free 2>/dev/null`,
-      { encoding: 'utf8', timeout: 30000 }
-    ).trim();
+      { encoding: 'utf8', timeout: 20000 }
+    );
 
     try {
       return JSON.parse(result);
@@ -172,12 +174,16 @@ export function proposeChanges(signals, critiqueResult) {
     });
   }
 
-  for (const pref of signals.preferences) {
+  // Gate preferences through critique too — only approved indices pass
+  const approvedPrefIdx = new Set(critiqueResult.approvedPreferences || []);
+  for (let i = 0; i < signals.preferences.length; i++) {
+    // If critique didn't return approvedPreferences, accept all (backward compat)
+    if (critiqueResult.approvedPreferences && !approvedPrefIdx.has(i)) continue;
     changes.push({
       type: 'preference',
-      source: pref.text,
-      proposed: pref.match,
-      timestamp: pref.timestamp,
+      source: signals.preferences[i].text,
+      proposed: signals.preferences[i].match,
+      timestamp: signals.preferences[i].timestamp,
     });
   }
 
@@ -357,8 +363,8 @@ export async function evolve(messages, sockRef) {
   }
   console.log(`[Evolution] Extracted ${signals.corrections.length} corrections, ${signals.preferences.length} preferences`);
 
-  // Step 2: Critique (async-safe, uses external LLM)
-  const critique = critiqueSignals(signals);
+  // Step 2: Critique (async — non-blocking LLM call)
+  const critique = await critiqueSignals(signals);
 
   // Step 3: Propose
   const changes = proposeChanges(signals, critique);
@@ -402,7 +408,7 @@ export function getLearnedContext(project = null) {
 
   if (principles.length > 0) {
     lines.push('LEARNED PRINCIPLES (from corrections and standing orders — follow these):');
-    for (const p of principles.slice(0, 25)) {
+    for (const p of principles.slice(-25)) {
       lines.push(`  - [${p.type}] ${p.text.substring(0, 150)}`);
     }
   }
