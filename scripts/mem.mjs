@@ -394,6 +394,7 @@ Tool events: ${s.total_events} total, ${s.uncompressed_events} uncompressed`);
       }
       if (report.error) {
         console.error(`Error: ${report.error}`);
+        process.exit(1); // signal failure to cron/automation
       }
       process.exit(0); // consolidator already closed its DB
     }

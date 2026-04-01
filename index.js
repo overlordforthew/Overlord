@@ -4803,19 +4803,17 @@ async function startBot() {
                 logger.error({ err: err.message }, '[memex] Post-response extraction failed');
               }
 
-              // Positive signal detection — learn from successes, not just errors
+              // Positive signal detection — only short messages (<30 chars) that are clearly feedback, not continuations
               if (isAdmin(last.senderJid)) {
-                const userText = (last.parsed?.text || '').toLowerCase();
+                const userText = (last.parsed?.text || '').trim();
+                const isShortFeedback = userText.length < 30;
                 const POSITIVE_PATTERNS = [
                   /\b(perfect|exactly|great|nice|awesome|good job|well done|nailed it)\b/i,
-                  /^(yes|yep|yup|yeah|correct|right|that'?s it)\b/i,
-                  /\bthank(s| you)\b/i,
+                  /^(yes|yep|yup|yeah|correct|right|that'?s it)[\s!.]*$/i,
                   /^(👍|💪|🔥|✅|👏)/,
                 ];
-                const isPositive = POSITIVE_PATTERNS.some(p => p.test(userText));
-                if (isPositive) {
+                if (isShortFeedback && POSITIVE_PATTERNS.some(p => p.test(userText))) {
                   pulseRecord('response:quality', 'up', `Positive signal: ${userText.substring(0, 60)}`);
-                  recordExperimentOutcome('principles-injection', 'treatment', 2).catch(() => {}); // bonus score for explicit approval
                 }
               }
 
