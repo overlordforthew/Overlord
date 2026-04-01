@@ -1,7 +1,7 @@
-- [OnlyHulls brand identity](project_onlyhulls_brand.md) — "Where Tinder™ collides with OnlyFans™ — for boats"
-- [OnlyHulls current state](project_onlyhulls_state.md) — 198 boats, 5 scrapers, daily cron, content pivot, Coolify UUID
-- [OnlyHulls UX preferences](feedback_onlyhulls_ux.md) — Load More, price format, sort toggles, auth gate, image rules
-- [Boats Group monopoly](reference_boats_group.md) — 9 brands, 300K listings, antitrust lawsuit, all Cloudflare-blocked
-- [Coolify API access](feedback_coolify_api.md) — Use localhost:8000 not public URL, extract token with grep
-- [Crossreview: prefer Codex](feedback_crossreview_codex.md) — Free models are stopgap; upgrade to Codex CLI as primary external reviewer
-- [Codex co-review mandatory](feedback_codex_coreview.md) — Run /codex after major changes; gpt-5.4 + xhigh effort, verify each time
+- [OnlyHulls Scraper State](project_onlyhulls_state.md) — 14,759 boats, 13 sources, TYM bulk at 500/6000, integrity is top priority
+- [OnlyHulls Cross-Listing](project_onlyhulls_crosslisting.md) — Only sailboatlistings.com worth building now; paid syndication later
+- [OverlordWeb Terminal](project_overlordweb.md) — Web terminal at overlord.namibarden.com, multi-pane tmux, Google OAuth, systemd
+- [ElmoServer Scraping Fallback](feedback_elmoserver_fallback.md) — Hetzner blocked? Route scrapes through ElmoServer or Gil's laptop
+- [Overlord Autonomy Layer](project_overlord_autonomy.md) — Garry Tan model, auto-fix/propose gate, Coolify noise issue
+- [Twitter OPSEC](feedback_twitter_opsec.md) — Never post server specs, infra details, project names, or personal info publicly
+- [NamiBarden Priority](feedback_namibarden_priority.md) — Nami's site is #1, never break it, never experiment on it

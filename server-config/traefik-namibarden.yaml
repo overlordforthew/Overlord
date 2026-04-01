@@ -212,6 +212,44 @@ http:
       tls:
         certResolver: letsencrypt
 
+    # === Overlord Web Terminal ===
+    http-overlord-web:
+      entryPoints:
+        - http
+      rule: "Host(`overlord.namibarden.com`)"
+      middlewares:
+        - redirect-to-https-file
+      service: overlord-web
+
+    https-overlord-web:
+      entryPoints:
+        - https
+      rule: "Host(`overlord.namibarden.com`)"
+      middlewares:
+        - security-headers
+      service: overlord-web
+      tls:
+        certResolver: letsencrypt
+
+    # === Crucix OSINT Dashboard ===
+    http-crucix:
+      entryPoints:
+        - http
+      rule: "Host(`crucix.namibarden.com`)"
+      middlewares:
+        - redirect-to-https-file
+      service: crucix
+
+    https-crucix:
+      entryPoints:
+        - https
+      rule: "Host(`crucix.namibarden.com`)"
+      middlewares:
+        - security-headers
+      service: crucix
+      tls:
+        certResolver: letsencrypt
+
   middlewares:
     redirect-to-https-file:
       redirectScheme:
@@ -288,3 +326,13 @@ http:
       loadBalancer:
         servers:
           - url: "http://overlord:3001"
+
+    overlord-web:
+      loadBalancer:
+        servers:
+          - url: "http://host.docker.internal:3003"
+
+    crucix:
+      loadBalancer:
+        servers:
+          - url: "http://crucix:3117"

@@ -1,44 +1,54 @@
 ---
-name: OnlyHulls current state
-description: OnlyHulls project status as of 2026-03-30 — scraper pipeline, inventory, architecture decisions, and next steps
+name: OnlyHulls scraper pipeline state
+description: Current inventory (14,759 boats, 13 sources), running jobs, integrity issues, and next steps as of 2026-03-31
 type: project
 ---
 
-## Status: Live at onlyhulls.com, pivoting to content/comparison + marketplace
+## Inventory: 14,759 active boats from 13 sources (2026-03-31 16:00 UTC)
 
-**Inventory (2026-03-30):** 198 active boats from 3 sources
-- Sailboat Listings: 187 boats (primary source, pure FSBO sail)
-- Moorings Brokerage: 7 boats (charter exit fleet cats)
-- Apollo Duck: 4 boats (cruisers, images hotlink-blocked)
-- All fake/sample boats removed on 2026-03-30
+| Source | Boats | Scraper Type | Notes |
+|--------|-------|-------------|-------|
+| Sailboat Listings | 10,645 | Scrapling detail | Bulk 16K done |
+| TheYachtMarket | 3,628 | Scrapling+SSH proxy | Hetzner blocked, uses ElmoServer |
+| Dream Yacht Sales | 97 | Playwright | |
+| Camper & Nicholsons | 89 | Playwright | Superyachts, $15M+ avg |
+| Apollo Duck US | 87 | Playwright | |
+| Catamarans.com | 83 | Scrapling detail | |
+| CatamaranSite | 43 | Playwright | |
+| Denison Yachting | 20 | Scrapling | |
+| Multihull Company | 15 | Playwright | |
+| VI Yacht Broker | 15 | Playwright | |
+| Moorings Brokerage | 14 | Scrapling JSON-LD | |
+| Multihull World | 12 | Playwright | |
+| Boote & Yachten | 11 | Playwright | |
 
-**Scraper Pipeline:**
-- 5 Python scrapers: sailboatlistings, apolloduck, theyachtmarket, catamarans_com, moorings
-- Daily cron at 5:37am UTC via `/root/projects/OnlyHulls/scripts/daily-scrape.sh`
-- Import: `scripts/import-scraped.ts` — ON CONFLICT dedup (source_url unique + make/model/year/location)
-- Freshness: `last_seen_at` bumped on re-scrape, `scripts/expire-stale.ts` marks 14-day-unseen as expired
-- Scraping costs $0 — pure Python regex + HTML parsing, zero LLM tokens
-- Master site directory: `documents/boat-sites-directory.md` (106 sites verified for scrapability)
+## Integrity Issues (2026-03-31 audit)
+- **3,347 boats with no location** (mostly old TYM index-only scrape) → Fix with TYM backfill
+- **3,595 boats with only 1 image** (old TYM scrape got 1 thumbnail) → Fix with TYM backfill
+- **Only 1 boat has a description** → TYM backfill will add descriptions
+- **421 boats with no model** (387 from Sailboatlistings) → Cosmetic, single-name brands
+- **98 short makes** (S2, LM, CS, J) → Real brands, not parse errors
+- **981 no images** → Sellers didn't upload, legitimate
+- **0 duplicate source_urls**, 0 bad prices, 0 missing years/makes → Clean
 
-**Key Architecture Decisions:**
-- Images are hotlinked (just URL strings in boat_media), not copied to S3 — zero storage cost
-- Dual currency: `asking_price` (original) + `asking_price_usd` (converted at import)
-- Source attribution: `source_site`, `source_name`, `source_url` on every imported boat
-- Dashboard routes gated behind auth via `(dashboard)/layout.tsx`
-- Boats page: "Load More" (no pagination), 30/batch, sorted price ascending
-- Sort toggles: Price/Size/Year/Newest, tap to reverse
+## Running Jobs (as of 2026-03-31 ~19:00 UTC)
+- **TYM bulk scrape**: PID 1480813, 500/6000 complete (~8%), routing via ElmoServer SSH. Log: `/tmp/bulk-tym.log`. Batches of 500 with 60s pauses.
+- After TYM bulk: run `--update` mode to backfill existing 3,628 boats with full specs/images/descriptions
 
-**Coolify Deploy:**
-- UUID: `qkggs84cs88o0gww4wc80gwo`
-- API via `localhost:8000` (public URL blocked)
-- Restart: `curl -s -X POST "http://localhost:8000/api/v1/applications/qkggs84cs88o0gww4wc80gwo/restart" -H "Authorization: Bearer $COOLIFY_API_TOKEN"`
-- GH_TOKEN lacks `workflow` scope — can't push .github/workflows/ files
+## Key Infrastructure
+- Daily cron: `37 5 * * *` runs `/root/projects/OnlyHulls/scripts/daily-scrape.sh`
+- TYM scraper auto-detects 503 and switches to ElmoServer (100.89.16.27) via SSH
+- Bulk outputs: `_bulk.json` suffix to avoid daily cron clobbering
+- Import: `scripts/import-scraped.ts` — $500 min, 25ft min, dedup by source_url
+- Upsert mode: `--update` flag for backfilling existing boats
+- Smart tagging: Groq free tier limited to ~525 boats/day
+- Integrity skill: `/root/.claude/skills/scrape-integrity.md`
+- **Data integrity is Gil's top priority** for OnlyHulls — "utmost importance" (2026-03-31)
+- Bug found 2026-03-31: ePropulsion Spirit 1 (electric motor, not a boat) passed 25ft filter → scraper filter tightened
 
-**Pricing Model:**
-- AI matching requires sign-up (free)
-- AI agent continuous search: $10/mo (Plus tier)
-- Seller: Free (1 listing) / Creator $30/mo / Featured $50/mo
-
-**Why:** OnlyHulls pivoted from pure marketplace to content/comparison site on 2026-03-30. Cold-start marketplace problem unsolved — content drives traffic first, marketplace layers on top.
-
-**How to apply:** Always check `documents/boat-sites-directory.md` before adding new scrapers. Use the import pipeline pattern (Python scraper → JSON → import-scraped.ts). Never add LLM calls to scraping — it's $0 and should stay that way.
+## Scraper Files
+All in `/root/projects/OnlyHulls/scraper/`:
+- TYM detail-page scraper with SSH proxy fallback, structured spec extraction
+- Sailboatlistings detail-page scraper with bulk/daily modes
+- 8 Playwright scrapers via `pw_fetch.py` shared context
+- 3 other Scrapling scrapers (catamarans, moorings, denison)
