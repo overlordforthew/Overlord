@@ -9,7 +9,7 @@
  * 5. Self-Observation — analyze session traces
  *
  * Loops 3 (prediction-outcome), 6 (cooperative refinement),
- * 8 (rule evolution) are future work requiring deeper architecture changes.
+ * 8 (rule evolution) are deferred — framework ready, activation pending.
  */
 
 import fs from 'fs/promises';
@@ -218,18 +218,21 @@ export async function generateDailySynthesis() {
     insights: [],
   };
 
-  // Generate insights
-  if (todayFriction.length > 20) {
-    synthesis.insights.push(`High friction day: ${todayFriction.length} events. Check for systemic issues.`);
+  // Generate insights (thresholds lowered to catch more signals)
+  if (todayFriction.length > 3) {
+    synthesis.insights.push(`Elevated friction: ${todayFriction.length} events. Check for systemic issues.`);
   }
   if (todayRegressions.length > 0) {
     synthesis.insights.push(`${todayRegressions.length} new regressions logged. Review avoidance rules.`);
   }
-  if (frictionByType['timeout'] > 3) {
+  if (frictionByType['timeout'] > 1) {
     synthesis.insights.push(`${frictionByType['timeout']} timeouts today — possible performance degradation.`);
   }
-  if (frictionByType['api_error'] > 5) {
+  if (frictionByType['api_error'] > 2) {
     synthesis.insights.push(`${frictionByType['api_error']} API errors — check rate limits or credentials.`);
+  }
+  if (frictionByType['slow_response'] > 2) {
+    synthesis.insights.push(`${frictionByType['slow_response']} slow responses — check model latency or context size.`);
   }
 
   await writeJSON(synthFile, synthesis);

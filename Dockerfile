@@ -72,7 +72,7 @@ COPY package.json ./
 RUN npm install --legacy-peer-deps
 
 # Copy app files
-COPY index.js server.js scheduler.js meta-learning.js router.js session-guard.js heartbeat.js CLAUDE.md traefik-watcher.sh task-store.js state-store.js executor.js policy.js conversation-store.js memory-curator.js memory-consolidator.js work-queue.js ssrf-guard.js usage-tracker.js fix-patterns.js error-watcher.js claude-sdk.js knowledge-base.js predictive-infra.js web-intel.js revenue-intel.js git-reviewer.js client-comms.js bot-fleet.js pulse.js cortex.js skill-learner.js multi-server.js postmortem.js ./
+COPY index.js server.js scheduler.js meta-learning.js router.js session-guard.js heartbeat.js CLAUDE.md traefik-watcher.sh task-store.js state-store.js executor.js policy.js conversation-store.js memory-curator.js memory-consolidator.js work-queue.js ssrf-guard.js usage-tracker.js fix-patterns.js error-watcher.js claude-sdk.js knowledge-base.js predictive-infra.js web-intel.js revenue-intel.js git-reviewer.js client-comms.js bot-fleet.js pulse.js skill-learner.js multi-server.js postmortem.js autonomy-engine.js strategic-patrol.js portfolio-scorecard.js kpi-tracker.js idle-study.js experiment-engine.js evolution-engine.js pattern-miner.js customer-evidence.js decision-journal.js practice-engine.js ./
 
 # Copy lib, skills, and scripts into container
 COPY lib/ ./lib/

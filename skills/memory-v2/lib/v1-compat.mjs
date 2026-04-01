@@ -7,6 +7,35 @@
 import { initSchema } from './schema.mjs';
 import { getDb } from './db.mjs';
 import * as observations from './observations.mjs';
+import { embed, search as vectorSearch, isAvailable as qdrantAvailable } from './embeddings.mjs';
+
+// ── TOKEN BUDGET ────────────────────────────────────────────────────────────
+
+export const TOKEN_BUDGET = {
+  episodic: 1500,    // ~6KB text for memories
+  semantic: 800,     // ~3.2KB for system knowledge
+  conversation: 3000, // ~12KB for recent messages
+  message: 1500,     // ~6KB for current message
+  system: 1200,      // ~4.8KB for system prompt (fixed, not budgeted)
+  total: 8000,       // total context budget
+};
+
+function estimateTokens(text) {
+  return Math.ceil((text || '').length / 4);
+}
+
+function truncateToTokenBudget(items, budget, formatFn) {
+  const result = [];
+  let used = 0;
+  for (const item of items) {
+    const text = formatFn(item);
+    const tokens = estimateTokens(text);
+    if (used + tokens > budget) break;
+    result.push(item);
+    used += tokens;
+  }
+  return { items: result, tokensUsed: used };
+}
 
 // ── INIT ────────────────────────────────────────────────────────────────────
 
@@ -20,7 +49,7 @@ export async function ensureSemanticSchema() {
 
 // ── EPISODIC: storeMemory ────────────────────────────────────────────────────
 
-export async function storeMemory({ jid, content, summary, tags = [], importance = 5, source = 'auto' }) {
+export async function storeMemory({ jid, content, summary, tags = [], importance = 5, source = 'auto', category }) {
   initSchema();
   const db = getDb();
 
@@ -30,6 +59,9 @@ export async function storeMemory({ jid, content, summary, tags = [], importance
   ).get(jid, summary?.slice(0, 255) || content.slice(0, 60));
   if (existing) return existing.id;
 
+  // Derive category from tags if not explicitly provided
+  const resolvedCategory = category || categoryFromTags(tags);
+
   return observations.store({
     jid,
     type: 'episodic',
@@ -38,7 +70,24 @@ export async function storeMemory({ jid, content, summary, tags = [], importance
     tags: Array.isArray(tags) ? tags : [],
     importance: importance / 10, // v1 uses 1-10, v2 uses 0.0-1.0
     source,
+    category: resolvedCategory,
   });
+}
+
+const TAG_CATEGORY_MAP = {
+  'standing-order': 'preference', correction: 'preference', preference: 'preference',
+  rule: 'rule', decision: 'rule',
+  project: 'project', person: 'person',
+  error: 'infrastructure', infrastructure: 'infrastructure',
+  tool: 'tool', pattern: 'pattern', security: 'security',
+};
+
+function categoryFromTags(tags) {
+  if (!Array.isArray(tags) || tags.length === 0) return 'general';
+  for (const tag of tags) {
+    if (TAG_CATEGORY_MAP[tag]) return TAG_CATEGORY_MAP[tag];
+  }
+  return 'general';
 }
 
 export async function storeManyMemories(memories) {
@@ -53,17 +102,17 @@ export async function retrieveMemories(jid, { query = '', limit = 20 } = {}) {
   initSchema();
   const db = getDb();
 
-  // Critical memories (importance >= 0.8, i.e. v1 importance >= 8)
+  // 1. Critical memories (importance >= 0.8) — ALWAYS included
   const critical = db.prepare(
     "SELECT * FROM observations WHERE jid = ? AND status = 'active' AND type = 'episodic' AND importance >= 0.8 ORDER BY importance DESC LIMIT 10"
   ).all(jid);
 
-  // FTS search if query
+  // 2. FTS keyword search
   let ftsRows = [];
   if (query && query.length > 3) {
     try {
       ftsRows = db.prepare(`
-        SELECT o.* FROM observations_fts fts
+        SELECT o.*, fts.rank as fts_rank FROM observations_fts fts
         JOIN observations o ON o.id = fts.rowid
         WHERE observations_fts MATCH ? AND o.jid = ? AND o.status = 'active' AND o.type = 'episodic'
         ORDER BY fts.rank LIMIT ?
@@ -71,23 +120,68 @@ export async function retrieveMemories(jid, { query = '', limit = 20 } = {}) {
     } catch { /* FTS query syntax error — skip */ }
   }
 
-  // Recent
+  // 3. Vector semantic search (NEW — Qdrant)
+  let vectorRows = [];
+  if (query && query.length > 3 && await qdrantAvailable()) {
+    try {
+      const queryVec = await embed(query);
+      if (queryVec) {
+        const filter = { must: [{ key: 'jid', match: { value: jid } }, { key: 'type', match: { value: 'episodic' } }] };
+        const vResults = await vectorSearch(queryVec, limit, filter);
+        // Fetch full rows from SQLite for vector matches
+        for (const vr of vResults) {
+          if (vr.score >= 0.4) { // minimum relevance threshold
+            const row = db.prepare('SELECT * FROM observations WHERE id = ? AND status = ?').get(vr.id, 'active');
+            if (row) vectorRows.push({ ...row, _vectorScore: vr.score });
+          }
+        }
+      }
+    } catch { /* Vector search failed — continue with FTS only */ }
+  }
+
+  // 4. Recent memories
   const recent = db.prepare(
     "SELECT * FROM observations WHERE jid = ? AND status = 'active' AND type = 'episodic' ORDER BY last_accessed DESC, importance DESC LIMIT ?"
   ).all(jid, limit);
 
-  // Merge, dedup, convert to v1 format
+  // 5. Merge + hybrid re-rank
   const seen = new Set();
-  const merged = [];
-  for (const row of [...critical, ...ftsRows, ...recent]) {
-    if (!seen.has(row.id)) {
-      seen.add(row.id);
-      merged.push(toEpisodicFormat(row));
-    }
+  const candidates = [];
+
+  // Add all sources
+  for (const row of critical) {
+    if (!seen.has(row.id)) { seen.add(row.id); candidates.push({ ...row, _source: 'critical' }); }
+  }
+  for (const row of ftsRows) {
+    if (!seen.has(row.id)) { seen.add(row.id); candidates.push({ ...row, _source: 'fts' }); }
+    else { const c = candidates.find(c => c.id === row.id); if (c) c._ftsRank = row.fts_rank; }
+  }
+  for (const row of vectorRows) {
+    if (!seen.has(row.id)) { seen.add(row.id); candidates.push({ ...row, _source: 'vector' }); }
+    else { const c = candidates.find(c => c.id === row.id); if (c) c._vectorScore = row._vectorScore; }
+  }
+  for (const row of recent) {
+    if (!seen.has(row.id)) { seen.add(row.id); candidates.push({ ...row, _source: 'recent' }); }
   }
 
-  // Update access stats
+  // Hybrid scoring: vector 40%, importance 30%, keyword 15%, recency 10%, access 5%
   const now = Date.now();
+  const scored = candidates.map(c => {
+    let score = 0;
+    score += (c._vectorScore || 0) * 40;              // vector similarity (0-1 * 40)
+    score += (c.importance || 0.5) * 30;                // importance (0-1 * 30)
+    if (c._ftsRank) score += Math.min(15, -c._ftsRank); // FTS rank (negative = better)
+    const age = now - (c.created_at || 0);
+    if (age < 7 * 86400000) score += 10;                // recency bonus
+    if ((c.access_count || 0) > 5) score += 5;          // frequently accessed
+    if (c._source === 'critical') score += 20;           // critical always boosted
+    return { ...c, _hybridScore: score };
+  });
+
+  scored.sort((a, b) => b._hybridScore - a._hybridScore);
+  const merged = scored.slice(0, limit).map(toEpisodicFormat);
+
+  // Update access stats
   const updateStmt = db.prepare('UPDATE observations SET access_count = access_count + 1, last_accessed = ? WHERE id = ?');
   for (const m of merged) updateStmt.run(now, m.id);
 
@@ -102,14 +196,35 @@ export function formatMemoriesForPrompt(memories) {
   const critical = memories.filter(m => m.importance >= 8);
   const other = memories.filter(m => m.importance < 8);
   const lines = [];
+  let tokensUsed = 0;
 
+  // Critical facts always included (standing orders, corrections)
   if (critical.length) {
     lines.push('## Standing Orders & Critical Facts');
-    for (const m of critical) lines.push(`- ${m.content}`);
+    tokensUsed += estimateTokens(lines[0]);
+    for (const m of critical) {
+      const line = `- ${m.content}`;
+      tokensUsed += estimateTokens(line);
+      lines.push(line);
+    }
   }
+
+  // Other facts — budget-aware
   if (other.length) {
     lines.push('## Context');
-    for (const m of other.slice(0, 15)) lines.push(`- ${m.content}`);
+    tokensUsed += estimateTokens('## Context');
+    let included = 0;
+    for (const m of other) {
+      const line = `- ${m.content}`;
+      const lineTokens = estimateTokens(line);
+      if (tokensUsed + lineTokens > TOKEN_BUDGET.episodic) {
+        lines.push(`- [...${other.length - included} more items truncated]`);
+        break;
+      }
+      lines.push(line);
+      tokensUsed += lineTokens;
+      included++;
+    }
   }
 
   return lines.join('\n');
@@ -289,30 +404,80 @@ export async function getSemanticContext(query) {
   if (!query || query.length < 3) return '';
 
   try {
-    let results = await searchSemantic(query, { limit: 10 });
+    // FTS results
+    let ftsResults = await searchSemantic(query, { limit: 10 });
 
-    // If few results, try individual words
-    if (results.length < 3) {
+    // If few FTS results, try individual words
+    if (ftsResults.length < 3) {
       const stopWords = new Set(['this','that','what','with','from','have','been','will','your','they','them','than','when','where','which','there','their','about','would','could','should','these','those','being','other','after','before','between','under','above','into','each','some','more','also','just','only']);
       const words = query.toLowerCase().split(/\W+/).filter(w => w.length >= 4 && !stopWords.has(w));
-      const seen = new Set(results.map(r => r.id));
+      const seen = new Set(ftsResults.map(r => r.id));
       for (const word of words.slice(0, 3)) {
         const extra = await searchSemantic(word, { limit: 5 });
         for (const r of extra) {
-          if (!seen.has(r.id)) { seen.add(r.id); results.push(r); }
+          if (!seen.has(r.id)) { seen.add(r.id); ftsResults.push(r); }
         }
       }
-      results.sort((a, b) => (b.importance || 0) - (a.importance || 0));
-      results = results.slice(0, 10);
     }
 
+    // Vector search (NEW)
+    let vectorResults = [];
+    if (await qdrantAvailable()) {
+      try {
+        const queryVec = await embed(query);
+        if (queryVec) {
+          const filter = { must: [{ key: 'type', match: { value: 'semantic' } }] };
+          const vResults = await vectorSearch(queryVec, 10, filter);
+          initSchema();
+          const db = getDb();
+          for (const vr of vResults) {
+            if (vr.score >= 0.4) {
+              const row = db.prepare('SELECT * FROM observations WHERE id = ? AND status = ?').get(vr.id, 'active');
+              if (row) vectorResults.push({ ...toSemanticFormat(row), _vectorScore: vr.score });
+            }
+          }
+        }
+      } catch { /* vector search failed — continue with FTS */ }
+    }
+
+    // Merge FTS + vector results
+    const seen = new Set();
+    const merged = [];
+    for (const r of [...ftsResults, ...vectorResults]) {
+      if (!seen.has(r.id)) {
+        seen.add(r.id);
+        merged.push(r);
+      } else {
+        // If already seen, merge vector score
+        const existing = merged.find(m => m.id === r.id);
+        if (existing && r._vectorScore) existing._vectorScore = r._vectorScore;
+      }
+    }
+
+    // Hybrid re-rank
+    merged.sort((a, b) => {
+      const scoreA = (a._vectorScore || 0) * 40 + (a.importance || 0.5) * 30;
+      const scoreB = (b._vectorScore || 0) * 40 + (b.importance || 0.5) * 30;
+      return scoreB - scoreA;
+    });
+
+    const results = merged.slice(0, 10);
     if (!results.length) return '';
 
+    // Token budget enforcement
     const lines = ['## System Knowledge'];
+    let tokensUsed = estimateTokens(lines[0]);
     for (const r of results) {
       const prefix = r.importance >= 0.8 ? '**' : '';
       const suffix = r.importance >= 0.8 ? '**' : '';
-      lines.push(`- ${prefix}[${r.category}/${r.topic}]${suffix} ${r.content}`);
+      const line = `- ${prefix}[${r.category}/${r.topic}]${suffix} ${r.content}`;
+      const lineTokens = estimateTokens(line);
+      if (tokensUsed + lineTokens > TOKEN_BUDGET.semantic) {
+        lines.push(`- [...${results.length - lines.length + 1} more items truncated by token budget]`);
+        break;
+      }
+      lines.push(line);
+      tokensUsed += lineTokens;
     }
     return lines.join('\n');
   } catch (err) {

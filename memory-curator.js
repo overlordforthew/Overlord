@@ -1,10 +1,38 @@
 /**
- * Memory Curator — extracts key facts from conversations and scores relevance.
- * Uses OpenRouter free models to keep cost at zero.
+ * Memory Curator v3 — Opus-powered extraction with vector dedup and crash safety.
+ *
+ * Changes from v2:
+ * - Uses Claude Opus 4.6 via OpenRouter (not free models)
+ * - Real-time vector dedup via Qdrant before storing
+ * - Crash-resilient: pending extractions tracked, flushed on SIGTERM
+ * - Standing orders and corrections auto-detected with high importance
  */
 
 import { storeManyMemories, storeMemory, saveSemantic } from './skills/memory-v2/lib/v1-compat.mjs';
-import { callOpenRouter, callWithFallback, FREE_FALLBACK_CHAINS } from './router.js';
+import { embed, dedupCheck, upsert, isAvailable, observationToPayload } from './skills/memory-v2/lib/embeddings.mjs';
+import { getDb } from './skills/memory-v2/lib/db.mjs';
+import { initSchema } from './skills/memory-v2/lib/schema.mjs';
+
+const OPENROUTER_KEY = process.env.OPENROUTER_KEY || '';
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const EXTRACT_MODEL = 'anthropic/claude-opus-4';
+
+// Track in-flight extractions for crash safety
+const pendingExtractions = new Set();
+
+// Derive category from episodic tags for proper classification
+const TAG_TO_CATEGORY = {
+  'standing-order': 'preference', correction: 'preference', preference: 'preference',
+  rule: 'rule', decision: 'rule',
+  project: 'project', person: 'person',
+  error: 'infrastructure', infrastructure: 'infrastructure',
+  tool: 'tool', pattern: 'pattern', security: 'security',
+};
+function deriveCategoryFromTags(tags) {
+  if (!Array.isArray(tags) || tags.length === 0) return 'general';
+  for (const t of tags) { if (TAG_TO_CATEGORY[t]) return TAG_TO_CATEGORY[t]; }
+  return 'general';
+}
 
 const EXTRACT_SYSTEM = `You are the memory extraction engine for Overlord, an AI assistant that manages Gil's server and projects.
 Your job: extract durable, actionable knowledge from conversations that will improve future interactions.
@@ -12,12 +40,12 @@ Your job: extract durable, actionable knowledge from conversations that will imp
 Extract TWO types of memories:
 
 1. EPISODIC — Per-person knowledge that shapes how Overlord interacts with them:
-   - **Decisions made** — "Gil decided to use Stripe for NamiBarden payments" (not "Gil is thinking about payments")
+   - **Standing orders** — "Always X", "Never Y", "From now on Z" → tag: "standing-order", importance 9-10
+   - **Corrections** — User corrects bot behavior, says "no", "don't", "stop doing X" → tag: "correction", importance 9
+   - **Decisions made** — "Gil decided to use Stripe for NamiBarden payments" (not "Gil is thinking about")
    - **Preferences revealed** — "Gil wants terse responses, no trailing summaries"
    - **Relationships & people** — "Emiel is Gil's Dutch friend, potential CTO for MasterCommander"
-   - **Standing orders** — "Always run codex review after significant commits"
    - **Project context** — "NamiBarden targets Japanese-first audience, English secondary"
-   - **Corrections** — "Gil said don't mock the database in integration tests"
 
 2. SEMANTIC — Global system knowledge (tools, APIs, configs, patterns):
    - **New capabilities discovered** — tool installed, API enabled, config changed
@@ -26,10 +54,10 @@ Extract TWO types of memories:
 
 QUALITY RULES:
 - Extract the WHY, not just the WHAT. "Gil chose Stripe because the audience is 99% Japanese LINE users" > "Gil chose Stripe"
-- Be specific and actionable. "Nami's hero copy approved: 「結果を出してきた。でも、なぜか満たされない。」" > "Hero copy was discussed"
-- Include names, URLs, versions, flags — concrete details that a future AI needs
+- Be specific and actionable. Include names, URLs, versions, flags — concrete details
 - If a fact UPDATES something in existing_memories, extract it with the same summary so it overwrites
 - If a fact is already in existing_memories and unchanged, DO NOT extract it
+- Standing orders and corrections are the HIGHEST priority — never miss them
 
 DO NOT extract:
 - Greetings, small talk, or one-off questions
@@ -43,13 +71,13 @@ Output ONLY a valid JSON object:
     {
       "content": "Full sentence with specific details and context",
       "summary": "Short label under 60 chars (used as dedup key)",
-      "tags": ["preference"|"project"|"person"|"decision"|"rule"|"fact"|"error"|"boat"|"content"|"correction"],
+      "tags": ["standing-order"|"correction"|"preference"|"project"|"person"|"decision"|"rule"|"fact"|"error"|"boat"|"content"],
       "importance": 1-10
     }
   ],
   "semantic": [
     {
-      "category": "tool"|"project"|"infrastructure"|"security"|"preference"|"person"|"pattern"|"integration",
+      "category": "tool"|"project"|"infrastructure"|"security"|"preference"|"person"|"pattern"|"integration"|"rule",
       "topic": "specific subject (e.g., 'gws CLI', 'namibarden SEO')",
       "content": "Full description with concrete details",
       "importance": 0.1-1.0,
@@ -58,20 +86,63 @@ Output ONLY a valid JSON object:
   ]
 }
 
-Importance guide (episodic): 9-10: Standing orders/rules, 7-8: Decisions/strong preferences, 5-6: Useful context, 3-4: Minor details
+Importance guide (episodic — be strict):
+  9-10: Standing orders, corrections, explicit rules. These PERSIST forever.
+  7-8: Firm decisions or strong preferences explicitly stated. Max 1-2 per extraction.
+  5-6: Useful context, project details, people info. This is the DEFAULT bucket.
+  3-4: Minor details, one-off mentions.
 Importance guide (semantic): 0.8-1.0: Critical tools/infra, 0.5-0.7: Useful patterns, 0.3-0.4: Minor discoveries
 
 Return {"episodic":[],"semantic":[]} if nothing new. Do NOT wrap in markdown code fences.`;
 
 /**
+ * Call Opus via OpenRouter for extraction.
+ */
+async function callOpus(systemPrompt, userPrompt, maxTokens = 1500) {
+  if (!OPENROUTER_KEY) throw new Error('OPENROUTER_KEY not set');
+
+  const res = await fetch(OPENROUTER_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENROUTER_KEY}`,
+      'HTTP-Referer': 'https://namibarden.com',
+      'X-Title': 'Overlord Memory Curator',
+    },
+    body: JSON.stringify({
+      model: EXTRACT_MODEL,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      max_tokens: maxTokens,
+      temperature: 0.1,
+      response_format: { type: 'json_object' },
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => '');
+    throw new Error(`OpenRouter ${res.status}: ${err.slice(0, 200)}`);
+  }
+
+  const data = await res.json();
+  return data?.choices?.[0]?.message?.content || '';
+}
+
+/**
  * Extract memorable facts from a conversation exchange.
- * Runs async after response — does NOT block the reply.
+ * Uses Opus for extraction quality. Includes vector dedup before storing.
  */
 export async function extractAndStore(jid, { userMessage, assistantResponse, existingMemories = '' }) {
-  try {
-    if (!userMessage || userMessage.length < 15) return 0; // Skip tiny messages
+  const extractionId = `${jid}-${Date.now()}`;
+  pendingExtractions.add(extractionId);
 
-    // Build a concise existing memory digest for dedup
+  try {
+    if (!userMessage || userMessage.length < 15) return 0;
+
+    // Build existing memory digest for dedup
     const memDigest = existingMemories
       .split('\n')
       .filter(l => l.trim().startsWith('-'))
@@ -84,42 +155,33 @@ ${memDigest.slice(0, 2500) || '(none yet)'}
 </existing_memories>
 
 <conversation>
-User: ${userMessage.slice(0, 3000)}
-Assistant: ${assistantResponse.slice(0, 3000)}
+User: ${userMessage.slice(0, 4000)}
+Assistant: ${assistantResponse.slice(0, 4000)}
 </conversation>
 
-Extract new or updated facts. If a fact updates an existing memory, use the SAME summary so it overwrites. Return {"episodic":[],"semantic":[]} if nothing new.`;
+Extract new or updated facts. Return {"episodic":[],"semantic":[]} if nothing new.`;
 
-    // Use free models — this is background work, doesn't need premium
+    // Use Opus via OpenRouter for maximum extraction quality
     let result;
     try {
-      const { response } = await callWithFallback(
-        FREE_FALLBACK_CHAINS.triage || ['step-flash', 'gemini-flash'],
-        EXTRACT_SYSTEM,
-        prompt,
-        1200,
-        { jsonMode: true }
-      );
-      result = response;
+      result = await callOpus(EXTRACT_SYSTEM, prompt);
     } catch (err) {
-      console.error('[memory-curator] All free models failed:', err.message);
+      console.error('[memory-curator] Opus extraction failed:', err.message);
       return 0;
     }
 
     if (!result || typeof result !== 'string') return 0;
 
-    // Parse JSON — handle possible markdown fences or preamble
+    // Parse JSON
     let clean = result.trim();
     clean = clean.replace(/^```(?:json)?\s*\n?/m, '').replace(/\n?```\s*$/m, '');
 
     let parsed;
-    // Try parsing as new format (object with episodic+semantic)
     const objMatch = clean.match(/\{[\s\S]*\}/);
     if (objMatch) {
       try { parsed = JSON.parse(objMatch[0]); } catch { /* fall through */ }
     }
 
-    // Fallback: try old format (plain array = all episodic)
     if (!parsed) {
       const arrayMatch = clean.match(/\[[\s\S]*\]/);
       if (!arrayMatch) return 0;
@@ -136,64 +198,145 @@ Extract new or updated facts. If a fact updates an existing memory, use the SAME
     const semanticFacts = Array.isArray(parsed.semantic) ? parsed.semantic : [];
     let stored = 0;
 
-    // Store episodic memories (per-JID)
-    const memories = episodicFacts
-      .filter(f => f.content && f.content.length > 10)
-      .slice(0, 5)
-      .map(f => ({
-        jid,
-        content: String(f.content),
-        summary: String(f.summary || f.content).slice(0, 60),
-        tags: Array.isArray(f.tags) ? f.tags : ['fact'],
-        importance: Math.min(10, Math.max(1, parseInt(f.importance) || 5)),
-        source: 'auto',
-      }));
+    // ── EPISODIC with vector dedup ──
+    for (const f of episodicFacts.filter(f => f.content?.length > 10).slice(0, 5)) {
+      const importance = Math.min(10, Math.max(1, parseInt(f.importance) || 5));
+      const tags = Array.isArray(f.tags) ? f.tags : ['fact'];
 
-    if (memories.length) {
-      await storeManyMemories(memories);
-      stored += memories.length;
+      // Auto-elevate standing orders and corrections
+      const isStandingOrder = tags.includes('standing-order') || tags.includes('correction');
+      const finalImportance = isStandingOrder ? Math.max(importance, 9) : importance;
+
+      // Vector dedup: check if similar memory already exists for this JID
+      const text = String(f.content);
+      const vector = await embed(text);
+      if (vector) {
+        const filter = { must: [{ key: 'jid', match: { value: jid } }, { key: 'type', match: { value: 'episodic' } }] };
+        const existingId = await dedupCheck(vector, 0.85, filter);
+        if (existingId) {
+          // Update existing instead of creating new
+          try {
+            initSchema();
+            const db = getDb();
+            db.prepare(`
+              UPDATE observations SET narrative = ?, importance = MAX(importance, ?), updated_at = ?, tags = ?
+              WHERE id = ? AND status = 'active'
+            `).run(text, finalImportance / 10, Date.now(), JSON.stringify(tags), existingId);
+            // Update Qdrant payload
+            const category = deriveCategoryFromTags(tags);
+            await upsert(existingId, vector, { type: 'episodic', category, title: String(f.summary || text).slice(0, 60), importance: finalImportance / 10, jid, status: 'active' });
+            stored++;
+          } catch (err) {
+            console.error('[memory-curator] Dedup update failed:', err.message);
+          }
+          continue;
+        }
+      }
+
+      // Derive category from tags
+      const category = deriveCategoryFromTags(tags);
+
+      // No duplicate — store new
+      const id = await storeMemory({
+        jid,
+        content: text,
+        summary: String(f.summary || text).slice(0, 60),
+        tags,
+        importance: finalImportance,
+        source: 'auto',
+        category,
+      });
+
+      // Embed and upsert to Qdrant
+      if (id && vector) {
+        await upsert(id, vector, { type: 'episodic', category, title: String(f.summary || text).slice(0, 60), importance: finalImportance / 10, jid, status: 'active' });
+      }
+      stored++;
     }
 
-    // Store semantic memories (global system knowledge)
-    const semanticToStore = semanticFacts
-      .filter(f => f.content && f.category && f.topic && f.content.length > 10)
-      .slice(0, 3);
+    // ── SEMANTIC with vector dedup ──
+    for (const sf of semanticFacts.filter(f => f.content && f.category && f.topic && f.content.length > 10).slice(0, 3)) {
+      const importance = Math.min(1.0, Math.max(0.1, parseFloat(sf.importance) || 0.5));
+      const text = `[${sf.category}] ${sf.topic}: ${sf.content}`;
 
-    for (const sf of semanticToStore) {
+      // Vector dedup for semantic
+      const vector = await embed(text);
+      if (vector) {
+        const filter = { must: [{ key: 'type', match: { value: 'semantic' } }] };
+        const existingId = await dedupCheck(vector, 0.85, filter);
+        if (existingId) {
+          // Update existing semantic memory
+          try {
+            initSchema();
+            const db = getDb();
+            db.prepare(`
+              UPDATE observations SET narrative = ?, importance = MAX(importance, ?), updated_at = ?, tags = ?
+              WHERE id = ? AND status = 'active'
+            `).run(String(sf.content), importance, Date.now(), JSON.stringify(sf.tags || []), existingId);
+            await upsert(existingId, vector, { type: 'semantic', category: String(sf.category), title: String(sf.topic), importance, jid: '', status: 'active' });
+            stored++;
+          } catch (err) {
+            console.error('[memory-curator] Semantic dedup update failed:', err.message);
+          }
+          continue;
+        }
+      }
+
+      // No duplicate — store new
       try {
-        await saveSemantic({
+        const id = await saveSemantic({
           category: String(sf.category),
           topic: String(sf.topic),
           content: String(sf.content),
-          importance: Math.min(1.0, Math.max(0.1, parseFloat(sf.importance) || 0.5)),
+          importance,
           tags: Array.isArray(sf.tags) ? sf.tags : [],
           source: 'observed',
         });
+        if (id && vector) {
+          await upsert(id, vector, { type: 'semantic', category: String(sf.category), title: String(sf.topic), importance, jid: '', status: 'active' });
+        }
         stored++;
       } catch (err) {
         console.error('[memory-curator] Semantic store failed:', err.message);
       }
     }
 
-    // Fire-and-forget: also store in mem0ai for vector search
     if (stored > 0) {
-      storeMem0(jid, userMessage, assistantResponse).catch(() => {});
+      console.log(`[memory-curator] Extracted ${stored} facts from ${jid} (Opus)`);
     }
 
     return stored;
   } catch (err) {
     console.error('[memory-curator] Extract error:', err.message);
     return 0;
+  } finally {
+    pendingExtractions.delete(extractionId);
   }
 }
 
-// mem0ai secondary memory layer — vector-based semantic search
+/**
+ * Flush all pending extractions. Called on SIGTERM for crash safety.
+ * Returns when all in-flight extractions complete (max 10s).
+ */
+export async function flushPendingExtractions() {
+  if (pendingExtractions.size === 0) return;
+  console.log(`[memory-curator] Flushing ${pendingExtractions.size} pending extractions...`);
+  // Give extractions up to 10 seconds to complete
+  const deadline = Date.now() + 10_000;
+  while (pendingExtractions.size > 0 && Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 200));
+  }
+  if (pendingExtractions.size > 0) {
+    console.warn(`[memory-curator] ${pendingExtractions.size} extractions still pending at shutdown`);
+  }
+}
+
+// Legacy mem0ai support — kept for backward compatibility
 let _mem0 = null;
 async function getMem0() {
   if (_mem0) return _mem0;
   try {
     const { MemoryClient } = await import('mem0ai');
-    // Use mem0 cloud if API key available, otherwise skip
     if (!process.env.MEM0_API_KEY) return null;
     _mem0 = new MemoryClient({ apiKey: process.env.MEM0_API_KEY });
     return _mem0;
@@ -202,20 +345,4 @@ async function getMem0() {
   }
 }
 
-async function storeMem0(jid, userMessage, assistantResponse) {
-  try {
-    const mem0 = await getMem0();
-    if (!mem0) return;
-    const userId = jid.split('@')[0].replace(/[^a-zA-Z0-9]/g, '_');
-    await mem0.add([
-      { role: 'user', content: (userMessage || '').slice(0, 2000) },
-      { role: 'assistant', content: (assistantResponse || '').slice(0, 2000) },
-    ], { user_id: userId });
-  } catch (err) {
-    console.error('[mem0] Background store failed:', err.message);
-  }
-}
-
-export { getMem0 };
-
-// scoreRelevance moved to skills/memory-v2/lib/v1-compat.mjs
+export { getMem0, flushPendingExtractions as flush };

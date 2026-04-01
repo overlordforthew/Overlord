@@ -62,6 +62,7 @@ function buildRuleSummary(group) {
 
   return {
     type: 'config',
+    category: 'infrastructure',
     session_id: group.session_id,
     title: `Auto-compressed: ${project} session (${group.events.length} events)`,
     narrative: `Autonomous session ${group.session_id.slice(0, 8)} on ${project}. Tools: ${toolList}. Time: ${first} to ${last}.`,
@@ -116,8 +117,10 @@ Return ONLY valid JSON:
     const parsed = JSON.parse(jsonMatch[0]);
     if (!parsed.title || !parsed.narrative) return null;
 
+    const typeToCategory = { config: 'infrastructure', discovery: 'discovery', feature: 'feature', bugfix: 'bugfix' };
     return {
       type: parsed.type || 'config',
+      category: typeToCategory[parsed.type] || 'infrastructure',
       session_id: group.session_id,
       title: parsed.title.slice(0, 200),
       narrative: parsed.narrative.slice(0, 500),
@@ -190,6 +193,7 @@ function run() {
 
     const batchObs = {
       type: 'config',
+      category: 'infrastructure',
       title: `Auto-compressed: ${sessionCount} small sessions (${smallEvents.length} events)`,
       narrative: `Batch of ${sessionCount} short autonomous sessions with <5 events each. Tools: ${toolList}.`,
       facts: [`${smallEvents.length} events across ${sessionCount} sessions`, `Tools: ${toolList}`],

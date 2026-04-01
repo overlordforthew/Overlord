@@ -12,6 +12,8 @@ import { spawn } from 'child_process';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import pino from 'pino';
+import { logRegression, logFriction } from './meta-learning.js';
+import { recordGap } from './pulse.js';
 
 const execAsync = promisify(exec);
 const logger = pino({ level: 'info' });
@@ -24,6 +26,22 @@ const COOLDOWN_MS = 10 * 60 * 1000;
 const IGNORED_CONTAINERS = new Set([
   'coolify-sentinel', // Coolify's own health check restarter
 ]);
+
+// Known project containers — only alert on containers we actually manage
+const KNOWN_PREFIXES = [
+  'overlord', 'namibarden', 'surfababe', 'mastercommander', 'lumina',
+  'onlyhulls', 'shannon', 'seneca', 'coolify', 'beszel', 'glances',
+  'qdrant', 'searxng', 'claude-proxy', 'hl-dashboard', 'lightpanda',
+];
+
+function isKnownContainer(name) {
+  // Match known prefixes (e.g. "overlord", "overlord-db", "lumina-app-1")
+  if (KNOWN_PREFIXES.some(p => name.startsWith(p))) return true;
+  // Match Coolify-deployed containers (UUID-style names)
+  if (/^[a-z0-9]{24,}-\d+$/.test(name)) return true;
+  if (/^(app|db)-[a-z0-9]{24,}-\d+$/.test(name)) return true;
+  return false;
+}
 
 let createRepairTask = null; // Injected callback
 let sockRef = null;
@@ -70,7 +88,12 @@ export function watchDockerEvents() {
       const exitCode = parseInt(parts[2]) || 0;
 
       if (!container || IGNORED_CONTAINERS.has(container)) continue;
+      if (!isKnownContainer(container)) {
+        logger.info({ container, event, exitCode }, 'Ignoring unknown/ephemeral container');
+        continue;
+      }
       if (exitCode === 0) continue; // Normal shutdown, not a crash
+      if (exitCode === 143) continue; // SIGTERM — intentional stop (Coolify deploys, manual stop), not a crash
       if (isOnCooldown(container)) continue;
 
       // Check if container self-recovers within 30s before creating a task
@@ -88,6 +111,11 @@ export function watchDockerEvents() {
 
         setCooldown(container);
         logger.warn({ container, event, exitCode }, 'Container crash detected, creating repair task');
+
+        // Feed learning systems
+        logRegression('infrastructure', `Container ${container} crashed (${event}, exit ${exitCode})`, null, `Monitor ${container} health and restart triggers`).catch(() => {});
+        recordGap('infrastructure', `Container ${container} crash: ${event}`, `Exit code ${exitCode}`);
+        logFriction('container_crash', `${container} ${event} exit=${exitCode}`, 0).catch(() => {});
 
         try {
           await createRepairTask({
@@ -159,6 +187,11 @@ export async function checkTraefik5xx() {
         setCooldown(key);
 
         logger.warn({ backend, status, count }, 'Traefik 5xx spike detected');
+
+        // Feed learning systems
+        logRegression('infrastructure', `5xx spike: ${backend} ${count}x HTTP ${status}`, null, `Monitor ${backend} health`).catch(() => {});
+        recordGap('performance', `Backend ${backend} 5xx spike`, `${count}x HTTP ${status} in 2min`);
+        logFriction('5xx_spike', `${backend} ${count}x ${status}`, 0).catch(() => {});
 
         await createRepairTask({
           title: `Auto-repair: ${backend} 5xx spike (${count}x HTTP ${status})`,

@@ -69,12 +69,15 @@ import {
   formatStandingOrders, formatStandingOrdersList,
 } from './state-store.js';
 import { executeTaskAutonomously, scheduleVerification } from './executor.js';
+import { resolveProposal, getPendingProposals } from './autonomy-engine.js';
+import { startExperiment } from './experiment-engine.js';
+import { evolve as runEvolution } from './evolution-engine.js';
 import {
   ensureSchema as ensureMemorySchema, retrieveMemories, formatMemoriesForPrompt,
   seedFromLegacyFile, storeMemory, listMemories, deleteMemory, clearMemories,
   getMemoryStats, scoreRelevance, getSemanticContext,
 } from './skills/memory-v2/lib/v1-compat.mjs';
-import { extractAndStore } from './memory-curator.js';
+import { extractAndStore, flushPendingExtractions } from './memory-curator.js';
 import { heavyQueue, spawnWithMemoryLimit, getMemoryLimit, shouldQueue, getMemoryPressure, withGlobalClaudeLock } from './work-queue.js';
 import { initUsageTracker, logUsage, getTodayUsage, getWeekUsage, getCostTrend, formatCostReport } from './usage-tracker.js';
 import { askClaudeSDK, isSDKEnabled, loadSDK } from './claude-sdk.js';
@@ -85,7 +88,7 @@ import { formatRevenueDashboard } from './revenue-intel.js';
 import { reviewProject } from './git-reviewer.js';
 import { buildDraft, savePendingDraft, formatDraftPreview, formatPendingDrafts, getPendingDraft, removePendingDraft, sendDraft, getTemplateNames } from './client-comms.js';
 import { getFleetStatus, formatFleetStatus } from './bot-fleet.js';
-import { formatSkillsList, formatRegistry, detectCapabilityGap, buildSkillAcquisitionPrompt, markSkillInProgress, record as pulseRecord, check as pulseCheck, dashboard as pulseDashboard } from './pulse.js';
+import { formatSkillsList, formatRegistry, detectCapabilityGap, buildSkillAcquisitionPrompt, markSkillInProgress, record as pulseRecord, check as pulseCheck, dashboard as pulseDashboard, recordGap, writeAnnotation } from './pulse.js';
 import { getAllServersStatus, formatAllServersStatus, runRemoteCommand, getServerNames } from './multi-server.js';
 import { searchPostmortems, formatPostmortemList } from './postmortem.js';
 
@@ -250,7 +253,10 @@ async function searchWeb(query, { limit = 5, engines = '', categories = 'general
     const params = new URLSearchParams({ q: query, format: 'json' });
     if (engines) params.set('engines', engines);
     if (categories) params.set('categories', categories);
-    const resp = await fetch(`http://searxng:8080/search?${params}`, { signal: AbortSignal.timeout(15000) });
+    const resp = await fetch(`http://searxng:8080/search?${params}`, {
+      signal: AbortSignal.timeout(15000),
+      headers: { 'X-Real-IP': '127.0.0.1' },
+    });
     if (!resp.ok) return [];
     const data = await resp.json();
     return (data.results || []).slice(0, limit).map(r => ({
@@ -303,7 +309,7 @@ const CONFIG = {
   claudePath: process.env.CLAUDE_PATH || 'claude',
   claudeModel: process.env.CLAUDE_MODEL || '',
   routerMode: process.env.ROUTER_MODE || 'alpha',
-  maxResponseTime: 300_000,  // 5 min — matches session guard timeout; longer tasks should be done from Claude Code
+  maxResponseTime: 480_000,  // 8 min — Claude with tool use (file reads, greps) needs more than 5 min for complex tasks
   chatResponseTimeout: 300_000, // 5 min — matched to maxResponseTime
   simpleResponseTimeout: 180_000, // 3 min — bumped from 2 min; Opus with tool use needs breathing room even for light tasks
 
@@ -325,7 +331,7 @@ const CONFIG = {
   groupTriggerWords: ['claude', 'bot', 'ai', 'hey claude', 'overlord', 'sage'],
 
   // Message batching: wait this long for more messages before responding
-  batchWindowMs: 2000,
+  batchWindowMs: 800,
 
   // Rolling context: how many recent messages to keep per chat
   contextWindowSize: 30,
@@ -831,6 +837,35 @@ async function generateKokoroTTS(text, voice = KOKORO_DEFAULT_VOICE) {
 }
 
 // ============================================================
+// XTTS-v2 VOICE CLONING (self-hosted on ElmoServer)
+// ============================================================
+
+const XTTS_API_URL = process.env.XTTS_API_URL || 'http://100.89.16.27:8020';
+
+async function generateVoiceClone(text, speaker = 'gil', language = 'en') {
+  const outFile = `/tmp/xtts_${Date.now()}.wav`;
+  try {
+    const resp = await fetch(`${XTTS_API_URL}/tts_to_audio/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, speaker_wav: speaker, language }),
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!resp.ok) {
+      const errText = await resp.text();
+      logger.error({ status: resp.status, err: errText }, 'XTTS API error');
+      return null;
+    }
+    const buffer = Buffer.from(await resp.arrayBuffer());
+    await fs.writeFile(outFile, buffer);
+    return outFile;
+  } catch (err) {
+    logger.error({ err: err.message }, 'XTTS voice clone generation failed');
+    return null;
+  }
+}
+
+// ============================================================
 // DEPLOY HELPERS
 // ============================================================
 
@@ -1098,6 +1133,8 @@ async function autoDeployIfChanged(profile, chatJid, sock) {
         }
       } else {
         pulseRecord(`deploy:${projName}`, 'down', result.error, ['broken-script']);
+        recordGap('skill', `Deploy failed: ${projName}`, result.error?.substring(0, 200));
+        writeAnnotation(`deploy:${projName}`, `Failed ${new Date().toISOString().split('T')[0]}: ${result.error?.substring(0, 100)}`, 'deployment');
         logger.error(`❌ Auto-deploy failed for ${projName}: ${result.error}`);
         // Always notify on failures so the user knows something went wrong
         await sock.sendMessage(chatJid, { text: `⚠️ Changes saved to git but deploy had an issue: ${result.error}` });
@@ -2326,6 +2363,36 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
   // Build system prompt based on role
   let sysPrompt;
 
+  // Load CLI activity for admin context (what Gil did in Claude Code recently)
+  let cliActivityContext = '';
+  if (isAdminUser) {
+    try {
+      const raw = readFileSync('/root/overlord/data/cli-activity.json', 'utf8');
+      const events = JSON.parse(raw);
+      const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
+      const recent = events.filter(e => e.ts > twoHoursAgo);
+      if (recent.length > 0) {
+        const summary = recent.map(e => `${e.tool}${e.project ? ` [${e.project}]` : ''}: ${(e.summary || '').slice(0, 80)}`).join('; ');
+        cliActivityContext = `CLI ACTIVITY (last 2h): ${summary}`;
+      }
+    } catch { /* no activity or file missing */ }
+
+    // Load patrol context for ambient awareness
+    try {
+      const patrolRaw = readFileSync('/root/overlord/data/patrol-latest.json', 'utf8');
+      const patrol = JSON.parse(patrolRaw);
+      const patrolAge = Date.now() - new Date(patrol.timestamp).getTime();
+      if (patrolAge < 24 * 60 * 60 * 1000 && patrol.totalFindings > 0) {
+        const items = [];
+        for (const f of (patrol.autoFixed || [])) items.push(`✅ ${f.project || 'system'}: ${f.detail}`);
+        for (const f of (patrol.proposed || [])) items.push(`📋 #${f.proposalId}: ${f.detail}`);
+        if (items.length > 0) {
+          cliActivityContext += (cliActivityContext ? ' ' : '') + `PATROL (${new Date(patrol.timestamp).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}): ${items.slice(0, 5).join('; ')}`;
+        }
+      }
+    } catch { /* no patrol data */ }
+  }
+
   // Load learning context for admin — fire both in parallel, fail silently
   const [regressionSummary, synthContext] = isAdminUser
     ? await Promise.all([getRegressionSummary(), getYesterdaySynthesisContext()]).catch(() => ['', ''])
@@ -2336,6 +2403,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       `You are ${agentName} — the AI running Gil's entire digital operation from a Hetzner server at 89.167.12.82. You know every container, every project, every quirk of this stack. You're sharp, direct, and occasionally dry. Not a corporate assistant — more like a very capable first mate who happens to know Docker, Claude API, and Traefik cold. When something breaks you fix it without being asked. When Gil has a wild idea you assess it honestly, even if that means pushing back. You have opinions and you share them. You're concise by default but go deep when the task demands it. You don't hedge, you don't fluff, and you don't pretend everything is fine when it isn't. Humor is deadpan and earned, not performed.`,
       'Admin user — full server access.',
       `AUTONOMY RULES: 1) Act first, report after. Never ask "should I?" — just do it. 2) Stuck? Try 3 different approaches before escalating. 3) Only escalate when genuinely stuck after exhausting all options. 4) Report results, not plans. 5) Destructive/irreversible actions (deleting data, refunds, spending money, force-push) still need confirmation.`,
+      `PROACTIVE AWARENESS: After answering Gil's question, surface 1-2 things worth knowing — upcoming risks, improvements you noticed, things that need attention. Don't dump everything — pick what's most relevant to what Gil is working on right now. If nothing is relevant, say nothing extra. Think like a first mate who just handled the helm and is briefing the captain.`,
       `TASK CONTINUITY: If [ACTIVE TASK] is shown in context, you are mid-task. "yes/proceed/ok" = confirm and continue. "repair/fix" = resume from last result. "check/status" = report current task state. Say "Task complete: [summary]" when you fully finish a task.`,
       `AUTO-REPAIR BEHAVIOR: For container/service issues, autonomously: 1) check logs 2) identify root cause 3) fix it 4) verify it works. Report root cause and fix, not just the symptom.`,
       `THINKING PARTNER MODE: When Gil shares ideas, plans, or decisions — don't just validate. Steel-man the opposing position. Show him the assumption his plan depends on and what happens when it breaks. Name what he's avoiding and what it's costing him. Show the gap between his current approach and expert-level thinking on the same problem. Give concrete next actions, not encouragement. If his instinct is right, say "stop overthinking, execute" — that's also honesty. No cheerleading, no hedging, no "great question." Say the hard thing and let it land.`,
@@ -2346,6 +2414,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       'NEVER read, display, or reference /root/.claude/.credentials.json, /root/.claude.json, or any credential/token files.',
       'MCP TOOLS: You have GitHub MCP (search repos, read files, create issues/PRs) and Postgres MCP (query the overlord database directly via SQL). Use these structured tools when relevant instead of shelling out.',
       'SEARXNG: Self-hosted search at http://searxng:8080. Use: curl -s "http://searxng:8080/search?q=QUERY&format=json" for web search without API keys. Returns title, url, snippet. Use for current events, research, fact-checking.',
+      cliActivityContext,
       regressionSummary,
       synthContext,
     ].filter(Boolean).join(' ');
@@ -2526,18 +2595,30 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
   const MAX_RETRIES = 2;
   let fallbackEscalatedToOpus = false;
 
+  let timeoutRetry = false; // Track if last failure was a timeout (not OOM)
+
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     const result = await new Promise((resolve) => {
       let stdout = '';
       let stderr = '';
 
+      // On timeout retry, inject conciseness hint — more time won't help, shorter response will
+      let promptToSend = fullPrompt;
+      if (timeoutRetry) {
+        promptToSend = '[IMPORTANT: Your previous attempt timed out. Respond concisely and directly. Do NOT investigate files or use tools — answer from context already provided. Keep response under 2000 characters.]\n\n' + fullPrompt;
+        logger.info({ attempt }, 'Injecting conciseness hint after timeout retry');
+      }
+
+      const configuredTimeout = route.taskType === 'complex' ? CONFIG.maxResponseTime
+        : route.taskType === 'simple' ? CONFIG.simpleResponseTimeout
+        : CONFIG.chatResponseTimeout;
+      const spawnTime = Date.now();
+
       const memLimit = getMemoryLimit(route.taskType);
-      logger.info({ attempt, workDir, argsCount: args.length, promptLen: fullPrompt.length, model: route.model?.id, memLimitMB: memLimit }, 'Spawning Claude CLI');
+      logger.info({ attempt, workDir, argsCount: args.length, promptLen: promptToSend.length, model: route.model?.id, memLimitMB: memLimit, timeoutMs: configuredTimeout }, 'Spawning Claude CLI');
       const proc = spawnWithMemoryLimit(CONFIG.claudePath, args, {
         cwd: workDir,
-        timeout: route.taskType === 'complex' ? CONFIG.maxResponseTime
-          : route.taskType === 'simple' ? CONFIG.simpleResponseTimeout
-          : CONFIG.chatResponseTimeout,
+        timeout: configuredTimeout,
         killSignal: 'SIGKILL',
         env: buildSafeEnv(),
         maxBuffer: 10 * 1024 * 1024,
@@ -2547,7 +2628,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       registerSession(chatJid, proc.pid);
       logger.info({ pid: proc.pid }, 'Claude CLI spawned');
 
-      proc.stdin.write(fullPrompt);
+      proc.stdin.write(promptToSend);
       proc.stdin.end();
 
       proc.stdout.on('data', (d) => { stdout += d.toString(); });
@@ -2582,13 +2663,23 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
               const resumeIdx = args.indexOf('--resume');
               if (resumeIdx !== -1) args.splice(resumeIdx, 2);
             }
-            // OOM: escalate memory tier so retry gets more headroom
+            // Distinguish timeout kills from OOM kills
             if (signal === 'SIGKILL' || code === 137 || code === null) {
-              const escalation = { simple: 'medium', medium: 'complex' };
-              const next = escalation[route.taskType];
-              if (next) {
-                logger.warn({ from: route.taskType, to: next, attempt }, 'Escalating memory tier after SIGKILL');
-                route.taskType = next;
+              const elapsed = Date.now() - spawnTime;
+              const wasLikelyTimeout = elapsed >= configuredTimeout * 0.85;
+              if (wasLikelyTimeout) {
+                // Timeout — escalating memory won't help. Flag for conciseness hint on retry.
+                logger.warn({ elapsed, configuredTimeout, attempt }, 'Claude killed by timeout (not OOM) — will retry with conciseness hint');
+                timeoutRetry = true;
+              } else {
+                // Genuine OOM — escalate memory tier
+                timeoutRetry = false;
+                const escalation = { simple: 'medium', medium: 'complex' };
+                const next = escalation[route.taskType];
+                if (next) {
+                  logger.warn({ from: route.taskType, to: next, attempt }, 'Escalating memory tier after OOM SIGKILL');
+                  route.taskType = next;
+                }
               }
             }
             logger.warn({ code, stderr: stderr.substring(0, 300), attempt }, 'Claude transient error, retrying');
@@ -2909,6 +3000,55 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
     return lines.join('\n');
   }
 
+  // Proposal replies: "ok 12" or "no 12" (autonomy engine)
+  const proposalMatch = fullText.match(/^(ok|no|approve|reject|yes)\s+(\d+)$/i);
+  if (proposalMatch && isAdmin(senderJid)) {
+    const approved = /^(ok|approve|yes)$/i.test(proposalMatch[1]);
+    const proposalId = parseInt(proposalMatch[2], 10);
+    const proposal = resolveProposal(proposalId, approved);
+    if (proposal) {
+      if (approved && proposal.actionPayload?.taskId) {
+        // Resume the blocked task
+        try {
+          const task = await getTask(proposal.actionPayload.taskId);
+          if (task) {
+            task._skipAutonomyGate = true;
+            executeTaskAutonomously(task, sockRef).catch(err =>
+              console.error(`[Autonomy] Approved task execution failed:`, err.message)
+            );
+            return `✅ Proposal #${proposalId} approved — executing: ${proposal.title}`;
+          }
+        } catch { /* task may be gone */ }
+        return `✅ Proposal #${proposalId} approved (task no longer available)`;
+      }
+      if (approved && proposal.actionPayload?.experimentId) {
+        // Start the approved experiment
+        const exp = startExperiment(proposal.actionPayload.experimentId);
+        if (exp) {
+          return `🧪 Experiment #${exp.id} started: ${exp.hypothesis}`;
+        }
+        return `✅ Proposal #${proposalId} approved (experiment not found)`;
+      }
+      return approved
+        ? `✅ Proposal #${proposalId} approved: ${proposal.title}`
+        : `❌ Proposal #${proposalId} dismissed: ${proposal.title}`;
+    }
+    return `No pending proposal #${proposalId} found.`;
+  }
+
+  // /proposals — list pending
+  if (cmd === '/proposals' && isAdmin(senderJid)) {
+    const pending = getPendingProposals();
+    if (pending.length === 0) return 'No pending proposals.';
+    const lines = ['📋 *Pending Proposals*', ''];
+    for (const p of pending) {
+      const riskEmoji = { low: '🟢', medium: '🟡', high: '🔴' }[p.risk] || '🟡';
+      lines.push(`${riskEmoji} *#${p.id}* ${p.title}${p.project ? ` [${p.project}]` : ''}`);
+    }
+    lines.push('', 'Reply "ok <id>" or "no <id>"');
+    return lines.join('\n');
+  }
+
   if (cmd.startsWith('/task ') && isAdmin(senderJid)) {
     const parts = fullText.substring(6).trim().split(/\s+/);
     const sub = parts[0];
@@ -3167,6 +3307,28 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
     const prefix = cmd.startsWith('/audiovoice') ? '/audiovoice'.length : '/voice'.length;
     let rawArgs = fullText.substring(prefix).trim();
 
+    // Parse --clone flag: /audiovoice --clone Hello world (uses Gil's voice via XTTS)
+    // Parse --speaker: /audiovoice --clone --speaker nami Hello world
+    // Parse --lang: /audiovoice --clone --lang ja こんにちは
+    let useClone = false;
+    let cloneSpeaker = 'gil';
+    let cloneLang = 'en';
+    const cloneMatch = rawArgs.match(/^--clone\s+/);
+    if (cloneMatch) {
+      useClone = true;
+      rawArgs = rawArgs.substring(cloneMatch[0].length);
+      const speakerMatch = rawArgs.match(/^--speaker\s+(\S+)\s+/);
+      if (speakerMatch) {
+        cloneSpeaker = speakerMatch[1];
+        rawArgs = rawArgs.substring(speakerMatch[0].length);
+      }
+      const langMatch = rawArgs.match(/^--lang\s+(\S+)\s+/);
+      if (langMatch) {
+        cloneLang = langMatch[1];
+        rawArgs = rawArgs.substring(langMatch[0].length);
+      }
+    }
+
     // Parse optional voice: /audiovoice --voice am_adam Hello world
     let voice = KOKORO_DEFAULT_VOICE;
     const voiceMatch = rawArgs.match(/^--voice\s+(\S+)\s+/);
@@ -3182,21 +3344,26 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
         if (!resp.ok) return '❌ Could not reach Kokoro API.';
         const data = await resp.json();
         const voices = data.voices || data;
-        return `🎙️ *${voices.length} voices available:*\n${voices.join(', ')}`;
+        return `🎙️ *${voices.length} Kokoro voices:*\n${voices.join(', ')}\n\n🎤 Voice clone: use --clone flag`;
       } catch (err) {
         return `❌ Kokoro API unreachable: ${err.message}`;
       }
     }
 
-    if (!rawArgs) return '🎙️ Usage: /audiovoice <text>\n/audiovoice --voice am_adam <text>\n/audiovoice voices\n\nOr reply to a message with /audiovoice to narrate it.\nSend a text file with caption /audiovoice to narrate a script.';
+    if (!rawArgs) return '🎙️ Usage:\n/audiovoice <text> — Kokoro TTS\n/audiovoice --clone <text> — Your voice clone\n/audiovoice --voice am_adam <text> — Specific voice\n/audiovoice voices — List voices';
 
     try {
-      const audioFile = await generateKokoroTTS(rawArgs, voice);
-      if (!audioFile) return '❌ Kokoro TTS generation failed. Is ElmoServer running?';
+      let audioFile;
+      if (useClone) {
+        audioFile = await generateVoiceClone(rawArgs, cloneSpeaker, cloneLang);
+      } else {
+        audioFile = await generateKokoroTTS(rawArgs, voice);
+      }
+      if (!audioFile) return `❌ ${useClone ? 'Voice clone' : 'Kokoro TTS'} generation failed. Is ElmoServer running?`;
       const buffer = await fs.readFile(audioFile);
       await sockRef.sock.sendMessage(chatJid, {
         audio: buffer,
-        mimetype: 'audio/mpeg',
+        mimetype: audioFile.endsWith('.wav') ? 'audio/wav' : 'audio/mpeg',
         ptt: false,
       });
       await fs.unlink(audioFile).catch(() => {});
@@ -3227,6 +3394,8 @@ async function handleSpecialCommand(text, chatJid, senderJid, sockRef) {
       return `🚀 Deploy triggered for ${project}\n\n${result.output}`;
     }
     pulseRecord(`deploy:${project}`, 'down', result.error, ['broken-script']);
+    recordGap('skill', `Manual deploy failed: ${project}`, result.error?.substring(0, 200));
+    writeAnnotation(`deploy:${project}`, `Failed ${new Date().toISOString().split('T')[0]}: ${result.error?.substring(0, 100)}`, 'deployment');
     return `❌ Deploy failed: ${result.error}`;
   }
 
@@ -4195,8 +4364,9 @@ async function startBot() {
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (type !== 'notify') return;
 
-    // Track message flow for health monitoring
+    // Track message flow for health monitoring + idle study
     connectionHealth.lastMessageAt = Date.now();
+    global.__overlordLastMessageAt = Date.now();
     connectionHealth.messagesReceived += messages.length;
     if (connectionHealth.reconnectCount > 0) {
       logger.info({ reconnectCount: connectionHealth.reconnectCount }, '📡 Messages flowing again — resetting reconnect counter');
@@ -4492,9 +4662,13 @@ async function startBot() {
             const routeModelId = claudeResult.modelId || 'unknown';
             if (_claudeDuration > 60000) {
               logFriction('slow_response', `${_claudeDuration}ms for ${chatJid}`, _claudeDuration).catch(() => {});
+              if (_claudeDuration > 120000) {
+                logRegression('performance', `Extreme slow response: ${Math.round(_claudeDuration/1000)}s for ${routeModelId}`, null, 'Check model latency, context size, or queue depth').catch(() => {});
+              }
             }
             if (response.startsWith('⚠️')) {
               logFriction('api_error', response.substring(0, 200), _claudeDuration).catch(() => {});
+              logRegression('api', `Model error from ${routeModelId}: ${response.substring(0, 100)}`, null, 'Check API credentials and rate limits').catch(() => {});
             }
 
             // Stop typing (re-resolve socket in case of reconnect)
@@ -4620,6 +4794,23 @@ async function startBot() {
               } catch (err) {
                 logger.error({ err: err.message }, '[memex] Post-response extraction failed');
               }
+
+              // Evolution: learn from admin corrections (non-blocking)
+              if (isAdmin(last.senderJid)) {
+                try {
+                  const msgs = batched.map(m => ({
+                    text: m.parsed?.text || '',
+                    role: 'user',
+                    timestamp: new Date().toISOString(),
+                  }));
+                  const evoResult = await runEvolution(msgs);
+                  if (evoResult.applied > 0) {
+                    logger.info({ applied: evoResult.applied }, '[evolution] Learned from admin conversation');
+                  }
+                } catch (err) {
+                  logger.error({ err: err.message }, '[evolution] Post-response evolution failed');
+                }
+              }
             });
 
             logger.info(`📤 → ${senderName}: ${finalResponse.substring(0, 100)}...`);
@@ -4676,7 +4867,12 @@ function persistDedupIds() {
   } catch { /* best effort */ }
 }
 process.on('SIGINT', () => { console.log('\n👋 Bye!'); persistDedupIds(); process.exit(0); });
-process.on('SIGTERM', () => { console.log('\n👋 Bye!'); persistDedupIds(); process.exit(0); });
+process.on('SIGTERM', async () => {
+  console.log('\n👋 Shutting down — flushing pending memory extractions...');
+  persistDedupIds();
+  await flushPendingExtractions().catch(() => {});
+  process.exit(0);
+});
 
 // ============================================================
 // START
