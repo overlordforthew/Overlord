@@ -4669,8 +4669,11 @@ async function startBot() {
             }
             if (response.startsWith('⚠️')) {
               logFriction('api_error', response.substring(0, 200), _claudeDuration).catch(() => {});
-              logRegression('api', `Model error from ${routeModelId}: ${response.substring(0, 100)}`, null, 'Check API credentials and rate limits').catch(() => {});
-              recordGap('performance', `API error from ${routeModelId}`, response.substring(0, 100));
+              // Only record as API regression/gap if it's actually an API issue (timeout/rate limit), not throttling/guard blocks
+              if (response.includes('timed out') || response.includes('rate limit') || response.includes('API')) {
+                logRegression('api', `Model error from ${routeModelId}: ${response.substring(0, 100)}`, null, 'Check API credentials and rate limits').catch(() => {});
+                recordGap('performance', `API error from ${routeModelId}`, response.substring(0, 100));
+              }
             }
 
             // Stop typing (re-resolve socket in case of reconnect)
@@ -4845,7 +4848,8 @@ async function startBot() {
                   }
                   // Record capability gaps from corrections detected by evolution
                   if (evoResult.signals > 0) {
-                    recordGap('knowledge', `${evoResult.signals} corrections detected in conversation`, userText.substring(0, 100));
+                    const msgText = (last.parsed?.text || '').substring(0, 100);
+                    recordGap('knowledge', `${evoResult.signals} corrections detected in conversation`, msgText);
                   }
                 } catch (err) {
                   logger.error({ err: err.message }, '[evolution] Post-response evolution failed');
