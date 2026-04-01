@@ -174,22 +174,28 @@ export async function getFrictionReport(hours = 24) {
  * Called by scheduler at 11pm.
  */
 export async function generateDailySynthesis() {
-  const today = new Date().toISOString().split('T')[0];
-  const synthFile = path.join(SYNTHESIS_DIR, `${today}.json`);
+  // Use AST (UTC-4) date since Gil is in AST and synthesis runs at 8pm AST
+  const now = new Date();
+  const astOffset = now.getTime() - (4 * 3600000);
+  const astDate = new Date(astOffset).toISOString().split('T')[0];
+  const synthFile = path.join(SYNTHESIS_DIR, `${astDate}.json`);
 
   // Gather data from all sources
   const regressions = await readJSON(REGRESSIONS_FILE, { entries: [], stats: {} });
   const friction = await readJSON(FRICTION_FILE, { events: [], summary: {} });
   const trends = await readJSON(TRENDS_FILE, { daily: [] });
 
+  // Last 24 hours of data (not date-prefix matching, which misses timezone boundary)
+  const cutoff24h = new Date(now.getTime() - 24 * 3600000).toISOString();
+
   // Today's regressions
   const todayRegressions = regressions.entries.filter(r =>
-    r.timestamp && r.timestamp.startsWith(today)
+    r.timestamp && r.timestamp >= cutoff24h
   );
 
   // Today's friction
   const todayFriction = friction.events.filter(e =>
-    e.timestamp && e.timestamp.startsWith(today)
+    e.timestamp && e.timestamp >= cutoff24h
   );
 
   // Friction by type
@@ -200,7 +206,7 @@ export async function generateDailySynthesis() {
 
   // Build synthesis
   const synthesis = {
-    date: today,
+    date: astDate,
     generatedAt: new Date().toISOString(),
     regressions: {
       count: todayRegressions.length,
@@ -234,6 +240,19 @@ export async function generateDailySynthesis() {
   if (frictionByType['slow_response'] > 2) {
     synthesis.insights.push(`${frictionByType['slow_response']} slow responses — check model latency or context size.`);
   }
+
+  // Include outcome stats from the day
+  try {
+    const outcomes = await readJSON(OUTCOMES_FILE, { entries: [] });
+    const entries = Array.isArray(outcomes) ? outcomes : outcomes.entries || [];
+    const todayOutcomes = entries.filter(e => e.timestamp && e.timestamp >= cutoff24h);
+    const success = todayOutcomes.filter(e => e.taskSucceeded === true).length;
+    const fail = todayOutcomes.filter(e => e.taskSucceeded === false).length;
+    const avgTime = todayOutcomes.filter(e => e.responseTime > 0).reduce((a, e) => a + e.responseTime, 0) / (todayOutcomes.filter(e => e.responseTime > 0).length || 1);
+    synthesis.outcomes = { total: todayOutcomes.length, success, fail, avgResponseMs: Math.round(avgTime) };
+    if (fail > 2) synthesis.insights.push(`${fail} failed responses today — check error patterns.`);
+    if (avgTime > 120000) synthesis.insights.push(`Avg response time ${Math.round(avgTime/1000)}s — above 2min threshold.`);
+  } catch { /* outcomes optional */ }
 
   await writeJSON(synthFile, synthesis);
   return synthesis;
