@@ -1,15 +1,14 @@
 /**
- * meta-learning.js — Nine Loops engine for Overlord
+ * meta-learning.js — Learning engine for Overlord
  *
- * Implements persistent learning across sessions:
+ * Active loops:
  * 1. Regressions List — track and avoid repeated mistakes
- * 2. Friction Tracking — log slowdowns and failures
- * 3. Daily Synthesis — consolidate learnings nightly
- * 4. Performance Trending — track metrics over time
- * 5. Self-Observation — analyze session traces
- *
- * Loops 3 (prediction-outcome), 6 (cooperative refinement),
- * 8 (rule evolution) are deferred — framework ready, activation pending.
+ * 4. Friction Tracking — log slowdowns and failures
+ * 5. Daily Synthesis — consolidate learnings nightly (AST-aware)
+ * 9. Performance Trending — track metrics over time
+ * 10. Outcome Scoring — per-response success/failure tracking with topic
+ * 11. Prompt Optimization — model/task affinity analysis
+ * 12. A/B Experiments — controlled experiment framework
  */
 
 import fs from 'fs/promises';

@@ -45,7 +45,7 @@ import {
 import {
   logRegression, getRegressionSummary, logFriction,
   getFrictionReport, getTrendAnalysis, getYesterdaySynthesisContext,
-  recordOutcome,
+  recordOutcome, recordExperimentOutcome,
 } from './meta-learning.js';
 import {
   routeMessage, routeTriage, planWithOpus, callOpenRouter, callGemini, callWithFallback,
@@ -4753,6 +4753,7 @@ async function startBot() {
             }).catch(() => {});
 
             // Record outcome for Agent Lightning (prompt optimization)
+            const _taskSucceeded = !(response?.includes('timed out') || response?.startsWith('⚠️'));
             recordOutcome(
               Buffer.from(last.parsed.text || '').toString('base64').slice(0, 16),
               {
@@ -4762,10 +4763,15 @@ async function startBot() {
                 responseTime: _claudeDuration,
                 toolCalls: [],
                 userCorrected: false,
-                taskSucceeded: !(response?.includes('timed out') || response?.startsWith('⚠️')),
+                taskSucceeded: _taskSucceeded,
                 retryCount: 0,
               }
             ).catch(() => {});
+
+            // A/B experiment: record treatment outcome (principles are now injected)
+            if (isAdminUser) {
+              recordExperimentOutcome('principles-injection', 'treatment', _taskSucceeded ? 1 : 0).catch(() => {});
+            }
 
             // Log usage for cost tracking
             logUsage({
@@ -4795,6 +4801,22 @@ async function startBot() {
                 }
               } catch (err) {
                 logger.error({ err: err.message }, '[memex] Post-response extraction failed');
+              }
+
+              // Positive signal detection — learn from successes, not just errors
+              if (isAdmin(last.senderJid)) {
+                const userText = (last.parsed?.text || '').toLowerCase();
+                const POSITIVE_PATTERNS = [
+                  /\b(perfect|exactly|great|nice|awesome|good job|well done|nailed it)\b/i,
+                  /^(yes|yep|yup|yeah|correct|right|that'?s it)\b/i,
+                  /\bthank(s| you)\b/i,
+                  /^(👍|💪|🔥|✅|👏)/,
+                ];
+                const isPositive = POSITIVE_PATTERNS.some(p => p.test(userText));
+                if (isPositive) {
+                  pulseRecord('response:quality', 'up', `Positive signal: ${userText.substring(0, 60)}`);
+                  recordExperimentOutcome('principles-injection', 'treatment', 2).catch(() => {}); // bonus score for explicit approval
+                }
               }
 
               // Evolution: learn from admin corrections (non-blocking)

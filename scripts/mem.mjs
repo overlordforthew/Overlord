@@ -25,7 +25,7 @@
 import { initSchema } from '../skills/memory-v2/lib/schema.mjs';
 import { getDb, closeDb } from '../skills/memory-v2/lib/db.mjs';
 import * as observations from '../skills/memory-v2/lib/observations.mjs';
-import { writeFileSync } from 'fs';
+import { writeFileSync, readFileSync } from 'fs';
 
 const args = process.argv.slice(2);
 const cmd = args[0];
@@ -106,20 +106,7 @@ try {
       const query = args.slice(1).filter(a => !a.startsWith('--')).join(' ');
       if (!query) { console.error('Usage: mem search <query>'); process.exit(1); }
 
-      // Search all types via FTS5
-      let results;
-      try {
-        results = db.prepare(`
-          SELECT o.*, fts.rank FROM observations_fts fts
-          JOIN observations o ON o.id = fts.rowid
-          WHERE observations_fts MATCH ? AND o.status = 'active'
-          ORDER BY fts.rank LIMIT 20
-        `).all(query);
-      } catch {
-        results = db.prepare(
-          "SELECT * FROM observations WHERE status = 'active' AND (title LIKE ? OR narrative LIKE ?) ORDER BY importance DESC LIMIT 20"
-        ).all(`%${query}%`, `%${query}%`);
-      }
+      const results = observations.search(query);
 
       if (jsonMode) { console.log(JSON.stringify(results, null, 2)); break; }
 
@@ -133,11 +120,6 @@ try {
       if (episodic.length) { console.log(`\n=== Episodic (${episodic.length}) ===`); episodic.forEach(printRow); }
       if (other.length) { console.log(`\n=== Other (${other.length}) ===`); other.forEach(printRow); }
       if (!results.length) console.log('No results found.');
-
-      // Update access counts
-      const updateStmt = db.prepare('UPDATE observations SET access_count = access_count + 1, last_accessed = ? WHERE id = ?');
-      const now = Date.now();
-      for (const r of results) updateStmt.run(now, r.id);
       break;
     }
 
@@ -360,8 +342,19 @@ Tool events: ${s.total_events} total, ${s.uncompressed_events} uncompressed`);
       const output = lines.slice(0, 190).join('\n');
       const memPath = '/root/.claude/projects/-root/memory/MEMORY.md';
       try {
-        writeFileSync(memPath, output, 'utf-8');
-        console.log(`Wrote ${lines.length} lines to ${memPath}`);
+        // Preserve Claude Code memory section if it exists
+        let preserved = '';
+        try {
+          const existing = readFileSync(memPath, 'utf-8');
+          const ccMatch = existing.match(/## Claude Code Memories[\s\S]*?(?=\n## |\n> Auto-generated|$)/);
+          if (ccMatch) preserved = ccMatch[0].trim() + '\n\n';
+        } catch { /* no existing file */ }
+        // Insert preserved section after the title
+        const finalOutput = preserved
+          ? output.replace('> Auto-generated', preserved + '> Auto-generated')
+          : output;
+        writeFileSync(memPath, finalOutput, 'utf-8');
+        console.log(`Wrote ${lines.length} lines to ${memPath}${preserved ? ' (preserved Claude Code section)' : ''}`);
       } catch {
         const altPath = '/app/data/MEMORY.md';
         try {
@@ -375,37 +368,34 @@ Tool events: ${s.total_events} total, ${s.uncompressed_events} uncompressed`);
     }
 
     case 'consolidate': {
-      console.log('Running memory consolidation (v2)...');
-      const now = Date.now();
-      const thirtyDaysAgo = now - 30 * 24 * 3600 * 1000;
-      const sevenDaysAgo = now - 7 * 24 * 3600 * 1000;
-
-      // Decay
-      const decayed = db.prepare(`
-        UPDATE observations SET importance = MAX(importance - 0.02, 0.1), updated_at = ?
-        WHERE status = 'active' AND last_accessed < ? AND importance > 0.1
-      `).run(now, thirtyDaysAgo);
-
-      // Boost
-      const boosted = db.prepare(`
-        UPDATE observations SET importance = MIN(importance + 0.05, 1.0), updated_at = ?
-        WHERE status = 'active' AND access_count > 5 AND last_accessed > ? AND importance < 1.0
-      `).run(now, sevenDaysAgo);
-
-      // Prune
-      const pruned = db.prepare(`
-        UPDATE observations SET status = 'archived', updated_at = ?
-        WHERE status = 'active' AND importance < 0.15 AND access_count = 0 AND created_at < ?
-      `).run(now, thirtyDaysAgo);
-
-      console.log(`Consolidation complete:
-  Decayed: ${decayed.changes} memories
-  Boosted: ${boosted.changes} memories
-  Pruned:  ${pruned.changes} memories`);
-
-      // Rebuild MEMORY.md (re-run rebuild command)
-      // Just call the rebuild logic inline
-      break;
+      console.log('Running full memory consolidation (v2)...');
+      closeDb(); // Release DB before consolidator opens its own connection
+      const { consolidate } = await import('../memory-consolidator.js');
+      const report = await consolidate();
+      console.log(`=== Memory Consolidation Report (v2) ===`);
+      console.log(`Deduped:      ${report.deduped} merged duplicates`);
+      console.log(`Decayed:      ${report.decayed} memories`);
+      console.log(`Boosted:      ${report.boosted} memories`);
+      console.log(`Pruned:       ${report.pruned} memories`);
+      if (report.compressed?.observations) {
+        console.log(`Compressed:   ${report.compressed.compressed} events -> ${report.compressed.observations} observations`);
+      } else if (report.compressed?.skipped) {
+        console.log(`Compressed:   ${report.compressed.skipped}`);
+      }
+      if (report.compressError) {
+        console.log(`Compress err: ${report.compressError}`);
+      }
+      console.log(`Purged:       ${report.purged} old compressed events`);
+      if (report.rebuild?.path) {
+        console.log(`MEMORY.md:    ${report.rebuild.lines} lines -> ${report.rebuild.path}`);
+      }
+      if (report.stats) {
+        console.log(`\nPost-consolidation: ${report.stats.semantic} semantic, ${report.stats.procedural} procedural (avg importance: ${report.stats.avg_importance})`);
+      }
+      if (report.error) {
+        console.error(`Error: ${report.error}`);
+      }
+      process.exit(0); // consolidator already closed its DB
     }
 
     case 'context': {
