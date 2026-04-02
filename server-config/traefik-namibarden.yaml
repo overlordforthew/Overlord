@@ -16,6 +16,16 @@ http:
         certResolver: letsencrypt
       priority: 100
 
+    # === Coolify webhooks (public — GitHub needs to reach these) ===
+    https-coolify-webhooks:
+      entryPoints:
+        - https
+      rule: "Host(`coolify.namibarden.com`) && PathPrefix(`/webhooks/`)"
+      service: coolify-app
+      tls:
+        certResolver: letsencrypt
+      priority: 50
+
     # === Coolify dashboard (Tailscale only) ===
     http-coolify:
       entryPoints:
@@ -250,6 +260,15 @@ http:
       tls:
         certResolver: letsencrypt
 
+    # === Raw IP catchall — prevents ACME errors from bot/scanner traffic ===
+    raw-ip-catchall:
+      entryPoints:
+        - https
+      rule: "Host(`89.167.12.82`)"
+      service: noop-ip
+      tls: {}
+      priority: -500
+
   middlewares:
     redirect-to-https-file:
       redirectScheme:
@@ -336,3 +355,7 @@ http:
       loadBalancer:
         servers:
           - url: "http://crucix:3117"
+
+    noop-ip:
+      loadBalancer:
+        servers: {}
