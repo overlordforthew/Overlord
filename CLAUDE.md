@@ -91,7 +91,7 @@ See /projects/CLAUDE.md for infrastructure rules, projects list, and permissions
 - `/research <topic>` — Launch research task (admin)
 - `/review <target>` — Code review (admin)
 - `/draft <text>` / `/drafts` — Draft management (admin)
-- `/send <target> <msg>` — Send message to contact (admin)
+- `/send <draft-id>` — Send pending email draft (admin)
 - `/newproject <name>` — Create new project (power user)
 - `/groupid` — Show current group JID (admin)
 - `/queue` — Work queue status (admin)
