@@ -1,15 +1,18 @@
 ---
-name: Gil — Owner Profile
-description: Gil's role, preferences, communication style, and how to collaborate effectively
+name: Gil's Working Style
+description: Gil is a hands-on developer who evaluates tools by practical fit and expects immediate action, not proposals
 type: user
 ---
 
-Gil is the owner/developer running all projects on this server. GitHub: bluemele.
+Gil is the sole developer/operator of this stack. Technical depth across Node.js, Docker, Linux, trading, and marine systems.
 
-**Communication style:** Playful, uses emoticons, prefers brevity. Wants action first, explanation after. Does not want to be treated as a non-technical user — frame everything as dev-to-dev.
+**Communication style:** Terse, action-oriented. Sends research/analysis as context (often from Overlord WhatsApp), then gives one-line directives. "Put it on ElmoServer, containerize it, send the API" — not "what do you think about deploying this?"
 
-**Design taste:** Prefers bold, fun, personality-driven designs over corporate/generic. Explicitly requested "sexy and fun" for OnlyHulls. Enjoys wordplay, puns, and brand humor (e.g., OnlyFans parody for boats). Leans toward dark themes and modern aesthetics over safe/corporate blue-and-white.
+**Tool evaluation:** Judges tools by practical utility: hardware requirements, zero-shot capability (no training overhead), integration effort, whether it runs on his hardware. Compares alternatives concisely (e.g., "Prophet needs per-series fitting, Chronos is heavier, Moirai wants GPU — TimesFM hits the sweet spot").
 
-**Work style:** Moves fast across multiple projects in the same day. Often starts tasks in one session and continues in another. Expects thorough research before implementation on design/UX work — said "be thorough, dig through" when requesting competitive analysis.
-
-**Technical context:** Comfortable with Node.js, Docker, Next.js, PostgreSQL, Tailwind. Runs all infra on a single Hetzner CX33. Uses Claude Code on Max plan with Opus 4.6 (1M context via `opus[1m]` model flag).
+**Expectations:**
+- Execute immediately, don't propose unless uncertain about direction
+- Containerize everything — if it runs, it runs in Docker
+- API-first: services expose HTTP endpoints for other projects to consume
+- Verify end-to-end before reporting done
+- Cross-project awareness: one service often feeds multiple projects (TimesFM → MC + HL bot)

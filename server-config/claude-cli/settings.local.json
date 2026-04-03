@@ -31,7 +31,9 @@
       "mcp__chrome-devtools__close_page",
       "Skill(browse)",
       "Skill(session-handoff)",
-      "Skill(schedule)"
+      "Skill(schedule)",
+      "Skill(save)",
+      "Skill(audit)"
     ]
   }
 }
