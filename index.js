@@ -82,6 +82,7 @@ import { heavyQueue, spawnWithMemoryLimit, getMemoryLimit, shouldQueue, getMemor
 import { initUsageTracker, logUsage, getTodayUsage, getWeekUsage, getCostTrend, formatCostReport } from './usage-tracker.js';
 import { askClaudeSDK, isSDKEnabled, loadSDK } from './claude-sdk.js';
 import { initKnowledgeBase, ingest as kbIngest, search as kbSearch, getRecent as kbRecent, getStats as kbStats, formatSearchResults as kbFormatResults, formatStats as kbFormatStats } from './knowledge-base.js';
+import { getKnowledgeContext, getKnowledgeMap, searchKnowledge, regenerateIndex as regenKnowledgeIndex } from './knowledge-engine.js';
 import { getPredictions, formatPredictions, getAlerts as getInfraAlerts } from './predictive-infra.js';
 import { isResearchRequest, extractResearchTopic, runResearch } from './web-intel.js';
 import { formatRevenueDashboard } from './revenue-intel.js';
@@ -2229,6 +2230,20 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
     logger.warn({ err: err.message }, '[semantic] Context injection failed');
   }
 
+  // Inject relevant knowledge from the compounding knowledge base
+  if (isAdminUser) {
+    try {
+      const knowledgeCtx = getKnowledgeContext(parsed.text || '');
+      if (knowledgeCtx) {
+        prompt.push(`[KNOWLEDGE BASE]`);
+        prompt.push(knowledgeCtx);
+        prompt.push('');
+      }
+    } catch (err) {
+      logger.warn({ err: err.message }, '[knowledge] Context injection failed');
+    }
+  }
+
   // Inject summary of evicted context (older messages that were summarized)
   const contextSummary = conversationContext.getSummary(chatJid);
   if (contextSummary) {
@@ -2482,6 +2497,9 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
       'THINKING PARTNER: When Gil shares ideas — don\'t validate. Steel-man the opposing position. Name what he\'s avoiding. Show the gap between his approach and expert-level thinking. Concrete next actions, not encouragement. If his instinct is right, say "stop overthinking, execute." No cheerleading, no hedging.',
       'AUTO-REPAIR: For container/service issues, autonomously: check logs → identify root cause → fix it → verify. Report root cause and fix, not symptoms.',
       'TASK CONTINUITY: If [ACTIVE TASK] in context, you are mid-task. "yes/proceed/ok" = continue. "repair/fix" = resume. "check/status" = report state.',
+      '',
+      // === KNOWLEDGE SYSTEM ===
+      'KNOWLEDGE COMPOUNDING: You have a knowledge base at /root/overlord/knowledge/ with INDEX.md as the master index. After solving non-trivial problems, discovering patterns, or making decisions — write back to the relevant knowledge file. Create new files if needed. This is how every session makes the next one smarter. Categories: patterns/ (recurring solutions), decisions/ (architecture rationale), insights/ (analysis), projects/ (per-project knowledge). Update INDEX.md when you add new files by running: node -e "import{regenerateIndex}from\'./knowledge-engine.js\';regenerateIndex();"',
       '',
       // === TOOLS & TECHNICAL ===
       'Keep responses WhatsApp-length. Use @ to read media files when referenced.',

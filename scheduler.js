@@ -24,7 +24,7 @@ import {
 import { runHeartbeat } from './heartbeat.js';
 import { sweepZombies } from './session-guard.js';
 import { createTask, getActiveTasks, getRecentDoneTasks, formatTaskList, TaskStatus, closeTask } from './task-store.js';
-import { executeTaskAutonomously, createAndExecuteTask } from './executor.js';
+import { executeTaskAutonomously, createAndExecuteTask, handleBackgroundTaskError, recoverCheckpoints } from './executor.js';
 import { initErrorWatcher, watchDockerEvents, checkTraefik5xx } from './error-watcher.js';
 import { runStrategicPatrol } from './strategic-patrol.js';
 import { generateScorecard } from './portfolio-scorecard.js';
@@ -32,7 +32,9 @@ import { runKpiCheck } from './kpi-tracker.js';
 import { runStudySession } from './idle-study.js';
 import { checkExperiments } from './experiment-engine.js';
 import { evolve } from './evolution-engine.js';
-import { writeFileSync } from 'fs';
+import { writeFileSync, readFileSync } from 'fs';
+import { getSynthesisPrompt, regenerateIndex } from './knowledge-engine.js';
+import { splitMessage } from './lib/split-message.js';
 
 const execAsync = promisify(exec);
 
@@ -41,11 +43,21 @@ function writeHeartbeat(jobName) {
     const dir = '/app/data/cron-heartbeats';
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     writeFileSync(path.join(dir, jobName), String(Math.floor(Date.now() / 1000)));
-  } catch { /* best effort */ }
+  } catch (err) { console.debug('[Heartbeat] Write failed:', err.message); }
 }
 
 const DATA_DIR = process.env.DATA_DIR || './data';
 const ADMIN_JID = `${process.env.ADMIN_NUMBER}@s.whatsapp.net`;
+
+/** Send a long message as multiple WhatsApp chunks instead of truncating */
+async function safeSendChunked(sockRef, jid, text) {
+  const chunks = splitMessage(text);
+  for (let i = 0; i < chunks.length; i++) {
+    const prefix = chunks.length > 1 ? `(${i + 1}/${chunks.length}) ` : '';
+    await sockRef.sock.sendMessage(jid, { text: prefix + chunks[i] });
+    if (i < chunks.length - 1) await new Promise(r => setTimeout(r, 500));
+  }
+}
 
 const SCHEDULES_FILE = path.join(DATA_DIR, 'schedules.json');
 const URL_WATCHES_FILE = path.join(DATA_DIR, 'url-watches.json');
@@ -238,7 +250,7 @@ export async function generateBriefing() {
       const resp = await fetch('http://beszel:8090/api/health', { signal: AbortSignal.timeout(3000) });
       if (!resp.ok) return null;
       return await resp.json();
-    } catch { return null; }
+    } catch (err) { console.debug('[Briefing] Beszel health unavailable:', err.message); return null; }
   }
 
   const [uptime, memory, disk, containers, dockerStats, fail2ban, beszelHealth] = await Promise.all([
@@ -263,7 +275,7 @@ export async function generateBriefing() {
       { timeout: 10000 }
     );
     f2bSummary = stdout.trim();
-  } catch { /* ignore */ }
+  } catch (err) { console.debug('[Briefing] Fail2ban summary unavailable:', err.message); }
 
   // Check for recent errors in container logs (last 6 hours)
   let recentErrors = '';
@@ -279,7 +291,7 @@ export async function generateBriefing() {
         recentErrors = recentErrors.replaceAll(`[${raw}]`, `[${friendly}]`);
       }
     }
-  } catch { /* ignore */ }
+  } catch (err) { console.debug('[Briefing] Recent error scan failed:', err.message); }
 
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
@@ -437,7 +449,7 @@ async function loadLogConfig() {
     containers: [],
     excludeContainers: DEFAULT_EXCLUDE_CONTAINERS,
     patterns: ['ERROR', 'FATAL', 'SIGKILL', 'OOMKilled', 'panic'],
-    ignorePatterns: ['sentinel/push', 'context deadline exceeded', '"error":0', '"error": 0'],
+    ignorePatterns: ['sentinel/push', 'context deadline exceeded', '"error":0', '"error": 0', 'request error: aborted'],
     lastCheck: null,
     alertedHashes: [],
   });
@@ -488,7 +500,8 @@ async function checkContainerLogs(sockRef) {
     try {
       const { stdout } = await execAsync('docker ps --format "{{.Names}}" 2>/dev/null', { timeout: 5000 });
       containers = stdout.trim().split('\n').filter(Boolean);
-    } catch {
+    } catch (err) {
+      console.warn('[LogMonitor] Cannot list containers:', err.message);
       return;
     }
   }
@@ -554,7 +567,7 @@ async function checkContainerLogs(sockRef) {
           console.error('Failed to send log alert: socket not open after 3 attempts');
           break;
         }
-        await sockRef.sock.sendMessage(ADMIN_JID, { text: msg.substring(0, 3900) });
+        await safeSendChunked(sockRef, ADMIN_JID, msg);
         console.log(`⚠️ Sent ${alerts.length} log alert(s)`);
         break;
       } catch (err) {
@@ -606,7 +619,7 @@ async function checkContainerLogs(sockRef) {
 
           // Execute autonomously in background (non-blocking)
           executeTaskAutonomously(task, sockRef).catch(err => {
-            console.error(`Repair task ${task.id} failed:`, err.message);
+            handleBackgroundTaskError(err, task, sockRef);
           });
         }
       } catch (err) {
@@ -752,7 +765,7 @@ export async function startScheduler(sockRef, connectionHealth) {
     const isWaking = (hour >= 9 && hour <= 23) || hour === 0;
     if (!isWaking) return;
 
-    if (silentMs > 10 * 60 * 1000) {
+    if (silentMs > 30 * 60 * 1000) {
       const recentReconnects = connectionHealth.reconnectCount;
       const timeSinceReconnect = Date.now() - connectionHealth.lastReconnectAt;
 
@@ -776,7 +789,7 @@ export async function startScheduler(sockRef, connectionHealth) {
             }
           }
           if (purged) console.warn(`🧹 Purged ${purged} stale Baileys keys`);
-        } catch {}
+        } catch (err) { console.warn('[SilenceWatchdog] Auth key purge failed:', err.message); }
       }
 
       console.warn(`📡 Silence watchdog: no messages for ${silentMin}min — forcing reconnect (attempt ${recentReconnects + 1})`);
@@ -800,7 +813,7 @@ export async function startScheduler(sockRef, connectionHealth) {
       // Exit code 1 = stale jobs found (message in stdout)
       if (err.stdout?.startsWith('STALE:')) {
         const msg = `⚠️ Cron Health Monitor — stale jobs detected:\n${err.stdout.replace('STALE:', '').trim()}`;
-        await sockRef.sock.sendMessage(ADMIN_JID, { text: msg }).catch(() => {});
+        await sockRef.sock.sendMessage(ADMIN_JID, { text: msg }).catch(err => { console.error('Failed to send cron health alert:', err.message); });
       }
     }
   });
@@ -853,17 +866,17 @@ export async function startScheduler(sockRef, connectionHealth) {
       unlinkSync(outboxPath);
       const msg = JSON.parse(raw);
       if (msg.jid && msg.text && (Date.now() - msg.ts) < 300000) {
-        await sockRef.sock.sendMessage(msg.jid, { text: msg.text.substring(0, 3900) });
+        await safeSendChunked(sockRef, msg.jid, msg.text);
         console.log(`📤 Outbox: sent ${msg.text.length} chars to ${msg.jid}`);
       }
-    } catch { /* ignore */ }
+    } catch (err) { if (err.code !== 'ENOENT') console.warn('[Outbox] Send error:', err.message); }
   });
 
   // 12. Error Watcher — auto-detect container crashes and 5xx spikes
   initErrorWatcher(async (taskParams) => {
     const task = await createTask(taskParams);
     executeTaskAutonomously(task, sockRef).catch(err => {
-      console.error(`Error watcher repair task ${task.id} failed:`, err.message);
+      handleBackgroundTaskError(err, task, sockRef);
     });
     return task;
   }, sockRef);
@@ -884,7 +897,7 @@ export async function startScheduler(sockRef, connectionHealth) {
     try {
       const { autoReviewNewCommits } = await import('./git-reviewer.js');
       await autoReviewNewCommits(async (msg) => {
-        await sockRef.sock.sendMessage(ADMIN_JID, { text: msg.substring(0, 3900) });
+        await safeSendChunked(sockRef, ADMIN_JID, msg);
       });
       writeHeartbeat('git-review');
     } catch (err) {
@@ -898,7 +911,7 @@ export async function startScheduler(sockRef, connectionHealth) {
     try {
       const { checkFleetHealth } = await import('./bot-fleet.js');
       await checkFleetHealth(async (msg) => {
-        await sockRef.sock.sendMessage(ADMIN_JID, { text: msg.substring(0, 3900) });
+        await safeSendChunked(sockRef, ADMIN_JID, msg);
       });
       writeHeartbeat('fleet-health');
     } catch (err) {
@@ -991,7 +1004,7 @@ export async function startScheduler(sockRef, connectionHealth) {
         if (result.observations > 0) {
           console.log(`🗜️ Auto-compressed: ${result.compressed} events → ${result.observations} observations`);
         }
-      } catch { /* non-JSON output, log it */ }
+      } catch { /* expected for non-JSON output lines */ }
 
       writeHeartbeat('auto-compress');
     } catch (err) {
@@ -1011,7 +1024,7 @@ export async function startScheduler(sockRef, connectionHealth) {
         env: { ...process.env },
       }).trim();
       if (report && report.length > 50) {
-        await sockRef.sock.sendMessage(ADMIN_JID, { text: report.substring(0, 3900) });
+        await safeSendChunked(sockRef, ADMIN_JID, report);
         console.log('📊 Sent weekly skill review');
       }
       writeHeartbeat('weekly-skill-review');
@@ -1083,6 +1096,67 @@ export async function startScheduler(sockRef, connectionHealth) {
     }
   });
   console.log('🧪 Experiment monitor scheduled (Daily 9:30 AM AST / 13:30 UTC)');
+
+  // 24. Free Model Benchmark — Weekly Sunday 6 AM AST (= 10:00 UTC)
+  cron.schedule('0 10 * * 0', async () => {
+    try {
+      console.log('[Benchmark] Starting weekly free model benchmark...');
+      const { execSync } = await import('child_process');
+      const output = execSync('node /app/scripts/benchmark-free-models.mjs', {
+        encoding: 'utf8',
+        timeout: 600000, // 10 min max
+        env: { ...process.env, RANKINGS_PATH: '/app/data/free-model-rankings.json' },
+      });
+      console.log(output);
+      writeHeartbeat('free-model-benchmark');
+    } catch (err) {
+      console.error('Free model benchmark error:', err.message);
+    }
+  });
+  console.log('🏋️ Free model benchmark scheduled (Sunday 6 AM AST / 10:00 UTC)');
+
+  // 25. Knowledge Synthesis — Weekly Wednesday 7 PM AST (= 23:00 UTC)
+  // Reviews recent conversations, extracts patterns, updates knowledge files
+  cron.schedule('0 23 * * 3', async () => {
+    try {
+      console.log('[Knowledge] Starting weekly knowledge synthesis...');
+      const prompt = getSynthesisPrompt();
+      const task = await createTask({
+        title: 'Weekly Knowledge Synthesis',
+        description: prompt,
+        kind: 'complex',
+        source: 'scheduler:knowledge-synthesis',
+      });
+      executeTaskAutonomously(task, sockRef).catch(err => {
+        handleBackgroundTaskError(err, task, sockRef);
+      });
+      writeHeartbeat('knowledge-synthesis');
+    } catch (err) {
+      console.error('Knowledge synthesis error:', err.message);
+    }
+  });
+  console.log('📚 Knowledge synthesis scheduled (Wednesday 7 PM AST / 23:00 UTC)');
+
+  // 26. Knowledge Index Regeneration — Daily at startup + 6 AM AST (= 10:00 UTC)
+  // Quick: just re-scans files and rebuilds INDEX.md
+  try {
+    const stats = regenerateIndex();
+    console.log(`[Knowledge] INDEX.md regenerated: ${stats.files} files, ${stats.categories} categories`);
+  } catch (err) {
+    console.warn('[Knowledge] Index regeneration failed:', err.message);
+  }
+  cron.schedule('0 10 * * *', () => {
+    try {
+      const stats = regenerateIndex();
+      console.log(`[Knowledge] Daily index regen: ${stats.files} files, ${stats.categories} categories`);
+      writeHeartbeat('knowledge-index');
+    } catch (err) {
+      console.error('Knowledge index regen error:', err.message);
+    }
+  });
+
+  // Recover tasks that were in_progress during container restart (delay for WhatsApp socket)
+  setTimeout(() => recoverCheckpoints(sockRef), 10000);
 
   console.log('⏰ Scheduler ready');
 }
