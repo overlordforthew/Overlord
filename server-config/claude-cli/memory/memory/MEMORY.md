@@ -1,13 +1,8 @@
 # Memory Index
 
-## User
-- [Gil's Working Style](user_gil.md) — action-oriented developer, expects immediate execution, containerize everything
-
-## Projects
-- [TimesFM 2.5 Deployment](timesfm_deployment.md) — zero-shot forecasting on ElmoServer, integrated with MC + HL bot (2026-04-02)
-- [MC TimesFM](mc_timesfm.md) — MasterCommander sensor forecasting: wind, pressure, battery via /api/weather/forecast/sensor
-- [HL TimesFM](hl_timesfm.md) — Blessings grid bot volatility-adjusted spacing via forecast.py
-
-## Reference
-- [ElmoServer as ML Inference Layer](elmoserver_role.md) — Kokoro, F5, XTTS, TimesFM; deploy new ML services here first
-- [GitHub Account Migration](github_accounts.md) — repos on overlordforthew now, bluemele archived, use OFW token for push
+- [Overlord Personality Fix](overlord_personality_fix.md) — IDENTITY.md injection, group chat fix, prompt restructuring (2026-04-03)
+- [Knowledge System](knowledge_system.md) — Compounding knowledge architecture, how it works, where files live
+- [Gil Preferences](gil_preferences.md) — How Gil works, what frustrates him, communication style
+- [Ai-Chan Status](ai_chan_status.md) — Current state of Ai-Chan, what was fixed, DM vs group behavior
+- [MasterCommander Status](mastercommander_status.md) — Energy table fix, planned nearby-places feature, design decisions
+- [GitHub: overlordforthew](github_overlordforthew.md) — ALL repos under overlordforthew, NOT bluemele. Push method: gh auth token.
