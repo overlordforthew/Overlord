@@ -38,6 +38,8 @@ See /projects/CLAUDE.md for infrastructure rules, projects list, and permissions
 
 ### Scheduling & Monitoring
 - `/briefing` — Daily report (power user)
+- `/reports` — List saved scheduled reports (admin)
+- `/report <type>` — Read a specific report (admin)
 - `/remind <time> <msg>` — Schedule reminder (power user)
 - `/reminders` — List active reminders (power user)
 - `/cancel <id>` — Cancel reminder (power user)
@@ -54,9 +56,10 @@ See /projects/CLAUDE.md for infrastructure rules, projects list, and permissions
 - `/order <desc>` — Create standing order (admin)
 - `/orders` — List orders (admin)
 - `/proposals` — List pending proposals (admin)
-- `/approve <id>` — Approve proposal (admin)
-- `/deny <id>` — Deny proposal (admin)
-- `/pending` — Show pending items (admin)
+- `ok <id>` / `no <id>` — Approve/deny proposal (natural language, admin)
+- `/approve <name>` — Approve project request (admin)
+- `/deny <name>` — Deny project request (admin)
+- `/pending` — Show pending project requests (admin)
 
 ### Infrastructure
 - `/deploy <project>` — Deploy project (power user)
@@ -177,10 +180,60 @@ All memory lives in a single SQLite DB at `data/memory-v2.db` (WAL mode). The un
 - **CLI**: `mem` (container) or `node scripts/mem.mjs` (host) — search, save, recall, learn, stats
 - When asked about capabilities, ALWAYS search semantic memory first (`mem search` or `getSemanticContext`)
 
+## KNOWLEDGE SYSTEM (LLM Wiki)
+
+Persistent, compounding wiki at `knowledge/`. The LLM builds and maintains interlinked markdown pages. No RAG — structured files, keyword search, and an LLM that reads the right pages at the right time.
+
+### Structure
+- `knowledge/INDEX.md` — Master index, injected into admin context
+- `knowledge/log.md` — Chronological wiki changelog (append-only, grep-parseable)
+- `knowledge/raw/` — **Immutable** source documents. LLM reads, never modifies.
+- `knowledge/patterns/` — Recurring solutions, error→fix mappings
+- `knowledge/decisions/` — Architecture choices and rationale
+- `knowledge/insights/` — Generated analysis, cross-project patterns
+- `knowledge/projects/` — Per-project knowledge
+- `knowledge/entities/` — People, services, tools, APIs (entity profiles)
+- `knowledge/concepts/` — Topics, methodologies, design patterns
+- `knowledge/comparisons/` — Filed analyses, comparisons, query answers
+
+### Operations
+- **Ingest:** Save source to raw/ (immutable). Read it, then create/update 10-15 wiki pages: summary, entity pages, concept pages. Add cross-references. Append to log.md. Regenerate INDEX.md.
+- **Query:** Search wiki → synthesize answer. **File good answers back** as comparisons/ pages — don't let synthesis disappear into chat history.
+- **Lint:** `lintWiki()` — orphan pages, stale pages, dead links, stubs, uningested sources. Run weekly with synthesis.
+- **Write-back:** After solving problems, update relevant pages. Cross-reference with `[Page](../category/page.md)` links.
+- **Synthesis:** Weekly Wednesday 7 PM AST — reviews conversations, generates insights.
+
+### Page Convention
+```yaml
+---
+title: Page Title
+type: entity|concept|pattern|decision|insight|project|comparison
+updated: YYYY-MM-DD
+sources: [raw/source-name.md]
+links: [category/related-page.md]
+---
+```
+
+### Key Functions (knowledge-engine.js)
+- `saveSource(name, content)` — save immutable source to raw/
+- `appendLog(action, title, details)` — append to log.md
+- `getIngestContext()` — full wiki state for LLM during ingest
+- `fileAnswer(title, content, category, sources)` — file a query answer as a wiki page
+- `lintWiki()` — health-check the wiki
+- `findMentions(term)` — find all pages mentioning a term
+- `findOrphanPages()` — pages with no inbound links
+- `searchKnowledge(query)` / `getKnowledgeContext(query)` — search + prompt injection
+- `regenerateIndex()` — rebuild INDEX.md from all files
+
+### Two Systems, Two Purposes
+- **Memory** (SQLite, memory-v2) = reactive. Auto-extracted facts from conversations. Importance decay, vector dedup.
+- **Wiki** (markdown, knowledge/) = generative. Synthesized pages that compound over time. Cross-referenced, interlinked.
+
 ## PERSONALITY
 
-- Friendly, sharp, witty when appropriate
-- Technical but approachable
+Driven by `IDENTITY.md` — loaded at startup, injected into all system prompts.
+- Sharp, direct, opinionated, dry humor (earned, not performed)
 - Participant, not formal assistant
-- Don't over-explain or lecture
+- Lead with action, not reasoning
+- Push back when something's wrong
 - Match the energy of who you're talking to
