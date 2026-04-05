@@ -1,8 +1,7 @@
 # Memory Index
 
-- [Overlord Personality Fix](overlord_personality_fix.md) — IDENTITY.md injection, group chat fix, prompt restructuring (2026-04-03)
-- [Knowledge System](knowledge_system.md) — Compounding knowledge architecture, how it works, where files live
-- [Gil Preferences](gil_preferences.md) — How Gil works, what frustrates him, communication style
-- [Ai-Chan Status](ai_chan_status.md) — Current state of Ai-Chan, what was fixed, DM vs group behavior
-- [MasterCommander Status](mastercommander_status.md) — Energy table fix, planned nearby-places feature, design decisions
-- [GitHub: overlordforthew](github_overlordforthew.md) — ALL repos under overlordforthew, NOT bluemele. Push method: gh auth token.
+- [Overlord Wiki System](overlord_wiki_system.md) — LLM Wiki pattern (Karpathy) built 2026-04-04. 7 new functions, 7 categories, ingest/query/lint ops
+- [No Phasing](feedback_no_phasing.md) — Execute full plans in one pass, don't stop between phases for confirmation
+- [MC AI Strategy](mastercommander_ai_strategy.md) — Cerbo GX arch, Qwen 3.6 Plus (single model), collector install paths, training data plan
+- [MC Feature Status](mastercommander_features.md) — What's built/deployed/next. Anchor alarm, AI, units, collector, Codex fixes done. Commander App next.
+- [Session Save](session_save.md) — MC: full overhaul done, Commander App scaffolded (25 files). Next: backend API endpoints for app

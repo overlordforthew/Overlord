@@ -33,7 +33,8 @@
       "Skill(session-handoff)",
       "Skill(schedule)",
       "Skill(save)",
-      "Skill(audit)"
+      "Skill(audit)",
+      "mcp__chrome-devtools__press_key"
     ]
   }
 }
