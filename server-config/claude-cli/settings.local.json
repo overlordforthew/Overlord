@@ -34,7 +34,8 @@
       "Skill(schedule)",
       "Skill(save)",
       "Skill(audit)",
-      "mcp__chrome-devtools__press_key"
+      "mcp__chrome-devtools__press_key",
+      "Skill(test-site)"
     ]
   }
 }

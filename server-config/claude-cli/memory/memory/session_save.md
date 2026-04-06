@@ -1,48 +1,43 @@
 ---
 name: session-save
-description: Work-in-progress session state for /resume -- MC Commander App: all gaps fixed, JDK+Android SDK installing for APK build
+description: MC Sentinel LIVE on Cerbo GX. Universal collector architecture spec underway. Server pruned to 78% disk.
 type: project
 ---
 
 # Session Save
-**Saved**: 2026-04-04 18:30 UTC
-**Project**: MasterCommander
-**Branch**: main (dirty — massive changes)
-**State**: working (builds installing in background)
+**Saved**: 2026-04-05 ~13:00 UTC
+**Project**: MasterCommander + Server maintenance
+**Branch**: main (clean — all pushed)
+**State**: working
 
-## Goal
-Build Commander App APK for Gil's Samsung S10+ test device. All code is written, gaps fixed, now installing JDK 17 + Android SDK to compile APK locally.
+## Current Production State
+- **Sentinel is LIVE on Cerbo GX** at `/data/mc-sentinel/`
+- Auto-restart via `/data/mc-sentinel/run.sh` (while-true loop, 5s backoff)
+- Boot autostart via `/data/rc.local`
+- All 3 adapters connected: MQTT (Victron), GoFree (Zeus), NMEA TCP (Zeus)
+- Pushing to mastercommander.namibarden.com every 10s
+- Old collector (`/data/mc-collector/`) retired
 
-## What Was Done Since Last Save
-- Fixed all 6 Codex completeness audit gaps (snapshot missing env/engines, llm/ask missing responseId, cerbo host not passed to installer, app restart skipping stages, bridge mode payload mismatch, nginx missing routes)
-- Added auth.js service + Account.js screen (signup/login flow)
-- Added notifications.js service (push notifications for critical alerts)
-- Added units.js service (matches web dashboard unit system)
-- Wired notifications into App.js (fires on critical alerts from rule engine)
-- Updated App.js: 5-stage first-launch (Setup → Account → Model Download → Cerbo Installer → Main)
-- Added /api/llm/ask and /api/cerbo/install backend endpoints + nginx proxy rules
-- Added /api/trips, /api/maintenance, /api/costs nginx proxy rules
-- Expo prebuild generated android/ directory
-- JDK 17 + Android SDK installing in background
+## What Was Decided This Session
 
-## Commander App Final State: 29 files
-- 9 services: mqtt-client, cerbo-discovery, cloud-sync, local-llm, auth, rule-engine, setup-wizard, units, notifications
-- 8 screens: Setup, Account, ModelDownload, CerboInstaller, Dashboard, Alerts, AI, Settings
-- Expo config, babel, index.js, package.json, .gitignore, README.md, assets
+### Universal Collector Architecture
+Gil directed MC from personal tool to universal product:
+- 6 protocol families: MQTT, SignalK, GoFree, NMEA TCP, Cloud APIs, BLE
+- Pluggable adapter architecture with auto-discovery
+- LLM-driven install wizard (network scan → device ID → source mapping)
+- RPi as minimum viable hardware
+- See `mc_product_vision.md` for full details
 
-## Expo Account
-- Could NOT create via headless Chrome (reCAPTCHA blocked) or API (locked down)
-- Building APK locally instead using Gradle + Android SDK (no Expo account needed)
-- Expo credentials if account gets created: email=overlord.gil.ai@gmail.com, username=overlordforthew, password=Mc!Expo2026$Commander
+### Server Prune (2026-04-05)
+- Disk 93% → 78% (5.1GB → 16GB free)
+- Cleaned: dangling Docker images (~4.9GB), build cache (~3.1GB), npm cache (~2.1GB), apt cache (~566MB), old Claude Code versions (~440MB), stale puppeteer profiles, journal logs
 
 ## Next Steps
-1. Wait for JDK + Android SDK install to complete
-2. Set ANDROID_HOME + JAVA_HOME env vars
-3. Run: cd android && ./gradlew assembleRelease (or assembleDebug for testing)
-4. APK will be at android/app/build/outputs/apk/release/app-release.apk
-5. Host APK on MC server for Gil to download on S10+
-6. Test on S10+ connected to Blue Moon's WiFi
+1. **Spec the universal collector** — COLLECTOR-SPEC.md v0.3 with 6 adapters, discovery engine, source map
+2. **Phase 2: Discovery Engine** — network scanning, device signatures
+3. **Phase 3: Commander-guided install** — LLM wizard via phone tunnel
+4. **Phase 0: Commander Direct Mode** — GoFree + NMEA TCP in React Native app
+5. **Phase 4: SignalK adapter** — unlocks non-Victron boats
 
-## Background Processes
-- JDK 17 installing via apt-get (task bh0spe82w / bwqccx6ds)
-- Android SDK downloading (task bu1dn3awl)
+## Errors / Blockers
+None. Sentinel is live and stable.
