@@ -1,6 +1,6 @@
 # OVERLORD — WhatsApp Bot Config
 
-See /projects/CLAUDE.md for infrastructure rules, projects list, and permissions.
+See /root/projects/CLAUDE.md for infrastructure rules, projects list, and permissions.
 
 ## BOT-SPECIFIC
 
@@ -72,7 +72,7 @@ See /projects/CLAUDE.md for infrastructure rules, projects list, and permissions
 - `/guard [on|off]` — Destructive command guard (admin)
 
 ### Media & TTS
-- `/audiovoice <text>` — Kokoro TTS (high quality, self-hosted on ElmoServer)
+- `/audiovoice <text>` — Kokoro TTS (self-hosted on ElmoServer, port 8880 — currently DOWN, service not running)
 - `/voice <text>` — Alias for /audiovoice
 - `/audiovoice voices` — List available voices
 - `/tts <text>` / `/say <text>` — Quick TTS
