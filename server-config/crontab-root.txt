@@ -51,3 +51,6 @@
 # OnlyHulls daily boat scrape — 3 sources, cruisers/liveaboards only
 37 5 * * * /root/projects/OnlyHulls/scripts/daily-scrape.sh 100 >> /tmp/onlyhulls-scrape.log 2>&1
 0 3 * * * /root/projects/MasterCommander/scripts/backup-db.sh >> /root/logs/backup.log 2>&1
+
+# OnlyHulls weekly quality pass — Sundays after daily scrape
+45 6 * * 0 cd /root/projects/OnlyHulls && CLAUDE_MODEL=haiku bash scripts/weekly-import-quality.sh >> /tmp/onlyhulls-weekly-quality.log 2>&1
