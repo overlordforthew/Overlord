@@ -33,8 +33,9 @@ import { runStudySession } from './idle-study.js';
 import { checkExperiments } from './experiment-engine.js';
 import { evolve } from './evolution-engine.js';
 import { writeFileSync, readFileSync } from 'fs';
-import { getSynthesisPrompt, regenerateIndex } from './knowledge-engine.js';
+import { getSynthesisPrompt, regenerateIndex, lintWiki, appendLog } from './knowledge-engine.js';
 import { splitMessage } from './lib/split-message.js';
+import { analyzeError, formatAnalyzedAlert, buildEnrichedNextAction } from './error-analyzer.js';
 
 const execAsync = promisify(exec);
 
@@ -48,6 +49,31 @@ function writeHeartbeat(jobName) {
 
 const DATA_DIR = process.env.DATA_DIR || './data';
 const ADMIN_JID = `${process.env.ADMIN_NUMBER}@s.whatsapp.net`;
+const REPORTS_DIR = path.join(DATA_DIR, 'reports');
+if (!existsSync(REPORTS_DIR)) mkdirSync(REPORTS_DIR, { recursive: true });
+
+/**
+ * Write a report to disk instead of sending to WhatsApp.
+ * Reports are pulled on demand via /reports command.
+ */
+function writeReport(type, content) {
+  try {
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    const file = path.join(REPORTS_DIR, `${type}_${ts}.txt`);
+    writeFileSync(file, content);
+    console.log(`📄 Report saved: ${type} (${content.length} chars)`);
+    // Prune old reports: keep last 20 per type
+    const all = require('fs').readdirSync(REPORTS_DIR)
+      .filter(f => f.startsWith(type + '_'))
+      .sort()
+      .reverse();
+    for (const old of all.slice(20)) {
+      require('fs').unlinkSync(path.join(REPORTS_DIR, old));
+    }
+  } catch (err) {
+    console.error(`[Report] Failed to write ${type}:`, err.message);
+  }
+}
 
 /** Send a long message as multiple WhatsApp chunks instead of truncating */
 async function safeSendChunked(sockRef, jid, text) {
@@ -449,7 +475,7 @@ async function loadLogConfig() {
     containers: [],
     excludeContainers: DEFAULT_EXCLUDE_CONTAINERS,
     patterns: ['ERROR', 'FATAL', 'SIGKILL', 'OOMKilled', 'panic'],
-    ignorePatterns: ['sentinel/push', 'context deadline exceeded', '"error":0', '"error": 0', 'request error: aborted'],
+    ignorePatterns: ['sentinel/push', 'context deadline exceeded', '"error":0', '"error": 0', 'request error: aborted', 'stream errored out'],
     lastCheck: null,
     alertedHashes: [],
   });
@@ -509,7 +535,7 @@ async function checkContainerLogs(sockRef) {
 
   const pattern = config.patterns.join('\\|');
   const ignorePatterns = config.ignorePatterns || [];
-  const alerts = [];
+  const alerts = [];       // structured: { container, friendly, errorText, analysis }
 
   for (const container of containers) {
     try {
@@ -547,7 +573,7 @@ async function checkContainerLogs(sockRef) {
         // Deduplicate — don't alert same errors repeatedly
         if (!config.alertedHashes.includes(errorHash)) {
           const friendly = await resolveContainerName(container);
-        alerts.push(`🐳 ${friendly}:\n${filtered.substring(0, 300)}`);
+          alerts.push({ container, friendly, errorText: filtered.substring(0, 300) });
           config.alertedHashes.push(errorHash);
           // Keep only last 100 hashes
           if (config.alertedHashes.length > 100) config.alertedHashes = config.alertedHashes.slice(-100);
@@ -559,29 +585,56 @@ async function checkContainerLogs(sockRef) {
   await saveLogConfig(config);
 
   if (alerts.length > 0) {
-    const msg = `⚠️ Log alerts detected:\n\n${alerts.join('\n\n')}`;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        if (!sockRef.sock?.ws?.isOpen) {
-          if (attempt < 2) { await new Promise(r => setTimeout(r, 5000)); continue; }
-          console.error('Failed to send log alert: socket not open after 3 attempts');
-          break;
+    // AI-powered error analysis before alerting
+    let analyzedAlerts = alerts;
+    try {
+      analyzedAlerts = await Promise.all(
+        alerts.map(async (a) => {
+          const analysis = await analyzeError(a.friendly, a.errorText);
+          return { ...a, analysis };
+        })
+      );
+    } catch (err) {
+      console.warn('[LogMonitor] AI analysis failed, sending raw alerts:', err.message);
+      analyzedAlerts = alerts.map(a => ({ ...a, analysis: null }));
+    }
+
+    // Filter out noise (AI-identified harmless errors)
+    const actionable = analyzedAlerts.filter(a => !a.analysis?.noise);
+    const noiseCount = analyzedAlerts.length - actionable.length;
+    if (noiseCount > 0) console.log(`[LogMonitor] AI filtered ${noiseCount} noise alert(s)`);
+
+    if (actionable.length > 0) {
+      // Format WhatsApp message with AI analysis
+      const formattedAlerts = actionable.map(a => {
+        if (a.analysis && a.analysis.rootCause !== 'Analysis unavailable') {
+          return formatAnalyzedAlert(a.friendly, a.errorText, a.analysis);
         }
-        await safeSendChunked(sockRef, ADMIN_JID, msg);
-        console.log(`⚠️ Sent ${alerts.length} log alert(s)`);
-        break;
-      } catch (err) {
-        if (attempt === 2) console.error('Failed to send log alert:', err.message);
-        else await new Promise(r => setTimeout(r, 5000));
+        return `\u{1F433} ${a.friendly}:\n${a.errorText}`;
+      });
+
+      const msg = `\u{26A0}\u{FE0F} Log alerts detected:\n\n${formattedAlerts.join('\n\n')}`;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          if (!sockRef.sock?.ws?.isOpen) {
+            if (attempt < 2) { await new Promise(r => setTimeout(r, 5000)); continue; }
+            console.error('Failed to send log alert: socket not open after 3 attempts');
+            break;
+          }
+          await safeSendChunked(sockRef, ADMIN_JID, msg);
+          console.log(`\u{26A0}\u{FE0F} Sent ${actionable.length} analyzed alert(s)`);
+          break;
+        } catch (err) {
+          if (attempt === 2) console.error('Failed to send log alert:', err.message);
+          else await new Promise(r => setTimeout(r, 5000));
+        }
       }
     }
 
-    // Auto-create repair tasks for each alert and attempt autonomous fix
-    for (const alert of alerts) {
+    // Auto-create repair tasks for actionable alerts with enriched context
+    for (const alert of actionable) {
       try {
-        // Extract container name from alert
-        const containerMatch = alert.match(/🐳 ([^:]+):/);
-        const containerName = containerMatch ? containerMatch[1].trim() : 'unknown';
+        const containerName = alert.friendly;
 
         // Check if there's already an active repair task for this specific container
         // Stale tasks (>15 min in_progress) are auto-closed so they don't block new repairs
@@ -592,7 +645,7 @@ async function checkContainerLogs(sockRef) {
             const age = Date.now() - new Date(t.startedAt || t.createdAt).getTime();
             if (age > STALE_MS) {
               await closeTask(t.id, TaskStatus.DONE, 'Auto-closed: stale repair task (>15min)');
-              console.log(`🧹 Closed stale repair task ${t.id} for ${containerName}`);
+              console.log(`\u{1F9F9} Closed stale repair task ${t.id} for ${containerName}`);
             }
           }
         }
@@ -603,19 +656,25 @@ async function checkContainerLogs(sockRef) {
         );
 
         if (!alreadyTracked) {
+          const baseAction = `Check logs for ${containerName}, identify root cause, fix it, verify recovery`;
+          const nextAction = alert.analysis
+            ? buildEnrichedNextAction(containerName, alert.errorText, alert.analysis, baseAction)
+            : baseAction;
+          const priority = alert.analysis?.severity === 'critical' ? 'urgent' : 'high';
+
           const task = await createTask({
             title: `Auto-repair: ${containerName} error detected`,
             kind: 'repair',
             chatJid: ADMIN_JID,
             owner: 'Gil',
             project: containerName,
-            priority: 'high',
+            priority,
             riskLevel: 'low',
             successCriteria: `${containerName} container healthy, no new errors`,
-            nextAction: `Check logs for ${containerName}, identify root cause, fix it, verify recovery`,
+            nextAction,
             source: 'observer',
           });
-          console.log(`🔧 Created repair task ${task.id} for ${containerName}`);
+          console.log(`\u{1F527} Created repair task ${task.id} for ${containerName}`);
 
           // Execute autonomously in background (non-blocking)
           executeTaskAutonomously(task, sockRef).catch(err => {
@@ -649,17 +708,17 @@ export async function startScheduler(sockRef, connectionHealth) {
   }
 
   // 2. Daily briefing at 6am Trinidad (= 10am UTC, Gil wakes ~5:30am AST)
+  // REPORT — saved to disk, pull via /briefing or /reports
   cron.schedule('0 10 * * *', async () => {
     try {
       const briefing = await generateBriefing();
-      await sockRef.sock.sendMessage(ADMIN_JID, { text: briefing });
+      writeReport('daily-briefing', briefing);
       writeHeartbeat('daily-briefing');
-      console.log('☀️ Sent daily briefing');
     } catch (err) {
-      console.error('Failed to send daily briefing:', err.message);
+      console.error('Failed to generate daily briefing:', err.message);
     }
   });
-  console.log('☀️ Daily briefing scheduled (6:00 AM AST / 10:00 AM UTC)');
+  console.log('☀️ Daily briefing scheduled (6:00 AM AST / 10:00 AM UTC) [report-only]');
 
   // 3. URL monitoring every 15 minutes
   cron.schedule('*/15 * * * *', async () => {
@@ -684,24 +743,22 @@ export async function startScheduler(sockRef, connectionHealth) {
   console.log('📋 Log monitor scheduled (every 5 min)');
 
   // 5. Nightly synthesis at 8pm Trinidad (= midnight UTC)
-  // Gil turns off Starlink by 9pm AST, so all nightly jobs run before 8:30pm AST
+  // ALERT only on regressions. Full report saved to disk.
   cron.schedule('0 0 * * *', async () => {
     try {
       const synthesis = await generateDailySynthesis();
-      // Notify if there are meaningful events or insights worth surfacing
-      if (synthesis.regressions.count > 0 || synthesis.friction.totalEvents > 3 || synthesis.insights?.length > 0) {
-        const msg = formatSynthesisMessage(synthesis);
-        await sockRef.sock.sendMessage(ADMIN_JID, { text: msg });
-        console.log('🧠 Sent nightly synthesis');
-      } else {
-        console.log('🧠 Nightly synthesis: clean day, no alert sent');
+      const msg = formatSynthesisMessage(synthesis);
+      writeReport('nightly-synthesis', msg);
+      // Only alert Gil on actual regressions (broken things)
+      if (synthesis.regressions.count > 0) {
+        await sockRef.sock.sendMessage(ADMIN_JID, { text: `⚠️ ${synthesis.regressions.count} regression(s) detected — check /reports for details` });
       }
       writeHeartbeat('nightly-synthesis');
     } catch (err) {
       console.error('Nightly synthesis error:', err.message);
     }
   });
-  console.log('🧠 Nightly synthesis scheduled (8:00 PM AST / 00:00 UTC)');
+  console.log('🧠 Nightly synthesis scheduled (8:00 PM AST / 00:00 UTC) [alert-only]');
 
   // 6. Daily performance metrics at 8:15pm Trinidad (= 00:15 UTC)
   cron.schedule('15 0 * * *', async () => {
@@ -754,7 +811,7 @@ export async function startScheduler(sockRef, connectionHealth) {
   console.log('🛡️ Session guard scheduled (every 1 min)');
 
   // 8a2. Inbound silence watchdog — every 5 minutes
-  // Backoff: reconnect at 10min, then wait progressively longer before retrying
+  // Only forces reconnect when WebSocket is actually dead, not just quiet
   // After 6 reconnects with no messages, back off to every 60 min
   cron.schedule('*/5 * * * *', async () => {
     const silentMs = Date.now() - connectionHealth.lastMessageAt;
@@ -765,7 +822,14 @@ export async function startScheduler(sockRef, connectionHealth) {
     const isWaking = (hour >= 9 && hour <= 23) || hour === 0;
     if (!isWaking) return;
 
-    if (silentMs > 30 * 60 * 1000) {
+    // Check actual WebSocket state before assuming connection is dead
+    const ws = sockRef.sock?.ws;
+    const wsOpen = ws && ws.readyState === ws.OPEN;
+
+    // If WebSocket is open and healthy, silence just means nobody is texting — skip
+    if (wsOpen && silentMs <= 90 * 60 * 1000) return;
+
+    if (silentMs > 60 * 60 * 1000 || (!wsOpen && silentMs > 10 * 60 * 1000)) {
       const recentReconnects = connectionHealth.reconnectCount;
       const timeSinceReconnect = Date.now() - connectionHealth.lastReconnectAt;
 
@@ -792,8 +856,9 @@ export async function startScheduler(sockRef, connectionHealth) {
         } catch (err) { console.warn('[SilenceWatchdog] Auth key purge failed:', err.message); }
       }
 
-      console.warn(`📡 Silence watchdog: no messages for ${silentMin}min — forcing reconnect (attempt ${recentReconnects + 1})`);
-      connectionHealth.reconnectCount++;
+      const wsState = wsOpen ? 'open' : 'closed/missing';
+      console.warn(`📡 Silence watchdog: no messages for ${silentMin}min (ws: ${wsState}) — forcing reconnect (attempt ${recentReconnects + 1})`);
+      // Don't increment reconnectCount here — the close handler in index.js already does it
       connectionHealth.lastReconnectAt = Date.now();
       try { sockRef.sock?.end(); } catch {}
     }
@@ -820,20 +885,20 @@ export async function startScheduler(sockRef, connectionHealth) {
   console.log('🔍 Cron health monitor scheduled (every 30 min)');
 
   // 9. Weekly AI repo intelligence — Friday 10am AST (= 2pm UTC)
+  // REPORT — saved to disk, pull via /reports
   cron.schedule('0 14 * * 5', async () => {
     try {
       const { generateReport } = await import('./scripts/github-trending.js');
       const report = await generateReport();
-      await sockRef.sock.sendMessage(ADMIN_JID, { text: report });
-      console.log('📊 Sent weekly AI repo intelligence report');
+      writeReport('weekly-ai-intel', report);
     } catch (err) {
       console.error('Weekly AI report error:', err.message);
     }
   });
-  console.log('📊 Weekly AI repo intelligence scheduled (Friday 10:00 AM AST / 14:00 UTC)');
+  console.log('📊 Weekly AI repo intelligence scheduled (Friday 10:00 AM AST / 14:00 UTC) [report-only]');
 
   // 10. Nightly Self-Improvement Protocol — 8:30pm AST
-  // Runs after daily synthesis (8pm), before Gil's Starlink goes off at 9pm
+  // REPORT — saved to disk, pull via /reports
   cron.schedule('30 20 * * *', async () => {
     try {
       const { execSync } = await import('child_process');
@@ -843,18 +908,13 @@ export async function startScheduler(sockRef, connectionHealth) {
         env: { ...process.env },
       }).trim();
       if (report && report.length > 50) {
-        if (sockRef.sock?.ws?.isOpen) {
-          await sockRef.sock.sendMessage(ADMIN_JID, { text: report });
-          console.log('🔬 Sent nightly self-improvement report');
-        } else {
-          console.warn('🔬 Self-improvement report ready but socket not open, skipping send');
-        }
+        writeReport('self-improvement', report);
       }
     } catch (err) {
       console.error('Self-improvement report error:', err?.message || err?.signal || String(err));
     }
   }, { timezone: 'America/Puerto_Rico' });
-  console.log('🔬 Self-improvement protocol scheduled (8:30 PM AST / 00:30 UTC)');
+  console.log('🔬 Self-improvement protocol scheduled (8:30 PM AST / 00:30 UTC) [report-only]');
 
   // 11. File-based outbox — send messages queued by external scripts
   const outboxPath = '/tmp/wa-outbox.json';
@@ -893,18 +953,19 @@ export async function startScheduler(sockRef, connectionHealth) {
   console.log('👁️ Error watcher scheduled (docker events + Traefik 5xx every 2 min)');
 
   // 13. Git auto-review — check for new commits every 30 minutes
+  // REPORT — saved to disk, pull via /reports
   cron.schedule('*/30 * * * *', async () => {
     try {
       const { autoReviewNewCommits } = await import('./git-reviewer.js');
       await autoReviewNewCommits(async (msg) => {
-        await safeSendChunked(sockRef, ADMIN_JID, msg);
+        writeReport('git-review', msg);
       });
       writeHeartbeat('git-review');
     } catch (err) {
       console.error('Git auto-review error:', err.message);
     }
   });
-  console.log('🔍 Git auto-review scheduled (every 30 min)');
+  console.log('🔍 Git auto-review scheduled (every 30 min) [report-only]');
 
   // 14. Fleet health check — every 5 minutes
   cron.schedule('*/5 * * * *', async () => {
@@ -1014,7 +1075,7 @@ export async function startScheduler(sockRef, connectionHealth) {
   console.log('🗜️ Memory v2 auto-compression scheduled (every 6 hours, :15 offset)');
 
   // 18. Weekly skill review — Friday 6pm AST (= 22:00 UTC)
-  // Runs same day as tech intel report but later — review week's performance + queue improvements
+  // REPORT — saved to disk, pull via /reports
   cron.schedule('0 22 * * 5', async () => {
     try {
       const { execSync } = await import('child_process');
@@ -1024,49 +1085,59 @@ export async function startScheduler(sockRef, connectionHealth) {
         env: { ...process.env },
       }).trim();
       if (report && report.length > 50) {
-        await safeSendChunked(sockRef, ADMIN_JID, report);
-        console.log('📊 Sent weekly skill review');
+        writeReport('weekly-skill-review', report);
       }
       writeHeartbeat('weekly-skill-review');
     } catch (err) {
       console.error('Weekly skill review error:', err.message);
     }
   });
-  console.log('📊 Weekly skill review scheduled (Friday 6:00 PM AST / 22:00 UTC)');
+  console.log('📊 Weekly skill review scheduled (Friday 6:00 PM AST / 22:00 UTC) [report-only]');
 
   // 19. Strategic Patrol — 11 AM and 5 PM AST (= 15:00 and 21:00 UTC)
-  // Reviews projects, deps, errors, infra. Routes findings through autonomy engine.
+  // REPORT — captures output to disk instead of WhatsApp
+  const silentSockRef = { sock: { sendMessage: async (jid, msg) => {
+    if (msg.text) writeReport('strategic-patrol', msg.text);
+  }, sendPresenceUpdate: async () => {} } };
   cron.schedule('0 15,21 * * *', async () => {
     try {
-      await runStrategicPatrol(sockRef);
+      await runStrategicPatrol(silentSockRef);
       writeHeartbeat('strategic-patrol');
     } catch (err) {
       console.error('Strategic patrol error:', err.message);
     }
   });
-  console.log('🔭 Strategic patrol scheduled (11 AM & 5 PM AST / 15:00 & 21:00 UTC)');
+  console.log('🔭 Strategic patrol scheduled (11 AM & 5 PM AST / 15:00 & 21:00 UTC) [report-only]');
 
   // 20. Portfolio Scorecard — Monday 9 AM AST (= 13:00 UTC)
+  // REPORT — saved to disk
+  const scorecardSilent = { sock: { sendMessage: async (jid, msg) => {
+    if (msg.text) writeReport('portfolio-scorecard', msg.text);
+  }, sendPresenceUpdate: async () => {} } };
   cron.schedule('0 13 * * 1', async () => {
     try {
-      await generateScorecard(sockRef);
+      await generateScorecard(scorecardSilent);
       writeHeartbeat('portfolio-scorecard');
     } catch (err) {
       console.error('Portfolio scorecard error:', err.message);
     }
   });
-  console.log('📊 Portfolio scorecard scheduled (Monday 9 AM AST / 13:00 UTC)');
+  console.log('📊 Portfolio scorecard scheduled (Monday 9 AM AST / 13:00 UTC) [report-only]');
 
   // 21. KPI Tracker — Daily 8 AM AST (= 12:00 UTC)
+  // REPORT — saved to disk
+  const kpiSilent = { sock: { sendMessage: async (jid, msg) => {
+    if (msg.text) writeReport('kpi-tracker', msg.text);
+  }, sendPresenceUpdate: async () => {} } };
   cron.schedule('0 12 * * *', async () => {
     try {
-      await runKpiCheck(sockRef);
+      await runKpiCheck(kpiSilent);
       writeHeartbeat('kpi-tracker');
     } catch (err) {
       console.error('KPI tracker error:', err.message);
     }
   });
-  console.log('📈 KPI tracker scheduled (Daily 8 AM AST / 12:00 UTC)');
+  console.log('📈 KPI tracker scheduled (Daily 8 AM AST / 12:00 UTC) [report-only]');
 
   // 22. Idle Study — Check every 10 min during waking hours
   let lastMessageAt = Date.now();
@@ -1087,25 +1158,43 @@ export async function startScheduler(sockRef, connectionHealth) {
   console.log('📚 Idle study scheduled (every 10 min, triggers after 30 min idle)');
 
   // 23. Experiment Monitor — Daily 9 AM AST (= 13:00 UTC, after scorecard)
+  // REPORT — saved to disk
+  const experimentSilent = { sock: { sendMessage: async (jid, msg) => {
+    if (msg.text) writeReport('experiment-monitor', msg.text);
+  }, sendPresenceUpdate: async () => {} } };
   cron.schedule('30 13 * * *', async () => {
     try {
-      await checkExperiments(sockRef);
+      await checkExperiments(experimentSilent);
       writeHeartbeat('experiment-monitor');
     } catch (err) {
       console.error('Experiment monitor error:', err.message);
     }
   });
-  console.log('🧪 Experiment monitor scheduled (Daily 9:30 AM AST / 13:30 UTC)');
+  console.log('🧪 Experiment monitor scheduled (Daily 9:30 AM AST / 13:30 UTC) [report-only]');
 
   // 24. Free Model Benchmark — Weekly Sunday 6 AM AST (= 10:00 UTC)
   cron.schedule('0 10 * * 0', async () => {
     try {
       console.log('[Benchmark] Starting weekly free model benchmark...');
-      const { execSync } = await import('child_process');
-      const output = execSync('node /app/scripts/benchmark-free-models.mjs', {
-        encoding: 'utf8',
-        timeout: 600000, // 10 min max
-        env: { ...process.env, RANKINGS_PATH: '/app/data/free-model-rankings.json' },
+      const { execFile } = await import('child_process');
+      const output = await new Promise((resolve, reject) => {
+        let stdout = '';
+        let stderr = '';
+        const child = execFile('node', ['/app/scripts/benchmark-free-models.mjs'], {
+          timeout: 1200000, // 20 min — benchmark tests dozens of models sequentially
+          env: { ...process.env, RANKINGS_PATH: '/app/data/free-model-rankings.json' },
+          maxBuffer: 10 * 1024 * 1024, // 10MB buffer for verbose output
+        }, (err, out, errOut) => {
+          if (err) {
+            // Still capture partial output on timeout
+            console.error('[Benchmark] Process error:', err.message);
+            if (stdout) console.log('[Benchmark] Partial output:', stdout.slice(-2000));
+            return reject(err);
+          }
+          resolve(out);
+        });
+        child.stdout?.on('data', d => { stdout += d; });
+        child.stderr?.on('data', d => { stderr += d; });
       });
       console.log(output);
       writeHeartbeat('free-model-benchmark');
@@ -1136,6 +1225,26 @@ export async function startScheduler(sockRef, connectionHealth) {
     }
   });
   console.log('📚 Knowledge synthesis scheduled (Wednesday 7 PM AST / 23:00 UTC)');
+
+  // 25b. Wiki Lint — Weekly Wednesday 30 min after synthesis (23:30 UTC)
+  cron.schedule('30 23 * * 3', () => {
+    try {
+      console.log('[Knowledge] Running weekly wiki lint...');
+      const report = lintWiki();
+      const summary = [
+        `Pages: ${report.total_pages}, Sources: ${report.total_sources}`,
+        `Orphans: ${report.orphans.length}, Stale: ${report.stale.length}`,
+        `Stubs: ${report.stubs.length}, Dead links: ${report.deadLinks.length}`,
+        `Uningested: ${report.uningested.length}`,
+        report.healthy ? 'Status: healthy' : 'Status: issues found',
+      ].join('. ');
+      appendLog('lint', 'Weekly health check', summary);
+      console.log(`[Knowledge] Wiki lint: ${summary}`);
+      writeHeartbeat('knowledge-lint');
+    } catch (err) {
+      console.error('Knowledge lint error:', err.message);
+    }
+  });
 
   // 26. Knowledge Index Regeneration — Daily at startup + 6 AM AST (= 10:00 UTC)
   // Quick: just re-scans files and rebuilds INDEX.md

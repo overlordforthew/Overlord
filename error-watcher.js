@@ -14,6 +14,7 @@ import { promisify } from 'util';
 import pino from 'pino';
 import { logRegression, logFriction } from './meta-learning.js';
 import { recordGap } from './pulse.js';
+import { analyzeError, buildEnrichedNextAction } from './error-analyzer.js';
 
 const execAsync = promisify(exec);
 const logger = pino({ level: 'info' });
@@ -25,6 +26,11 @@ const COOLDOWN_MS = 10 * 60 * 1000;
 // Containers to ignore (Coolify restart cycles, planned restarts)
 const IGNORED_CONTAINERS = new Set([
   'coolify-sentinel', // Coolify's own health check restarter
+]);
+
+// Coolify UUIDs to ignore — these are Coolify-managed and can't be repaired by Overlord
+const IGNORED_COOLIFY_UUIDS = new Set([
+  'okw0cwwgskcow8k8o08gsok0', // Lumina (Coolify-managed, persistent crash-loop)
 ]);
 
 // Known project containers — only alert on containers we actually manage
@@ -52,14 +58,22 @@ export function initErrorWatcher(taskCreator, sock) {
   sockRef = sock;
 }
 
+// Normalize Coolify container names: strip the timestamp suffix so
+// db-okw0cwwgskcow8k8o08gsok0-122041472130 → db-okw0cwwgskcow8k8o08gsok0
+// This prevents each Coolify-recreated incarnation from bypassing cooldown
+function normalizeName(container) {
+  return container.replace(/-\d{9,}$/, '');
+}
+
 function isOnCooldown(container) {
-  const last = cooldowns.get(container);
+  const key = normalizeName(container);
+  const last = cooldowns.get(key);
   if (!last) return false;
   return (Date.now() - last) < COOLDOWN_MS;
 }
 
 function setCooldown(container) {
-  cooldowns.set(container, Date.now());
+  cooldowns.set(normalizeName(container), Date.now());
 }
 
 // ============================================================
@@ -89,6 +103,9 @@ export function watchDockerEvents() {
       const exitCode = parseInt(parts[2]) || 0;
 
       if (!container || IGNORED_CONTAINERS.has(container)) continue;
+      // Skip Coolify-managed containers we can't repair
+      const coolifyUuid = container.match(/^(?:app|db)-([a-z0-9]{24,})-\d+$/)?.[1];
+      if (coolifyUuid && IGNORED_COOLIFY_UUIDS.has(coolifyUuid)) continue;
       if (!isKnownContainer(container)) {
         logger.info({ container, event, exitCode }, 'Ignoring unknown/ephemeral container');
         continue;
@@ -119,16 +136,29 @@ export function watchDockerEvents() {
         logFriction('container_crash', `${container} ${event} exit=${exitCode}`, 0).catch(() => {});
 
         try {
+          // AI-powered crash analysis for better repair context
+          const baseAction = `Container "${container}" crashed with ${event} (exit code ${exitCode}). Check docker logs, identify root cause, restart if needed, verify recovery.`;
+          let nextAction = baseAction;
+          let priority = 'high';
+          try {
+            const crashInfo = `${event} (exit code ${exitCode})`;
+            const analysis = await analyzeError(container, crashInfo);
+            if (analysis.rootCause !== 'Analysis unavailable') {
+              nextAction = buildEnrichedNextAction(container, crashInfo, analysis, baseAction);
+              if (analysis.severity === 'critical') priority = 'urgent';
+            }
+          } catch { /* analysis is best-effort */ }
+
           await createRepairTask({
             title: `Auto-repair: ${container} ${event} (exit ${exitCode})`,
             kind: 'repair',
             project: container,
             chatJid: `${process.env.ADMIN_NUMBER}@s.whatsapp.net`,
             owner: 'error-watcher',
-            priority: 'high',
+            priority,
             riskLevel: 'low',
             successCriteria: `Container ${container} running and healthy`,
-            nextAction: `Container "${container}" crashed with ${event} (exit code ${exitCode}). Check docker logs, identify root cause, restart if needed, verify recovery.`,
+            nextAction,
             source: 'observer',
           });
         } catch (err) {
@@ -194,16 +224,30 @@ export async function checkTraefik5xx() {
         recordGap('performance', `Backend ${backend} 5xx spike`, `${count}x HTTP ${status} in 2min`);
         logFriction('5xx_spike', `${backend} ${count}x ${status}`, 0).catch(() => {});
 
+        // AI-powered 5xx analysis
+        const baseAction = `Detected ${count} HTTP ${status} errors for backend "${backend}" in last 2 minutes. Check container logs, check if container is running, check Traefik routing config, fix and verify.`;
+        let nextAction = baseAction;
+        let priority = 'medium';
+        try {
+          const errorInfo = `${count}x HTTP ${status} errors in 2 minutes`;
+          const analysis = await analyzeError(backend, errorInfo);
+          if (analysis.rootCause !== 'Analysis unavailable') {
+            nextAction = buildEnrichedNextAction(backend, errorInfo, analysis, baseAction);
+            if (analysis.severity === 'critical') priority = 'urgent';
+            else if (analysis.severity === 'high') priority = 'high';
+          }
+        } catch { /* analysis is best-effort */ }
+
         await createRepairTask({
           title: `Auto-repair: ${backend} 5xx spike (${count}x HTTP ${status})`,
           kind: 'repair',
           project: backend,
           chatJid: `${process.env.ADMIN_NUMBER}@s.whatsapp.net`,
           owner: 'error-watcher',
-          priority: 'medium',
+          priority,
           riskLevel: 'low',
           successCriteria: `${backend} returning 200 OK`,
-          nextAction: `Detected ${count} HTTP ${status} errors for backend "${backend}" in last 2 minutes. Check container logs, check if container is running, check Traefik routing config, fix and verify.`,
+          nextAction,
           source: 'observer',
         });
       }
