@@ -84,7 +84,7 @@ http:
       entryPoints:
       - https
       rule: Host(`mastercommander.namibarden.com`) && PathPrefix(`/api/auth`)
-      service: overlord-api
+      service: mastercommander
       tls:
         certResolver: letsencrypt
       priority: 100
@@ -92,7 +92,7 @@ http:
       entryPoints:
       - https
       rule: Host(`mastercommander.namibarden.com`) && PathPrefix(`/api/boats`)
-      service: overlord-api
+      service: mastercommander
       tls:
         certResolver: letsencrypt
       priority: 100
@@ -100,7 +100,7 @@ http:
       entryPoints:
       - https
       rule: Host(`mastercommander.namibarden.com`) && PathPrefix(`/api/user`)
-      service: overlord-api
+      service: mastercommander
       tls:
         certResolver: letsencrypt
       priority: 100
@@ -108,7 +108,7 @@ http:
       entryPoints:
       - https
       rule: Host(`mastercommander.namibarden.com`) && PathPrefix(`/api/billing`)
-      service: overlord-api
+      service: mastercommander
       tls:
         certResolver: letsencrypt
       priority: 100
