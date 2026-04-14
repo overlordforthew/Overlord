@@ -1,0 +1,34 @@
+{
+  "name": "overlord",
+  "version": "1.0.0",
+  "description": "WhatsApp ↔ Claude Code bridge — Overlord",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "test:log-alerts": "node scripts/test-log-alerts.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.76",
+    "@mozilla/readability": "^0.6.0",
+    "@qdrant/js-client-rest": "^1.17.0",
+    "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^12.8.0",
+    "cheerio": "^1.0.0",
+    "cookie-parser": "^1.4.7",
+    "express": "^4.21.0",
+    "jsdom": "^25.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "mem0ai": "^2.4.4",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^8.0.2",
+    "pg": "^8.13.0",
+    "pino": "^9.0.0",
+    "puppeteer-core": "^24.39.1",
+    "qrcode": "^1.5.4",
+    "qrcode-terminal": "^0.12.0",
+    "sharp": "^0.33.0",
+    "stripe": "^17.0.0"
+  }
+}

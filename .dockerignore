@@ -1,0 +1,8 @@
+auth/
+data/
+logs/
+media/
+node_modules/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
