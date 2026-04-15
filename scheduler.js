@@ -1216,8 +1216,8 @@ export async function startScheduler(sockRef, connectionHealth) {
   console.log('🛡️ Session guard scheduled (every 1 min)');
 
   // 8a2. Inbound silence watchdog — every 5 minutes
-  // Only forces reconnect when WebSocket is actually dead, not just quiet
-  // After 6 reconnects with no messages, back off to every 60 min
+  // Quiet inbox periods are normal. Only reconnect when the underlying socket
+  // is closed or missing, then back off after repeated failures.
   cron.schedule('*/5 * * * *', async () => {
     const silentMs = Date.now() - connectionHealth.lastMessageAt;
     const silentMin = Math.floor(silentMs / 60000);
@@ -1231,10 +1231,9 @@ export async function startScheduler(sockRef, connectionHealth) {
     const ws = sockRef.sock?.ws;
     const wsOpen = ws && ws.readyState === ws.OPEN;
 
-    // If WebSocket is open and healthy, silence just means nobody is texting — skip
-    if (wsOpen && silentMs <= 90 * 60 * 1000) return;
+    if (wsOpen || silentMs <= 10 * 60 * 1000) return;
 
-    if (silentMs > 60 * 60 * 1000 || (!wsOpen && silentMs > 10 * 60 * 1000)) {
+    if (silentMs > 10 * 60 * 1000) {
       const recentReconnects = connectionHealth.reconnectCount;
       const timeSinceReconnect = Date.now() - connectionHealth.lastReconnectAt;
 

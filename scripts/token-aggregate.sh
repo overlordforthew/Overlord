@@ -162,8 +162,19 @@ try:
     import subprocess
     result = subprocess.run(
         ["docker", "exec", "overlord", "python3", "-c", f"""
-import sqlite3, json
-conn = sqlite3.connect('/root/.config/io.datasette.llm/logs.db')
+import json, os, sqlite3, sys
+path = '/root/.config/io.datasette.llm/logs.db'
+if not os.path.exists(path) or os.path.getsize(path) == 0:
+    print('[]')
+    raise SystemExit(0)
+conn = sqlite3.connect(path)
+has_responses = conn.execute(
+    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='responses'"
+).fetchone()
+if not has_responses:
+    conn.close()
+    print('[]')
+    raise SystemExit(0)
 cursor = conn.execute(
     "SELECT model, input_tokens, output_tokens FROM responses WHERE datetime_utc LIKE '{TODAY}%'"
 )

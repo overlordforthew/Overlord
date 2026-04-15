@@ -13,6 +13,7 @@ REPORT_MD="$DATA_DIR/token-report.md"
 DASHBOARD_HTML="$DATA_DIR/token-dashboard.html"
 TODAY=$(date +%Y-%m-%d)
 WEEK_START=$(date -d "7 days ago" +%Y-%m-%d)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 WEBHOOK_TOKEN="${WEBHOOK_TOKEN:-$(grep WEBHOOK_TOKEN /root/overlord/.env 2>/dev/null | cut -d= -f2)}"
 SEND_URL="http://localhost:3001/api/send"
@@ -20,7 +21,7 @@ SEND_URL="http://localhost:3001/api/send"
 echo "=== Token Dashboard: $TODAY ==="
 
 # Run aggregation first to ensure fresh data
-/root/overlord/scripts/token-aggregate.sh 2>&1 || echo "WARN: aggregation had errors"
+"$SCRIPT_DIR/token-aggregate.sh" 2>&1 || echo "WARN: aggregation had errors"
 
 # ─── Generate all three outputs with Python ───
 python3 << 'PYEOF'
