@@ -19,6 +19,7 @@ import { addReminder, removeReminder, listReminders } from './scheduler.js';
 const WEBHOOK_TOKEN = process.env.WEBHOOK_TOKEN || '';
 const WEBHOOK_PORT = parseInt(process.env.WEBHOOK_PORT || '3001');
 const ADMIN_JID = `${process.env.ADMIN_NUMBER}@s.whatsapp.net`;
+const OPERATOR_RELAY_SECRET = process.env.MC_OPERATOR_ALERT_RELAY_SECRET || '';
 
 // sockRef is a mutable wrapper { sock } so the server always uses the latest socket after reconnects
 export function startServer(sockRef, sendResponse, connectionHealth) {
@@ -52,6 +53,22 @@ export function startServer(sockRef, sendResponse, connectionHealth) {
     next();
   }
 
+  function requireOperatorRelaySecret(req, res, next) {
+    const provided = String(req.headers['x-mc-relay-secret'] || '');
+    if (!OPERATOR_RELAY_SECRET || !provided) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    const expectedBuffer = Buffer.from(OPERATOR_RELAY_SECRET);
+    const providedBuffer = Buffer.from(provided);
+    if (
+      expectedBuffer.length !== providedBuffer.length ||
+      !crypto.timingSafeEqual(expectedBuffer, providedBuffer)
+    ) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    next();
+  }
+
   // GET /health — connection-aware health check
   app.get('/health', (_req, res) => {
     const silentMs = Date.now() - connectionHealth.lastMessageAt;
@@ -66,6 +83,27 @@ export function startServer(sockRef, sendResponse, connectionHealth) {
         reconnectCount: connectionHealth.reconnectCount,
       },
     });
+  });
+
+  // POST /api/internal/operator-alerts/whatsapp — shared-secret relay for operator alerts
+  app.post('/api/internal/operator-alerts/whatsapp', requireOperatorRelaySecret, async (req, res) => {
+    try {
+      const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
+      const source = typeof req.body?.source === 'string' ? req.body.source.trim() : 'unknown';
+      const context = typeof req.body?.context === 'string' ? req.body.context.trim() : 'operator alert';
+      if (!message) {
+        return res.status(400).json({ delivered: false, error: 'Message is required' });
+      }
+      if (!sockRef.sock?.user) {
+        return res.status(503).json({ delivered: false, error: 'WhatsApp bot unavailable' });
+      }
+      const prefix = source ? `BoatMC relay (${source})` : 'BoatMC relay';
+      await sendResponse(sockRef.sock, ADMIN_JID, `📡 ${prefix}\nContext: ${context}\n\n${message}`);
+      return res.json({ ok: true, delivered: true });
+    } catch (err) {
+      console.error('[api/internal/operator-alerts/whatsapp] Error:', err.message);
+      return res.status(500).json({ delivered: false, error: 'Internal server error' });
+    }
   });
 
   // POST /api/send — send message to any chat (requires token)
