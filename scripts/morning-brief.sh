@@ -3,7 +3,7 @@
 # The WhatsApp briefing is sent by scheduler.js in the bot container
 
 set -euo pipefail
-IGNORED_STOPPED_REGEX='^beastmode-.*(pg-test|polish-pg|final-pg).*'
+IGNORED_STOPPED_REGEX='^beastmode-.*test.*'
 
 # Container name mapping
 declare -A NAMES=(

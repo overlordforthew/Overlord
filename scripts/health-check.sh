@@ -3,7 +3,7 @@
 # Outputs clean summary of system state
 
 set -euo pipefail
-IGNORED_STOPPED_REGEX='^beastmode-.*(pg-test|polish-pg|final-pg).*'
+IGNORED_STOPPED_REGEX='^beastmode-.*test.*'
 
 list_actionable_stopped_containers() {
     local format="$1"

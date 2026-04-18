@@ -4,7 +4,7 @@
 set -euo pipefail
 
 STATUS_FILE="/root/overlord/STATUS.md"
-IGNORED_STOPPED_REGEX='^beastmode-.*(pg-test|polish-pg|final-pg).*'
+IGNORED_STOPPED_REGEX='^beastmode-.*test.*'
 
 list_actionable_stopped_containers() {
     local format="$1"
