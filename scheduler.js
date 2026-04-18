@@ -28,7 +28,7 @@ import { runHeartbeat } from './heartbeat.js';
 import { sweepZombies } from './session-guard.js';
 import { createTask, getActiveTasks, getRecentDoneTasks, formatTaskList, TaskStatus, closeTask, getDueGoalFollowUps, updateTask, addTaskEvent } from './task-store.js';
 import { executeTaskAutonomously, createAndExecuteTask, handleBackgroundTaskError, recoverCheckpoints } from './executor.js';
-import { initErrorWatcher, watchDockerEvents, checkTraefik5xx } from './error-watcher.js';
+import { initErrorWatcher, watchDockerEvents, checkTraefik5xx, isEphemeralContainer } from './error-watcher.js';
 import { runStrategicPatrol } from './strategic-patrol.js';
 import { generateScorecard } from './portfolio-scorecard.js';
 import { runKpiCheck } from './kpi-tracker.js';
@@ -861,7 +861,7 @@ async function checkContainerLogs(sockRef) {
       return;
     }
   }
-  containers = containers.filter(c => !exclude.includes(c));
+  containers = containers.filter(c => !exclude.includes(c) && !isEphemeralContainer(c));
 
   const pattern = config.patterns.join('\\|');
   const ignorePatterns = config.ignorePatterns || [];
@@ -982,6 +982,9 @@ async function checkContainerLogs(sockRef) {
     // Auto-create repair tasks for actionable alerts with enriched context
     for (const alert of actionable) {
       try {
+        if (isEphemeralContainer(alert.container)) {
+          continue;
+        }
         const containerName = alert.friendly;
 
         // Check if there's already an active repair task for this specific container

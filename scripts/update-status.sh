@@ -4,6 +4,12 @@
 set -euo pipefail
 
 STATUS_FILE="/root/overlord/STATUS.md"
+IGNORED_STOPPED_REGEX='^beastmode-.*(test|pg|hardening-run).*'
+
+list_actionable_stopped_containers() {
+    local format="$1"
+    docker ps -a --filter "status=exited" --format "$format" 2>/dev/null | grep -Ev "$IGNORED_STOPPED_REGEX" || true
+}
 
 {
 echo "# OVERLORD — Server Status"
@@ -25,7 +31,7 @@ docker ps --format 'table {{.Names}}\t{{.Status}}' 2>/dev/null || echo "Docker n
 echo '```'
 echo ""
 
-STOPPED=$(docker ps -a --filter "status=exited" --format '{{.Names}}: exited {{.RunningFor}} ago' 2>/dev/null)
+STOPPED=$(list_actionable_stopped_containers '{{.Names}}: exited {{.RunningFor}} ago')
 if [ -n "$STOPPED" ]; then
     echo "## Stopped Containers"
     echo "$STOPPED" | while read -r line; do echo "- $line"; done

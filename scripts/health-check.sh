@@ -3,6 +3,12 @@
 # Outputs clean summary of system state
 
 set -euo pipefail
+IGNORED_STOPPED_REGEX='^beastmode-.*(test|pg|hardening-run).*'
+
+list_actionable_stopped_containers() {
+    local format="$1"
+    docker ps -a --filter "status=exited" --format "$format" 2>/dev/null | grep -Ev "$IGNORED_STOPPED_REGEX" || true
+}
 
 echo "=== OVERLORD Health Check ==="
 echo "Date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
@@ -29,10 +35,10 @@ docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' 2>/dev/null || ec
 echo ""
 
 # Stopped containers
-STOPPED=$(docker ps -a --filter "status=exited" --format '{{.Names}}' 2>/dev/null | wc -l)
+STOPPED=$(list_actionable_stopped_containers '{{.Names}}' | sed '/^$/d' | wc -l)
 if [ "$STOPPED" -gt 0 ]; then
     echo "Stopped containers: $STOPPED"
-    docker ps -a --filter "status=exited" --format '  {{.Names}} (exited {{.Status}})' 2>/dev/null
+    list_actionable_stopped_containers '  {{.Names}} (exited {{.Status}})'
     echo ""
 fi
 

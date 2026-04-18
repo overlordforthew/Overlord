@@ -46,8 +46,10 @@ const EPHEMERAL_CONTAINER_PATTERNS = [
   /^agent-[a-z0-9]+$/i,
   /^(runner|build|job)-[a-z0-9-]+$/i,
   /^beastmode-(?:.+-)?test(?:-[a-z0-9-]+)?$/i,
-  /^beastmode-(?:.+-)?pg-test(?:-[a-z0-9-]+)?$/i,
-  /^beastmode-(?:.+-)?pg-[0-9]+$/i,
+  // BeastMode smoke/visual runs create disposable local Postgres containers
+  // such as beastmode-visual-pg, beastmode-final-pg, and beastmode-play-pg-test.
+  /^beastmode-(?:[a-z0-9-]+-)?pg(?:-test)?(?:-[a-z0-9-]+)?$/i,
+  /^beastmode-hardening-run(?:-[a-z0-9-]+)?$/i,
 ];
 
 function isKnownContainer(name) {
@@ -59,7 +61,7 @@ function isKnownContainer(name) {
   return false;
 }
 
-function isEphemeralContainer(name) {
+export function isEphemeralContainer(name) {
   return EPHEMERAL_CONTAINER_PATTERNS.some((pattern) => pattern.test(name));
 }
 
