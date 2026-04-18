@@ -3,6 +3,7 @@
 # The WhatsApp briefing is sent by scheduler.js in the bot container
 
 set -euo pipefail
+IGNORED_STOPPED_REGEX='^beastmode-.*(pg-test|polish-pg|final-pg).*'
 
 # Container name mapping
 declare -A NAMES=(
@@ -41,6 +42,11 @@ friendly_name() {
   echo "$raw"
 }
 
+list_actionable_stopped_containers() {
+  local format="$1"
+  docker ps -a --filter "status=exited" --format "$format" 2>/dev/null | grep -Ev "$IGNORED_STOPPED_REGEX" || true
+}
+
 echo "========================================="
 echo "  OVERLORD Daily Brief — $(date '+%A, %B %d %Y')"
 echo "========================================="
@@ -56,12 +62,12 @@ echo ""
 # Docker status with friendly names
 echo "## Containers"
 RUNNING=$(docker ps --format '{{.Names}}' 2>/dev/null | wc -l)
-STOPPED=$(docker ps -a --filter "status=exited" --format '{{.Names}}' 2>/dev/null | wc -l)
+STOPPED=$(list_actionable_stopped_containers '{{.Names}}' | sed '/^$/d' | wc -l)
 echo "- Running: $RUNNING"
 echo "- Stopped: $STOPPED"
 if [ "$STOPPED" -gt 0 ]; then
     echo "- Stopped containers:"
-    docker ps -a --filter "status=exited" --format '{{.Names}}' 2>/dev/null | while read -r name; do
+    list_actionable_stopped_containers '{{.Names}}' | while read -r name; do
         echo "    - $(friendly_name "$name")"
     done
 fi

@@ -12,7 +12,7 @@
 ## Projects
 - **Project deploy methods**: BeastMode/Lumina/Elmo/OnlyHulls: Coolify auto-deploy on git push. SurfaBabe: GitHub webhook (deploy-listener.js port 900
 - **Overlord — WhatsApp bot**: Node.js + Baileys at /root/overlord/. Multi-model router (Alpha/Beta/Charlie). Memory v2 SQLite backend. Scheduler with 
-- **beastmode**: BeastMode is intentionally kept offline. Do not attempt to redeploy or flag as an issue.
+- **beastmode**: BeastMode is live again at `https://beastmode.namibarden.com` and deploys via Coolify on push to `main`. Do not treat disposable local verification containers like `beastmode-*pg-test*`, `beastmode-*polish-pg*`, or `beastmode-*final-pg*` as production outages, stopped services, or auto-repair targets; they are temporary test databases and may be stopped or removed immediately after verification while production remains healthy.
 
 ## Infrastructure
 - **Container memory limit: 2GB**: Overlord container has a 2GB memory limit. Heavy tasks cause SIGTERM/code 143. Must break up heavy operations — one majo
