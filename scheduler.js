@@ -38,6 +38,16 @@ import { evolve } from './evolution-engine.js';
 import { getSynthesisPrompt, regenerateIndex, lintWiki, appendLog } from './knowledge-engine.js';
 import { splitMessage } from './lib/split-message.js';
 import { analyzeError, formatAnalyzedAlert, buildEnrichedNextAction } from './error-analyzer.js';
+import {
+  buildDiskPruneAlertMessage,
+  buildDiskPruneRecoveryMessage,
+  classifyDiskPressure,
+  getDiskPruneThresholds,
+  parseDfBytesLine,
+  shouldSendDiskPruneAlert,
+  summarizeDockerSystemDf,
+  updateDiskPruneAlertState,
+} from './lib/disk-prune-alert.js';
 
 const execAsync = promisify(exec);
 
@@ -49,13 +59,85 @@ function writeHeartbeat(jobName) {
   } catch (err) { console.debug('[Heartbeat] Write failed:', err.message); }
 }
 
+async function readJsonFile(file) {
+  try {
+    return JSON.parse(await fs.readFile(file, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
 const DATA_DIR = process.env.DATA_DIR || './data';
 const ADMIN_JID = `${process.env.ADMIN_NUMBER}@s.whatsapp.net`;
 const REPORTS_DIR = path.join(DATA_DIR, 'reports');
+const DISK_PRUNE_ALERT_STATE_FILE = path.join(DATA_DIR, 'disk-prune-alert-state.json');
 const ALERT_AUDIT_RETENTION_DAYS = Number(process.env.ALERT_AUDIT_RETENTION_DAYS || 14);
 const ALERT_AUDIT_FILE_PATTERN = /^alert-audit-\d{4}-\d{2}-\d{2}\.jsonl$/;
 if (!existsSync(REPORTS_DIR)) mkdirSync(REPORTS_DIR, { recursive: true });
 const observerGuard = createObserverGuard({ dataDir: DATA_DIR });
+
+async function writeJsonFile(file, value) {
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+async function collectDiskPruneSnapshot() {
+  const [dfResult, dockerResult] = await Promise.allSettled([
+    execAsync('df -PB1 / | tail -1', { timeout: 5000, maxBuffer: 1024 * 1024 }),
+    execAsync('docker system df 2>/dev/null', { timeout: 10000, maxBuffer: 1024 * 1024 }),
+  ]);
+
+  if (dfResult.status !== 'fulfilled') {
+    throw new Error(`Unable to read root disk usage: ${dfResult.reason?.message || dfResult.reason}`);
+  }
+
+  const disk = parseDfBytesLine(dfResult.value.stdout);
+  if (!disk) {
+    throw new Error(`Unable to parse root disk usage: ${dfResult.value.stdout.trim()}`);
+  }
+
+  const dockerSummary = dockerResult.status === 'fulfilled'
+    ? summarizeDockerSystemDf(dockerResult.value.stdout)
+    : { ...summarizeDockerSystemDf(''), unavailable: true, error: dockerResult.reason?.message || '' };
+
+  return {
+    disk,
+    dockerSummary,
+    dockerError: dockerSummary.error || '',
+  };
+}
+
+export async function checkDiskPruneAlert(sockRef, { force = false } = {}) {
+  const thresholds = getDiskPruneThresholds();
+  const generatedAt = new Date();
+  const snapshot = await collectDiskPruneSnapshot();
+  const classification = classifyDiskPressure(snapshot.disk, thresholds);
+  const state = await readJsonFile(DISK_PRUNE_ALERT_STATE_FILE) || {};
+  let decision = shouldSendDiskPruneAlert(state, classification, snapshot.disk, thresholds, generatedAt.getTime());
+
+  if (force && classification.shouldAlert && !decision.send) {
+    decision = { send: true, kind: 'alert', reason: 'forced' };
+  }
+
+  if (decision.send) {
+    const message = decision.kind === 'recovery'
+      ? buildDiskPruneRecoveryMessage({ disk: snapshot.disk, thresholds, generatedAt })
+      : buildDiskPruneAlertMessage({
+          disk: snapshot.disk,
+          dockerSummary: snapshot.dockerSummary,
+          classification,
+          thresholds,
+          generatedAt,
+        });
+    await safeSendChunked(sockRef, ADMIN_JID, message);
+  }
+
+  const nextState = updateDiskPruneAlertState(state, classification, snapshot.disk, decision, generatedAt.getTime());
+  if (snapshot.dockerError) nextState.lastDockerError = snapshot.dockerError;
+  await writeJsonFile(DISK_PRUNE_ALERT_STATE_FILE, nextState);
+
+  return { sent: decision.send, decision, classification, disk: snapshot.disk };
+}
 
 /**
  * Write a report to disk instead of sending to WhatsApp.
@@ -1294,6 +1376,34 @@ export async function startScheduler(sockRef, connectionHealth) {
     if (run.ok) writeHeartbeat('cron-health-monitor');
   });
   console.log('🔍 Cron health monitor scheduled (every 30 min)');
+
+  // 8c. Disk prune alert — warn before root disk pressure breaks databases
+  const diskPruneAlertCron = process.env.DISK_PRUNE_ALERT_CRON || '*/30 * * * *';
+  cron.schedule(diskPruneAlertCron, async () => {
+    try {
+      const result = await checkDiskPruneAlert(sockRef);
+      if (result.sent) {
+        console.log(`💿 Disk prune alert sent (${result.classification.level}: ${result.decision.reason})`);
+      }
+      writeHeartbeat('disk-prune-alert');
+    } catch (err) {
+      console.error('Disk prune alert error:', err.message);
+    }
+  });
+
+  const diskPruneStartupDelayMs = Number(process.env.DISK_PRUNE_STARTUP_DELAY_MS || 45000);
+  setTimeout(async () => {
+    try {
+      const result = await checkDiskPruneAlert(sockRef);
+      if (result.sent) {
+        console.log(`💿 Startup disk prune alert sent (${result.classification.level}: ${result.decision.reason})`);
+      }
+      writeHeartbeat('disk-prune-alert');
+    } catch (err) {
+      console.error('Startup disk prune alert error:', err.message);
+    }
+  }, diskPruneStartupDelayMs).unref?.();
+  console.log(`💿 Disk prune alert scheduled (${diskPruneAlertCron}, startup check after ${Math.round(diskPruneStartupDelayMs / 1000)}s)`);
 
   // 9. Weekly AI repo intelligence — Friday 10am AST (= 2pm UTC)
   // REPORT — saved to disk, pull via /reports
