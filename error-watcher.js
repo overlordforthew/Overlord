@@ -40,6 +40,11 @@ const KNOWN_PREFIXES = [
   'qdrant', 'searxng', 'claude-proxy', 'hl-dashboard', 'lightpanda',
   'beastmode', 'elmo', 'surfagent', 'hl-blessings', 'hl-grid',
 ];
+const EPHEMERAL_CONTAINER_PATTERNS = [
+  /^beastmode-(?:.+-)?test(?:-[a-z0-9-]+)?$/i,
+  /^beastmode-(?:.+-)?pg-test(?:-[a-z0-9-]+)?$/i,
+  /^beastmode-(?:.+-)?pg-[0-9]+$/i,
+];
 
 function isKnownContainer(name) {
   // Match known prefixes (e.g. "overlord", "overlord-db", "lumina-app-1")
@@ -48,6 +53,10 @@ function isKnownContainer(name) {
   if (/^[a-z0-9]{24,}-\d+$/.test(name)) return true;
   if (/^(app|db)-[a-z0-9]{24,}-\d+$/.test(name)) return true;
   return false;
+}
+
+function isEphemeralContainer(name) {
+  return EPHEMERAL_CONTAINER_PATTERNS.some((pattern) => pattern.test(name));
 }
 
 let createRepairTask = null; // Injected callback
@@ -103,6 +112,7 @@ export function watchDockerEvents() {
       const exitCode = parseInt(parts[2]) || 0;
 
       if (!container || IGNORED_CONTAINERS.has(container)) continue;
+      if (isEphemeralContainer(container)) continue;
       // Skip Coolify-managed containers we can't repair
       const coolifyUuid = container.match(/^(?:app|db)-([a-z0-9]{24,})-\d+$/)?.[1];
       if (coolifyUuid && IGNORED_COOLIFY_UUIDS.has(coolifyUuid)) continue;
