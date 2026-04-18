@@ -45,6 +45,9 @@ const KNOWN_PREFIXES = [
 const EPHEMERAL_CONTAINER_PATTERNS = [
   /^agent-[a-z0-9]+$/i,
   /^(runner|build|job)-[a-z0-9-]+$/i,
+  /^beastmode-(?:.+-)?test(?:-[a-z0-9-]+)?$/i,
+  /^beastmode-(?:.+-)?pg-test(?:-[a-z0-9-]+)?$/i,
+  /^beastmode-(?:.+-)?pg-[0-9]+$/i,
 ];
 
 function isKnownContainer(name) {
