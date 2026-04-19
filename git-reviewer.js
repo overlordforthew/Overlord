@@ -137,9 +137,9 @@ ${diff.substring(0, 8000)}`;
         systemPrompt: 'You are a code reviewer. Focus on bugs, regressions, security risks, and missing tests.',
         userPrompt: prompt,
         cwd: path,
-        timeoutMs: 120000,
+        timeoutMs: 300000,
         role: 'user',
-        requestedModel: 'claude-opus-4-7',
+        requestedModel: 'claude-sonnet-4-6',
       });
       return result.text || 'Review produced no output.';
     }
@@ -147,11 +147,11 @@ ${diff.substring(0, 8000)}`;
     return new Promise((resolve, reject) => {
       let stdout = '';
       const proc = spawnWithMemoryLimit(CLAUDE_PATH, [
-        '-p', '--output-format', 'json', '--model', 'claude-opus-4-7',
-        '--max-turns', '1',
+        '-p', '--output-format', 'json', '--model', 'claude-sonnet-4-6',
+        '--max-turns', '5',
       ], {
         cwd: path,
-        timeout: 120000,
+        timeout: 300000,
         env: { HOME: process.env.HOME || '/root', PATH: process.env.PATH, TERM: 'dumb', NODE_OPTIONS: '--max-old-space-size=1024' },
       }, getMemoryLimit('medium'));
 
