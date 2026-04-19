@@ -4923,9 +4923,8 @@ async function startBot() {
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (type !== 'notify') return;
 
-    // Track message flow for health monitoring + idle study
+    // Track message flow for health monitoring
     connectionHealth.lastMessageAt = Date.now();
-    global.__overlordLastMessageAt = Date.now();
     connectionHealth.messagesReceived += messages.length;
     if (connectionHealth.reconnectCount > 0) {
       logger.info({ reconnectCount: connectionHealth.reconnectCount }, '📡 Messages flowing again — resetting reconnect counter');

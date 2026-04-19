@@ -34,7 +34,6 @@ import { initErrorWatcher, watchDockerEvents, checkTraefik5xx, isEphemeralContai
 import { runStrategicPatrol } from './strategic-patrol.js';
 import { generateScorecard } from './portfolio-scorecard.js';
 import { runKpiCheck } from './kpi-tracker.js';
-import { runStudySession } from './idle-study.js';
 import { checkExperiments } from './experiment-engine.js';
 import { evolve } from './evolution-engine.js';
 import { getSynthesisPrompt, regenerateIndex, lintWiki, appendLog } from './knowledge-engine.js';
@@ -1892,24 +1891,6 @@ export async function startScheduler(sockRef, connectionHealth) {
   });
   console.log('📈 KPI tracker scheduled (Daily 8 AM AST / 12:00 UTC) [report-only]');
 
-  // 22. Idle Study — Check every 10 min during waking hours
-  let lastMessageAt = Date.now();
-  // Update lastMessageAt on any incoming message (set by index.js via export)
-  global.__overlordLastMessageAt = lastMessageAt;
-  cron.schedule('*/10 * * * *', async () => {
-    const idleMs = Date.now() - (global.__overlordLastMessageAt || Date.now());
-    const idleMin = idleMs / 60000;
-    if (idleMin >= 30) {
-      try {
-        await runStudySession(sockRef);
-        writeHeartbeat('idle-study');
-      } catch (err) {
-        console.error('Idle study error:', err.message);
-      }
-    }
-  });
-  console.log('📚 Idle study scheduled (every 10 min, triggers after 30 min idle)');
-
   // 23. Experiment Monitor — Daily 9 AM AST (= 13:00 UTC, after scorecard)
   // REPORT — saved to disk
   const experimentSilent = { sock: { sendMessage: async (jid, msg) => {
@@ -1924,38 +1905,6 @@ export async function startScheduler(sockRef, connectionHealth) {
     }
   });
   console.log('🧪 Experiment monitor scheduled (Daily 9:30 AM AST / 13:30 UTC) [report-only]');
-
-  // 24. Free Model Benchmark — Weekly Sunday 6 AM AST (= 10:00 UTC)
-  cron.schedule('0 10 * * 0', async () => {
-    try {
-      console.log('[Benchmark] Starting weekly free model benchmark...');
-      const { execFile } = await import('child_process');
-      const output = await new Promise((resolve, reject) => {
-        let stdout = '';
-        let stderr = '';
-        const child = execFile('node', ['/app/scripts/benchmark-free-models.mjs'], {
-          timeout: 1200000, // 20 min — benchmark tests dozens of models sequentially
-          env: { ...process.env, RANKINGS_PATH: '/app/data/free-model-rankings.json' },
-          maxBuffer: 10 * 1024 * 1024, // 10MB buffer for verbose output
-        }, (err, out, errOut) => {
-          if (err) {
-            // Still capture partial output on timeout
-            console.error('[Benchmark] Process error:', err.message);
-            if (stdout) console.log('[Benchmark] Partial output:', stdout.slice(-2000));
-            return reject(err);
-          }
-          resolve(out);
-        });
-        child.stdout?.on('data', d => { stdout += d; });
-        child.stderr?.on('data', d => { stderr += d; });
-      });
-      console.log(output);
-      writeHeartbeat('free-model-benchmark');
-    } catch (err) {
-      console.error('Free model benchmark error:', err.message);
-    }
-  });
-  console.log('🏋️ Free model benchmark scheduled (Sunday 6 AM AST / 10:00 UTC)');
 
   // 25. Knowledge Synthesis — Weekly Wednesday 7 PM AST (= 23:00 UTC)
   // Reviews recent conversations, extracts patterns, updates knowledge files

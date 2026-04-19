@@ -1,14 +1,13 @@
 /**
  * error-analyzer.js — AI-powered error analysis for container alerts
  *
- * Analyzes raw error logs using AI before sending WhatsApp alerts,
- * providing severity classification, root cause hypothesis, and
- * suggested remediation. Uses the configured intelligence backend first,
- * with OpenRouter as a cost-controlled fallback.
+ * Analyzes raw error logs using Claude Haiku (via SDK or the configured
+ * intelligence backend) before sending WhatsApp alerts, providing severity
+ * classification, root cause hypothesis, and suggested remediation.
+ * Falls back to a deterministic heuristic when Haiku is unavailable.
  */
 
 import { triageWithSDK, isSDKEnabled } from './claude-sdk.js';
-import { callOpenRouter } from './router.js';
 import crypto from 'crypto';
 import { getIntelligenceBackend, runStatelessIntelligence } from './intelligence-runtime.js';
 
@@ -16,11 +15,8 @@ import { getIntelligenceBackend, runStatelessIntelligence } from './intelligence
 const analysisCache = new Map();
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const MAX_CACHE_SIZE = 50;
-const providerCooldowns = new Map();
 const analyzerNoticeCooldowns = new Map();
 const ANALYZER_NOTICE_COOLDOWN_MS = 30 * 60 * 1000;
-const PROVIDER_AUTH_COOLDOWN_MS = 30 * 60 * 1000;
-const PROVIDER_RATE_LIMIT_COOLDOWN_MS = 10 * 60 * 1000;
 
 function getCacheKey(container, errorText) {
   return crypto.createHash('md5').update(`${container}:${errorText.substring(0, 300)}`).digest('hex');
@@ -48,29 +44,9 @@ function setCache(key, result) {
 function summarizeAnalyzerFailure(message) {
   return String(message || 'Analyzer unavailable')
     .replace(/\{"error":\{.*$/i, '')
-    .replace(/OpenRouter\s+401:.*/i, 'OpenRouter 401')
-    .replace(/OpenRouter\s+429:.*/i, 'OpenRouter 429')
     .replace(/\s+/g, ' ')
     .trim()
     .substring(0, 180) || 'Analyzer unavailable';
-}
-
-function getCooldownUntil(provider) {
-  const until = providerCooldowns.get(provider);
-  if (!until) return 0;
-  if (until <= Date.now()) {
-    providerCooldowns.delete(provider);
-    return 0;
-  }
-  return until;
-}
-
-function isProviderCoolingDown(provider) {
-  return getCooldownUntil(provider) > 0;
-}
-
-function setProviderCooldown(provider, ms) {
-  providerCooldowns.set(provider, Date.now() + ms);
 }
 
 function logAnalyzerNotice(key, message) {
@@ -78,16 +54,6 @@ function logAnalyzerNotice(key, message) {
   if ((Date.now() - last) < ANALYZER_NOTICE_COOLDOWN_MS) return;
   analyzerNoticeCooldowns.set(key, Date.now());
   console.warn(`[AI Triage] ${message}`);
-}
-
-function classifyProviderFailure(message) {
-  if (/401|user not found|unauthorized|invalid api key|authentication/i.test(message)) {
-    return { provider: 'openrouter', cooldownMs: PROVIDER_AUTH_COOLDOWN_MS, key: 'openrouter-auth' };
-  }
-  if (/429|rate limit/i.test(message)) {
-    return { provider: 'openrouter', cooldownMs: PROVIDER_RATE_LIMIT_COOLDOWN_MS, key: 'openrouter-rate-limit' };
-  }
-  return null;
 }
 
 const ANALYSIS_PROMPT = `You are an infrastructure expert triaging Docker container errors.
@@ -135,7 +101,7 @@ export async function analyzeError(container, errorText) {
         });
         raw = result.text || null;
       } catch (backendErr) {
-        logAnalyzerNotice('backend-fallback', `Configured backend triage unavailable, falling back to OpenRouter: ${summarizeAnalyzerFailure(backendErr.message)}`);
+        logAnalyzerNotice('backend-fallback', `Configured backend triage unavailable, using heuristic fallback: ${summarizeAnalyzerFailure(backendErr.message)}`);
         raw = null;
       }
     } else if (isSDKEnabled()) {
@@ -146,26 +112,15 @@ export async function analyzeError(container, errorText) {
           timeoutMs: 8000,
         });
       } catch (sdkErr) {
-        logAnalyzerNotice('sdk-fallback', `SDK triage unavailable, falling back to OpenRouter: ${summarizeAnalyzerFailure(sdkErr.message)}`);
+        logAnalyzerNotice('sdk-fallback', `SDK triage unavailable, using heuristic fallback: ${summarizeAnalyzerFailure(sdkErr.message)}`);
         raw = null;
       }
     }
 
     if (!raw) {
-      if (isProviderCoolingDown('openrouter')) {
-        const result = fallbackAnalysis();
-        setCache(cacheKey, result);
-        return result;
-      }
-
-      // Fallback: free model via OpenRouter
-      raw = await callOpenRouter(
-        'stepfun/step-3.5-flash:free',
-        ANALYSIS_PROMPT,
-        userPrompt,
-        200,
-        { jsonMode: true }
-      );
+      const result = fallbackAnalysis();
+      setCache(cacheKey, result);
+      return result;
     }
 
     const result = parseAnalysis(raw);
@@ -173,13 +128,7 @@ export async function analyzeError(container, errorText) {
     return result;
   } catch (err) {
     const message = summarizeAnalyzerFailure(err.message);
-    const failure = classifyProviderFailure(message);
-    if (failure) {
-      setProviderCooldown(failure.provider, failure.cooldownMs);
-      logAnalyzerNotice(failure.key, `${failure.provider} triage unavailable: ${message}`);
-    } else {
-      logAnalyzerNotice('analysis-fallback', `AI triage unavailable: ${message}`);
-    }
+    logAnalyzerNotice('analysis-fallback', `AI triage unavailable: ${message}`);
     const result = fallbackAnalysis();
     setCache(cacheKey, result);
     return result;

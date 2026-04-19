@@ -15,6 +15,7 @@ import nodemailer from 'nodemailer';
 import Stripe from 'stripe';
 import { recordSignal } from './customer-evidence.js';
 import { addReminder, removeReminder, listReminders } from './scheduler.js';
+import { runStatelessIntelligence } from './intelligence-runtime.js';
 
 const WEBHOOK_TOKEN = process.env.WEBHOOK_TOKEN || '';
 const WEBHOOK_PORT = parseInt(process.env.WEBHOOK_PORT || '3001');
@@ -1703,43 +1704,27 @@ BEHAVIOR:
       }
       session.lastActive = Date.now();
 
-      // Build conversation context
       session.history.push({ role: 'user', text: message });
-      // Keep last 10 exchanges
       if (session.history.length > 20) session.history = session.history.slice(-20);
 
-      // Build messages for OpenRouter API
-      const apiMessages = [
-        { role: 'system', content: MC_SYSTEM_PROMPT },
-        ...session.history.map(m => ({
-          role: m.role === 'user' ? 'user' : 'assistant',
-          content: m.text
-        }))
-      ];
+      const transcript = session.history
+        .map(m => `${m.role === 'user' ? 'Visitor' : 'Assistant'}: ${m.text}`)
+        .join('\n\n');
+      const userPrompt = `${transcript}\n\nAssistant:`;
 
-      const controller = new AbortController();
-      const tm = setTimeout(() => controller.abort(), 30_000);
-
-      const apiRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.OPENROUTER_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'openai/gpt-4.1-nano',
-          messages: apiMessages,
-          max_tokens: 400,
-        }),
-        signal: controller.signal,
+      const result = await runStatelessIntelligence({
+        systemPrompt: MC_SYSTEM_PROMPT,
+        userPrompt,
+        requestedModel: 'claude-haiku-4-5',
+        timeoutMs: 25_000,
+        maxTurns: 1,
+        role: 'user',
+        outputFormat: 'text',
       });
-      clearTimeout(tm);
-
-      const data = await apiRes.json();
-      const response = data.choices?.[0]?.message?.content?.trim();
+      const response = (result.text || '').trim();
 
       if (!response) {
-        console.error('[web-chat] Empty API response:', JSON.stringify(data).slice(0, 300));
+        console.error('[web-chat] Empty Haiku response');
         return res.status(500).json({ error: 'No response generated. Please try again.' });
       }
 
