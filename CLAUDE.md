@@ -38,8 +38,6 @@ See /root/projects/CLAUDE.md for infrastructure rules, projects list, and permis
 
 ### Scheduling & Monitoring
 - `/briefing` — Daily report (power user)
-- `/reports` — List saved scheduled reports (admin)
-- `/report <type>` — Read a specific report (admin)
 - `/remind <time> <msg>` — Schedule reminder (power user)
 - `/reminders` — List active reminders (power user)
 - `/cancel <id>` — Cancel reminder (power user)
@@ -48,11 +46,16 @@ See /root/projects/CLAUDE.md for infrastructure rules, projects list, and permis
 - `/watches` — List watches
 - `/monitor` — Log watch status (admin)
 - `/monitor add|remove` — Add/remove log monitors (admin)
+- `/alertaudit [N]` — Recent alert audit summary (admin)
 - `/heartbeat` — Health status (admin)
+- `/jobs` / `/jobstatus` — Background job status report (admin)
 
-### Tasks & Proposals
+### Tasks, Goals & Proposals
 - `/task <action>` — Task management (admin)
 - `/tasks` — List tasks (admin)
+- `/goals` — List open goals (power user)
+- `/next` — Upcoming goals + active tasks (power user)
+- `/goal <title>` / `/goal done|cancel|follow|due <id>` — Create & manage goals (power user)
 - `/order <desc>` — Create standing order (admin)
 - `/orders` — List orders (admin)
 - `/proposals` — List pending proposals (admin)
