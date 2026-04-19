@@ -7,6 +7,8 @@ const parserNoiseVariant = '2026-04-13 08:06:57.003 UTC [698949] ERROR: syntax e
 const dbFatal = '2026-04-13 08:08:11.003 UTC [700111] FATAL: terminating connection due to administrator command';
 const staleDeployNoise = 'Error: Failed to find Server Action "abc123". This request might be from an older or newer deployment.';
 const nginxTestNoise = '2026/04/14 19:03:25 [error] 24#24: *3 open() "/usr/share/nginx/html/en.html" failed (13: Permission denied)';
+const nginxScannerProbe = '2026/04/19 15:45:25 [error] 21#21: *1763 access forbidden by rule, client: 54.216.54.8, server: _, request: "GET /mandrill/.env HTTP/1.1", host: "monethayashi.com"';
+const nginxRealError = '2026/04/19 15:45:25 [error] 21#21: *1763 upstream timed out (110: Connection timed out) while reading response header from upstream';
 
 assert.equal(
   shouldIgnoreContainerLogLine('namibarden-db', parserNoise, []),
@@ -36,6 +38,18 @@ assert.equal(
   shouldIgnoreContainerLogLine('namibarden-nginx-test', nginxTestNoise, []),
   true,
   'Ephemeral nginx deploy smoke-test containers should be suppressed'
+);
+
+assert.equal(
+  shouldIgnoreContainerLogLine('monethayashi', nginxScannerProbe, []),
+  true,
+  'Nginx deny-rule scanner probes (.env/.git/etc) should be suppressed'
+);
+
+assert.equal(
+  shouldIgnoreContainerLogLine('monethayashi', nginxRealError, []),
+  false,
+  'Real nginx upstream errors must still alert'
 );
 
 assert.equal(
