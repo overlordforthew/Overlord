@@ -139,7 +139,7 @@ ${diff.substring(0, 8000)}`;
         cwd: path,
         timeoutMs: 120000,
         role: 'user',
-        requestedModel: 'claude-opus-4-6',
+        requestedModel: 'claude-opus-4-7',
       });
       return result.text || 'Review produced no output.';
     }
@@ -147,7 +147,7 @@ ${diff.substring(0, 8000)}`;
     return new Promise((resolve, reject) => {
       let stdout = '';
       const proc = spawnWithMemoryLimit(CLAUDE_PATH, [
-        '-p', '--output-format', 'json', '--model', 'claude-opus-4-6',
+        '-p', '--output-format', 'json', '--model', 'claude-opus-4-7',
         '--max-turns', '1',
       ], {
         cwd: path,

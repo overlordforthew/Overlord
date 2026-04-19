@@ -191,6 +191,19 @@ async function rebuildMemoryMd(db) {
     lines.push('');
   }
 
+  // Operational knowledge (decisions, bugfixes, patterns, configs, discoveries)
+  const operational = db.prepare(
+    "SELECT title, narrative, type, project, importance FROM observations WHERE status = 'active' AND type IN ('decision', 'bugfix', 'pattern', 'config', 'discovery') AND importance >= 0.4 ORDER BY importance DESC, created_at DESC LIMIT 20"
+  ).all();
+  if (operational.length) {
+    lines.push('## Operational Knowledge');
+    for (const o of operational) {
+      const proj = o.project ? `[${o.project}]` : '';
+      lines.push(`- **${o.title}** ${proj}: ${(o.narrative || '').split('\n')[0].slice(0, 120)}`);
+    }
+    lines.push('');
+  }
+
   // Standing orders (high-importance episodic)
   const standingOrders = db.prepare(
     "SELECT title, narrative FROM observations WHERE status = 'active' AND type = 'episodic' AND importance >= 0.8 ORDER BY importance DESC LIMIT 10"

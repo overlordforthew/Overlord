@@ -95,20 +95,74 @@ else
   fi
 fi
 
-# 4. NamiBarden site
+# 4. NamiBarden site — graduated diagnosis and healing
+NB_STATE_FILE="/tmp/nb-heal-state"
 NB_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 https://namibarden.com 2>/dev/null)
 if [ "$NB_STATUS" = "200" ]; then
   check "namibarden.com" "OK" "HTTP $NB_STATUS"
+  rm -f "$NB_STATE_FILE"
 else
   if heal; then
-    echo "  -> Auto-healing: restarting namibarden container" >> "$LOG"
-    docker restart namibarden >/dev/null 2>&1
-    sleep 5
-    NB_RETRY=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 https://namibarden.com 2>/dev/null)
-    if [ "$NB_RETRY" = "200" ]; then
-      check "namibarden.com" "FIXED" "restarted, now HTTP $NB_RETRY"
+    # Circuit breaker: stop retrying after 2 failed attempts for same error
+    NB_PREV_CODE=""; NB_ATTEMPTS=0
+    if [ -f "$NB_STATE_FILE" ]; then
+      NB_PREV_CODE=$(awk 'NR==1' "$NB_STATE_FILE" 2>/dev/null)
+      NB_ATTEMPTS=$(awk 'NR==2' "$NB_STATE_FILE" 2>/dev/null)
+    fi
+    if [ "$NB_PREV_CODE" = "$NB_STATUS" ] && [ "$NB_ATTEMPTS" -ge 2 ]; then
+      check "namibarden.com" "FAIL" "HTTP $NB_STATUS — gave up after $NB_ATTEMPTS heal attempts"
     else
-      check "namibarden.com" "FAIL" "still HTTP $NB_RETRY after restart"
+      # Track this attempt
+      [ "$NB_PREV_CODE" = "$NB_STATUS" ] && NB_ATTEMPTS=$((NB_ATTEMPTS + 1)) || NB_ATTEMPTS=1
+      printf '%s\n%s\n' "$NB_STATUS" "$NB_ATTEMPTS" > "$NB_STATE_FILE"
+
+      NB_HEALED=false
+      case "$NB_STATUS" in
+        403)
+          echo "  -> Diagnosing: HTTP 403 — likely file permissions" >> "$LOG"
+          docker exec namibarden chmod -R a+rX /usr/share/nginx/html 2>/dev/null
+          docker exec namibarden nginx -s reload 2>/dev/null
+          ;;
+        502)
+          echo "  -> Diagnosing: HTTP 502 — backend down, restarting container" >> "$LOG"
+          docker restart namibarden >/dev/null 2>&1
+          sleep 8
+          ;;
+        503)
+          echo "  -> Diagnosing: HTTP 503 — checking database" >> "$LOG"
+          DB_OK=$(docker exec namibarden-db pg_isready -U namibarden 2>/dev/null && echo yes || echo no)
+          if [ "$DB_OK" = "no" ]; then
+            docker restart namibarden-db >/dev/null 2>&1
+            sleep 5
+          fi
+          docker restart namibarden >/dev/null 2>&1
+          sleep 8
+          ;;
+        000)
+          echo "  -> Diagnosing: HTTP 000 — container unreachable" >> "$LOG"
+          NB_RUNNING=$(docker inspect --format '{{.State.Running}}' namibarden 2>/dev/null)
+          if [ "$NB_RUNNING" != "true" ]; then
+            docker start namibarden >/dev/null 2>&1
+          else
+            docker restart namibarden >/dev/null 2>&1
+          fi
+          sleep 8
+          ;;
+        *)
+          echo "  -> Diagnosing: HTTP $NB_STATUS — unknown, restarting container" >> "$LOG"
+          docker restart namibarden >/dev/null 2>&1
+          sleep 8
+          ;;
+      esac
+
+      sleep 3
+      NB_RETRY=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 https://namibarden.com 2>/dev/null)
+      if [ "$NB_RETRY" = "200" ]; then
+        check "namibarden.com" "FIXED" "was $NB_STATUS, healed (attempt $NB_ATTEMPTS)"
+        rm -f "$NB_STATE_FILE"
+      else
+        check "namibarden.com" "FAIL" "was $NB_STATUS, still $NB_RETRY after heal attempt $NB_ATTEMPTS"
+      fi
     fi
   else
     check "namibarden.com" "FAIL" "HTTP $NB_STATUS"

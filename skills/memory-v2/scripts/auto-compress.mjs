@@ -1,52 +1,34 @@
 #!/usr/bin/env node
 
 /**
- * auto-compress.mjs — Programmatic compression of stale tool events.
+ * auto-compress.mjs — Compress stale tool events into actionable observations.
  *
- * Groups uncompressed events by session, generates summary observations
- * using a free LLM model, and marks events as compressed.
+ * Groups uncompressed events by session, extracts decisions/patterns/fixes
+ * using an LLM, and stores as high-quality observations.
  *
- * Runs on a schedule (every 6h via scheduler.js) to prevent event pileup
- * from autonomous sessions that don't trigger the Claude-prompted flow.
+ * Runs on a schedule (every 6h via scheduler.js).
  *
  * Usage: node auto-compress.mjs [--threshold 50] [--dry-run]
  */
 
 import { execSync } from 'child_process';
+import { readFileSync } from 'fs';
 import { getDb } from '../lib/db.mjs';
 import { initSchema } from '../lib/schema.mjs';
 import { store } from '../lib/observations.mjs';
 import { markCompressed } from '../lib/events.mjs';
 
+const GEMINI_KEY = process.env.GOOGLE_API_KEY || (() => {
+  try {
+    return JSON.parse(readFileSync(process.env.HOME + '/.config/io.datasette.llm/keys.json', 'utf8')).gemini || '';
+  } catch { return ''; }
+})();
+
 const THRESHOLD = parseInt(process.argv.find((_, i, a) => a[i - 1] === '--threshold') || '50');
 const DRY_RUN = process.argv.includes('--dry-run');
-const MAX_LLM_ATTEMPTS = 3;
-let llmFailCount = 0;
 
 function log(msg) {
   console.log(`[auto-compress] ${msg}`);
-}
-
-// Detect project from file paths in event summaries
-const PROJECT_PATH_PATTERNS = [
-  [/(?:\/root\/overlord|\/app)\b/i, 'Overlord'],
-  [/(?:\/root\/projects|\/projects)\/NamiBarden\b/i, 'NamiBarden'],
-  [/(?:\/root\/projects|\/projects)\/MasterCommander\b/i, 'MasterCommander'],
-  [/(?:\/root\/projects|\/projects)\/BeastMode\b/i, 'BeastMode'],
-  [/(?:\/root\/projects|\/projects)\/Lumina\b/i, 'Lumina'],
-  [/(?:\/root\/projects|\/projects)\/SurfaBabe\b/i, 'SurfaBabe'],
-  [/(?:\/root\/projects|\/projects)\/Elmo\b/i, 'Elmo'],
-  [/(?:\/root\/projects|\/projects)\/OnlyHulls\b/i, 'OnlyHulls'],
-  [/\/data\/coolify/i, 'Coolify'],
-  [/\/etc\/fail2ban/i, 'Security'],
-  [/traefik/i, 'Traefik'],
-];
-
-function detectProject(text) {
-  for (const [pattern, name] of PROJECT_PATH_PATTERNS) {
-    if (pattern.test(text)) return name;
-  }
-  return null;
 }
 
 function groupEventsBySession(events) {
@@ -59,16 +41,106 @@ function groupEventsBySession(events) {
     const g = groups.get(sid);
     g.events.push(e);
     if (e.project) g.project = e.project;
-    // Enhanced project detection from file paths in input summaries
-    if (!g.project && e.input_summary) {
-      g.project = detectProject(e.input_summary);
-    }
     g.tools[e.tool_name] = (g.tools[e.tool_name] || 0) + 1;
   }
   return groups;
 }
 
-function buildRuleSummary(group) {
+function buildEventSample(group) {
+  // Sample up to 30 events, evenly spaced, with full detail
+  const sampleSize = Math.min(group.events.length, 30);
+  const step = Math.max(1, Math.floor(group.events.length / sampleSize));
+  const samples = [];
+  for (let i = 0; i < group.events.length && samples.length < sampleSize; i += step) {
+    const e = group.events[i];
+    const ts = new Date(e.timestamp).toISOString().slice(11, 19);
+    const proj = e.project ? `[${e.project}]` : '';
+    samples.push(`${ts} ${proj} ${e.tool_name}: ${(e.input_summary || '').slice(0, 120)}`);
+  }
+  return samples;
+}
+
+function callGemini(prompt) {
+  if (!GEMINI_KEY) throw new Error('No Gemini API key');
+  const body = JSON.stringify({
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.3, maxOutputTokens: 4096, responseMimeType: 'application/json' },
+  });
+  const result = execSync(
+    `curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}" -H "Content-Type: application/json" -d @-`,
+    { timeout: 45000, encoding: 'utf-8', input: body, stdio: ['pipe', 'pipe', 'pipe'] }
+  );
+  const resp = JSON.parse(result);
+  const text = resp?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('Empty Gemini response');
+  return text;
+}
+
+function tryLlmExtraction(group) {
+  const samples = buildEventSample(group);
+  const toolList = Object.entries(group.tools)
+    .sort((a, b) => b[1] - a[1])
+    .map(([t, c]) => `${t}(${c})`)
+    .join(', ');
+
+  const prompt = `You are a memory extraction engine. Analyze these tool events from a coding session and extract ACTIONABLE knowledge — decisions made, patterns discovered, configurations changed, bugs fixed, architectural choices.
+
+Session: ${group.events.length} events on project "${group.project || 'unknown'}"
+Tools used: ${toolList}
+
+Events (${group.events.length} total, showing ${samples.length} sampled):
+${samples.join('\n')}
+
+Extract 1-3 observations. Each observation should capture WHAT was done and WHY it matters for future work.
+
+DO NOT write generic summaries like "file reading and debugging". Extract specific, reusable knowledge:
+- BAD: "Docker resource management tasks were performed"
+- GOOD: "MasterCommander deployment requires docker cp into the running container — Coolify webhook not configured for this project"
+- BAD: "Code was edited and tested"
+- GOOD: "Fixed memory-v2 db.mjs path detection: /app/data exists on host as stale directory, must check /.dockerenv to distinguish container from host"
+
+Return a JSON array:
+[{"type":"decision|bugfix|pattern|config|discovery","title":"specific title","narrative":"1-3 sentences with concrete details","importance":0.4-0.8}]
+
+If the events are too generic to extract meaningful knowledge (e.g., just file browsing with no clear outcome), return: []`;
+
+  try {
+    const raw = callGemini(prompt);
+    const jsonMatch = raw.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) return [];
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .filter(o => o.title && o.narrative && o.narrative.length > 30)
+      .map(o => ({
+        type: o.type || 'discovery',
+        session_id: group.session_id,
+        title: String(o.title).slice(0, 200),
+        narrative: String(o.narrative).slice(0, 500),
+        project: group.project || null,
+        source: 'auto-compress',
+        importance: Math.min(0.8, Math.max(0.4, parseFloat(o.importance) || 0.5)),
+      }));
+  } catch (err) {
+    log(`LLM failed for session ${group.session_id.slice(0, 8)}: ${err.message}`);
+    return null;
+  }
+}
+
+function buildFallbackObservation(group) {
+  // Extract meaningful file paths and commands
+  const files = new Set();
+  const commands = [];
+  for (const e of group.events) {
+    const s = e.input_summary || '';
+    const pathMatches = s.match(/\/root\/[^\s,'")\]]+/g);
+    if (pathMatches) pathMatches.forEach(f => files.add(f));
+    if (e.tool_name === 'Bash' && s.length > 10) commands.push(s.slice(0, 100));
+    if (e.tool_name === 'Edit' || e.tool_name === 'Write') files.add(s);
+  }
+
   const toolList = Object.entries(group.tools)
     .sort((a, b) => b[1] - a[1])
     .map(([t, c]) => `${t}(${c})`)
@@ -78,90 +150,18 @@ function buildRuleSummary(group) {
   const last = new Date(group.events[group.events.length - 1].timestamp).toISOString().slice(0, 16);
   const project = group.project || 'unknown';
 
-  // Extract unique file paths from input summaries
-  const files = new Set();
-  for (const e of group.events) {
-    const s = e.input_summary || '';
-    const matches = s.match(/\/root\/[^\s,'")\]]+/g);
-    if (matches) matches.forEach(f => files.add(f));
-  }
+  const fileList = [...files].slice(0, 5).join(', ');
+  const cmdSample = commands.slice(0, 3).join('; ');
 
   return {
     type: 'config',
-    category: 'infrastructure',
     session_id: group.session_id,
-    title: `${project} session: ${group.events.length} events (${Object.keys(group.tools).join(', ')})`,
-    narrative: `Autonomous session ${group.session_id.slice(0, 8)} on ${project}. Tools: ${toolList}. Time: ${first} to ${last}.${[...files].length ? ' Files: ' + [...files].slice(0, 5).join(', ') : ''}`,
-    facts: [
-      `${group.events.length} tool events on ${project}`,
-      `Tools: ${toolList}`,
-      `Time range: ${first} to ${last}`,
-    ],
-    concepts: ['auto-compressed', project.toLowerCase()],
-    files_modified: [...files].slice(0, 10),
+    title: `${project}: ${group.events.length}-event session (${first.slice(5)})`,
+    narrative: `Session on ${project} (${first} to ${last}). Tools: ${toolList}.${fileList ? ` Key files: ${fileList}.` : ''}${cmdSample ? ` Commands: ${cmdSample}` : ''}`,
     project: project !== 'unknown' ? project : null,
-    source: 'auto-compress',
-    importance: 0.3,
+    source: 'auto-compress-fallback',
+    importance: 0.25, // Low — fallback only, real extraction failed
   };
-}
-
-function tryLlmSummary(group) {
-  // Skip LLM if we've already failed or exceeded max attempts
-  if (llmFailCount >= MAX_LLM_ATTEMPTS) {
-    return null;
-  }
-
-  const sampleSize = Math.min(group.events.length, 20);
-  const step = Math.max(1, Math.floor(group.events.length / sampleSize));
-  const samples = [];
-  for (let i = 0; i < group.events.length && samples.length < sampleSize; i += step) {
-    const e = group.events[i];
-    const ts = new Date(e.timestamp).toISOString().slice(11, 19);
-    samples.push(`${ts} ${e.tool_name}: ${(e.input_summary || '').slice(0, 80)}`);
-  }
-
-  const prompt = `Summarize these tool events from an autonomous coding session into a JSON object. Be concise.
-
-Events (${group.events.length} total, showing ${samples.length}):
-${samples.join('\n')}
-
-Project: ${group.project || 'unknown'}
-
-Return ONLY valid JSON:
-{"type":"config|bugfix|feature|discovery","title":"short title","narrative":"1-2 sentence summary","facts":["fact1","fact2"],"concepts":["concept1"]}`;
-
-  try {
-    const result = execSync(
-      'llm -m openrouter/openrouter/free',
-      { timeout: 20000, encoding: 'utf-8', input: prompt }
-    );
-
-    // Extract JSON from response (may have markdown fences)
-    const jsonMatch = result.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return null;
-
-    const parsed = JSON.parse(jsonMatch[0]);
-    if (!parsed.title || !parsed.narrative) return null;
-
-    const typeToCategory = { config: 'infrastructure', discovery: 'discovery', feature: 'feature', bugfix: 'bugfix' };
-    return {
-      type: parsed.type || 'config',
-      category: typeToCategory[parsed.type] || 'infrastructure',
-      session_id: group.session_id,
-      title: parsed.title.slice(0, 200),
-      narrative: parsed.narrative.slice(0, 500),
-      facts: Array.isArray(parsed.facts) ? parsed.facts.slice(0, 5) : [],
-      concepts: Array.isArray(parsed.concepts) ? parsed.concepts.slice(0, 5) : [],
-      project: group.project || null,
-      source: 'auto-compress-llm',
-      importance: 0.35,
-    };
-  } catch (err) {
-    llmFailCount++;
-    const skipMsg = llmFailCount >= MAX_LLM_ATTEMPTS ? ' — skipping LLM for remaining groups' : '';
-    log(`LLM failed (${llmFailCount}/${MAX_LLM_ATTEMPTS}) for session ${group.session_id.slice(0, 8)}: ${err.message}${skipMsg}`);
-    return null;
-  }
 }
 
 function run() {
@@ -182,8 +182,6 @@ function run() {
   const groups = groupEventsBySession(uncompressed);
   let obsCount = 0;
   let lastEventId = 0;
-
-  // Process sessions with 5+ events individually, batch the rest
   const smallEvents = [];
 
   for (const [sid, group] of groups) {
@@ -192,52 +190,44 @@ function run() {
       continue;
     }
 
-    // Try LLM first, fall back to rule-based
-    let obs = tryLlmSummary(group);
-    if (!obs) obs = buildRuleSummary(group);
+    // Rate limit: 4s between Gemini calls (free tier = 20 RPM)
+    if (obsCount > 0 || lastEventId > 0) execSync('sleep 4');
 
-    if (DRY_RUN) {
-      log(`[dry-run] Would store: ${obs.title}`);
+    // Try LLM extraction first
+    const extracted = tryLlmExtraction(group);
+
+    if (extracted === null || extracted.length === 0) {
+      // LLM failed or found nothing extractable — store minimal fallback
+      const fallback = buildFallbackObservation(group);
+      if (DRY_RUN) {
+        log(`[dry-run] Fallback: ${fallback.title}`);
+      } else {
+        const id = store(fallback);
+        log(`Stored fallback #${id}: ${fallback.title}`);
+        obsCount++;
+      }
     } else {
-      const id = store(obs);
-      log(`Stored #${id}: ${obs.title}`);
-      obsCount++;
+      // Store each extracted observation
+      for (const obs of extracted) {
+        if (DRY_RUN) {
+          log(`[dry-run] Would store: ${obs.title} (importance: ${obs.importance})`);
+        } else {
+          const id = store(obs);
+          log(`Stored #${id}: ${obs.title} (importance: ${obs.importance})`);
+          obsCount++;
+        }
+      }
     }
 
     const maxId = Math.max(...group.events.map(e => e.id));
     if (maxId > lastEventId) lastEventId = maxId;
   }
 
-  // Batch small sessions into one observation
+  // Batch small sessions — these are too short for meaningful extraction
   if (smallEvents.length > 0) {
-    const toolCounts = {};
-    for (const e of smallEvents) {
-      toolCounts[e.tool_name] = (toolCounts[e.tool_name] || 0) + 1;
-    }
-    const toolList = Object.entries(toolCounts).sort((a, b) => b[1] - a[1]).map(([t, c]) => `${t}(${c})`).join(', ');
-    const sessionCount = new Set(smallEvents.map(e => e.session_id)).size;
-
-    const batchObs = {
-      type: 'config',
-      category: 'infrastructure',
-      title: `Auto-compressed: ${sessionCount} small sessions (${smallEvents.length} events)`,
-      narrative: `Batch of ${sessionCount} short autonomous sessions with <5 events each. Tools: ${toolList}.`,
-      facts: [`${smallEvents.length} events across ${sessionCount} sessions`, `Tools: ${toolList}`],
-      concepts: ['auto-compressed', 'batch'],
-      source: 'auto-compress',
-      importance: 0.2,
-    };
-
-    if (DRY_RUN) {
-      log(`[dry-run] Would store batch: ${batchObs.title}`);
-    } else {
-      const id = store(batchObs);
-      log(`Stored #${id}: ${batchObs.title}`);
-      obsCount++;
-    }
-
     const maxId = Math.max(...smallEvents.map(e => e.id));
     if (maxId > lastEventId) lastEventId = maxId;
+    log(`Skipping ${smallEvents.length} events from short sessions (<5 events) — no meaningful extraction possible`);
   }
 
   // Mark all as compressed
@@ -253,6 +243,5 @@ function run() {
 
 const result = run();
 if (!DRY_RUN) {
-  // Output JSON for scheduler to parse
   console.log(JSON.stringify(result));
 }

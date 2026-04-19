@@ -89,7 +89,7 @@ function setSDKSessionId(chatJid, sessionId) {
  * @param {object} opts
  * @param {string} opts.prompt - The full prompt to send
  * @param {string} opts.systemPrompt - System prompt
- * @param {string} opts.model - Model ID (e.g., 'claude-opus-4-6')
+ * @param {string} opts.model - Model ID (e.g., 'claude-opus-4-7')
  * @param {string} opts.allowedTools - Comma-separated tool names
  * @param {number} opts.maxTurns - Max turns
  * @param {string} opts.cwd - Working directory
@@ -108,7 +108,7 @@ export async function askClaudeSDK(opts) {
   const {
     prompt,
     systemPrompt,
-    model = 'claude-opus-4-6',
+    model = 'claude-opus-4-7',
     allowedTools,
     maxTurns = 100,
     cwd = '/projects',
@@ -204,7 +204,7 @@ export async function triageWithSDK({ prompt, model = 'claude-haiku-4-5', timeou
 export async function runTaskWithSDK({ prompt, cwd = '/projects', timeoutMs = 600000 }) {
   return askClaudeSDK({
     prompt,
-    model: 'claude-opus-4-6',
+    model: 'claude-opus-4-7',
     maxTurns: 50,
     cwd,
     timeoutMs,

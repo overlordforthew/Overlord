@@ -27,6 +27,7 @@ done
 
 HEARTBEAT_DIR="/root/overlord/data/cron-heartbeats"
 NOW=$(date +%s)
+GENERATED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 # Known heartbeat intervals (seconds) for jobs that write heartbeat files
 declare -A HEARTBEAT_INTERVALS
@@ -45,6 +46,11 @@ is_inline_command() {
   [[ "$cmd" == docker\ exec\ * ]] && return 0
   [[ "$cmd" == /usr/bin/claude\ * ]] && return 0
   return 1
+}
+
+uses_interpreter() {
+  local cmd="$1"
+  echo "$cmd" | grep -qP '(^|[[:space:];]|&& )((/usr/bin/)?(bash|node|python3)) '
 }
 
 # Extract the script path from a cron command
@@ -95,6 +101,31 @@ extract_script_path() {
 script_to_name() {
   local path="$1"
   basename "$path" | sed 's/\.\(sh\|js\|mjs\|py\)$//'
+}
+
+# Approximate the expected run interval from the cron schedule.
+# This is only used to decide whether a log file is fresh enough to inspect.
+estimate_schedule_interval() {
+  local schedule="$1"
+  local minute hour day month dow
+  read -r minute hour day month dow <<< "$schedule"
+
+  if [[ "$minute" =~ ^\*/([0-9]+)$ ]]; then
+    echo $((BASH_REMATCH[1] * 60))
+    return
+  fi
+
+  if [[ "$hour" =~ ^\*/([0-9]+)$ ]]; then
+    echo $((BASH_REMATCH[1] * 3600))
+    return
+  fi
+
+  if [[ "$dow" != "*" ]]; then
+    echo 604800
+    return
+  fi
+
+  echo 86400
 }
 
 # Parse crontab
@@ -148,6 +179,7 @@ for i in "${!COMMANDS[@]}"; do
   name=$(script_to_name "$script")
   status="OK"
   notes=""
+  heartbeat_fresh=false
 
   # Check 1: Does the script exist?
   if [[ ! -f "$script" ]]; then
@@ -161,11 +193,8 @@ for i in "${!COMMANDS[@]}"; do
 
   # Check 2: Is it executable (or called via interpreter)?
   if [[ ! -x "$script" ]]; then
-    # Check if cron command uses an interpreter prefix
-    if echo "$cmd" | grep -qP '^(bash|node|python3) '; then
+    if uses_interpreter "$cmd"; then
       : # Fine — interpreter handles it
-    elif echo "$cmd" | grep -qP '&& *(bash|node|python3) '; then
-      : # Fine — interpreter after cd
     else
       status="WARN"
       notes="not executable (chmod +x needed)"
@@ -182,7 +211,7 @@ for i in "${!COMMANDS[@]}"; do
     interval=${HEARTBEAT_INTERVALS[$name]:-0}
     if [[ "$interval" -gt 0 ]]; then
       last=$(cat "$hb_file" 2>/dev/null)
-      if [[ -n "$last" ]]; then
+      if [[ "$last" =~ ^[0-9]+$ ]]; then
         age=$((NOW - last))
         grace=$((interval + interval / 2))
         if [[ "$age" -gt "$grace" ]]; then
@@ -195,6 +224,7 @@ for i in "${!COMMANDS[@]}"; do
           DETAILS+=("$status | $sched | $name — $notes")
           continue
         fi
+        heartbeat_fresh=true
       fi
     fi
   fi
@@ -202,15 +232,46 @@ for i in "${!COMMANDS[@]}"; do
   # Check 4: If script has a log file, check for recent errors
   log_file=$(echo "$cmd" | grep -oP '>> *\K[^ ]+' | head -1)
   if [[ -n "$log_file" && -f "$log_file" ]]; then
-    # Check last 20 lines for error/fail patterns
-    recent_errors=$(tail -20 "$log_file" 2>/dev/null | grep -ciP 'error|fail|fatal|panic|traceback' || true)
-    if [[ "$recent_errors" -gt 0 ]]; then
-      status="WARN"
-      notes="$recent_errors error(s) in recent log output ($log_file)"
-      WARN=$((WARN + 1))
-      WARNINGS+=("$name: $notes")
-      DETAILS+=("$status | $sched | $name — $notes")
-      continue
+    should_scan_log=true
+
+    # A fresh heartbeat is a stronger success signal than a reused log tail.
+    if [[ "$heartbeat_fresh" == true ]]; then
+      should_scan_log=false
+    else
+      log_mtime=$(stat -c %Y "$log_file" 2>/dev/null || echo 0)
+      if [[ "$log_mtime" -gt 0 ]]; then
+        interval=${HEARTBEAT_INTERVALS[$name]:-$(estimate_schedule_interval "$sched")}
+        max_log_age=$((interval + interval / 2))
+        log_age=$((NOW - log_mtime))
+        if [[ "$log_age" -gt "$max_log_age" ]]; then
+          should_scan_log=false
+        fi
+      fi
+    fi
+
+    if [[ "$should_scan_log" == true ]]; then
+      # "Last summary wins": if the most recent summary line in the log
+      # reports zero failures, the job is healthy regardless of older entries.
+      # This prevents stale errors from a previous run triggering warnings.
+      last_summary=$(tail -20 "$log_file" 2>/dev/null \
+        | tac | grep -m1 -iP '\d+\s+(passed|failed|errors)' || true)
+      if [[ -n "$last_summary" ]] \
+        && echo "$last_summary" | grep -qiP '0\s+failed?\b|failed?:\s*0\b|\b0\s+errors?\b'; then
+        : # Most recent run passed — skip error counting
+      else
+        # Check last 20 lines for error/fail patterns
+        recent_errors=$(tail -20 "$log_file" 2>/dev/null \
+          | grep -viP 'errors?:\s*0\b|failed?:\s*0\b|\b0\s+errors?\b|\b0\s+failed\b' \
+          | grep -ciP 'error|fail|fatal|panic|traceback' || true)
+        if [[ "$recent_errors" -gt 0 ]]; then
+          status="WARN"
+          notes="$recent_errors error(s) in recent log output ($log_file)"
+          WARN=$((WARN + 1))
+          WARNINGS+=("$name: $notes")
+          DETAILS+=("$status | $sched | $name — $notes")
+          continue
+        fi
+      fi
     fi
   fi
 
@@ -251,6 +312,7 @@ fi
 
 if $JSON_MODE; then
   echo "{"
+  echo "  \"generatedAt\": \"$GENERATED_AT\","
   echo "  \"total\": $TOTAL,"
   echo "  \"ok\": $OK,"
   echo "  \"warn\": $WARN,"

@@ -58,7 +58,7 @@ Output your research brief in plain text (no markdown headers, WhatsApp-friendly
       cwd: '/tmp',
       timeoutMs,
       role: 'user',
-      requestedModel: 'claude-opus-4-6',
+      requestedModel: 'claude-opus-4-7',
       search: true,
     });
 
@@ -84,7 +84,7 @@ Output your research brief in plain text (no markdown headers, WhatsApp-friendly
     const args = [
       '-p', '--output-format', 'json',
       '--max-turns', '30',
-      '--model', 'claude-opus-4-6',
+      '--model', 'claude-opus-4-7',
       '--allowedTools', 'WebSearch,WebFetch,Read',
     ];
 

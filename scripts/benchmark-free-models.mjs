@@ -11,13 +11,27 @@
  */
 
 import { writeFileSync, readFileSync, existsSync } from 'fs';
+import {
+  analyzeOptionalOpenRouterFailure,
+  describeOptionalOpenRouterPause,
+  getOptionalOpenRouterPause,
+  pauseOptionalOpenRouter,
+} from '../lib/optional-openrouter.js';
 
 const RANKINGS_PATH = process.env.RANKINGS_PATH || '/app/data/free-model-rankings.json';
 const KEY = process.env.OPENROUTER_KEY;
 
+class OptionalBenchmarkSkip extends Error {}
+
 if (!KEY) {
-  console.error('[Benchmark] No OPENROUTER_KEY');
-  process.exit(1);
+  console.log('[Benchmark] Skipping: OPENROUTER_KEY missing');
+  process.exit(0);
+}
+
+const globalPause = getOptionalOpenRouterPause();
+if (globalPause) {
+  console.log(`[Benchmark] Skipping: OpenRouter paused (${describeOptionalOpenRouterPause(globalPause)})`);
+  process.exit(0);
 }
 
 const CODE_PROMPT = 'Write a JavaScript function rateLimiter(maxCalls, windowMs) that implements a sliding window rate limiter. Include 3 test cases with console.log showing it works. Return ONLY the code — no markdown fences, no explanation.';
@@ -31,7 +45,21 @@ async function fetchModels() {
     headers: { 'Authorization': `Bearer ${KEY}` },
     signal: AbortSignal.timeout(15000),
   });
-  const data = await res.json();
+  const raw = await res.text();
+  let data = {};
+  try {
+    data = JSON.parse(raw);
+  } catch {}
+  if (!res.ok || data.error) {
+    const failure = analyzeOptionalOpenRouterFailure({
+      status: res.status,
+      errorText: data?.error?.message || raw,
+    });
+    if (failure.cooldownMs) {
+      pauseOptionalOpenRouter(failure.kind, failure.summary, failure.cooldownMs);
+    }
+    throw new OptionalBenchmarkSkip(`[Benchmark] Skipping: model catalog ${failure.summary}`);
+  }
   return (data.data || [])
     .filter(m => m.id.includes(':free'))
     .map(m => ({ id: m.id, name: m.name, ctx: m.context_length, created: m.created }));
@@ -55,7 +83,21 @@ async function testModel(model, prompt, maxTokens = 800) {
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    const data = await res.json();
+    const raw = await res.text();
+    let data = {};
+    try {
+      data = JSON.parse(raw);
+    } catch {}
+    if (!res.ok || data.error) {
+      const failure = analyzeOptionalOpenRouterFailure({
+        status: res.status,
+        errorText: data?.error?.message || raw,
+      });
+      if (failure.cooldownMs) {
+        pauseOptionalOpenRouter(failure.kind, failure.summary, failure.cooldownMs);
+      }
+      return { ok: false, ms: Date.now() - start, error: failure.summary };
+    }
     let text = data.choices?.[0]?.message?.content?.trim() || '';
     // Strip thinking blocks
     text = text.replace(/^<think>[\s\S]*?<\/think>\s*/m, '').trim();
@@ -227,6 +269,10 @@ async function benchmark() {
 }
 
 benchmark().catch(err => {
+  if (err instanceof OptionalBenchmarkSkip) {
+    console.log(err.message);
+    process.exit(0);
+  }
   console.error('[Benchmark] Fatal:', err.message);
   process.exit(1);
 });

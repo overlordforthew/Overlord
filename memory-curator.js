@@ -93,13 +93,47 @@ Importance guide (semantic): 0.8-1.0: Critical tools/infra, 0.5-0.7: Useful patt
 Return {"episodic":[],"semantic":[]} if nothing new. Do NOT wrap in markdown code fences.`;
 
 /**
- * Run the configured extraction backend for memory curation.
+ * Run extraction via Gemini (fast, reliable, free).
+ * Falls back to intelligence runtime if Gemini unavailable.
  */
 async function callExtractor(systemPrompt, userPrompt) {
+  const geminiKey = process.env.GOOGLE_API_KEY || '';
+  if (geminiKey) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 30_000);
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+          {
+            method: 'POST',
+            signal: controller.signal,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: systemPrompt }] },
+              contents: [{ parts: [{ text: userPrompt }] }],
+              generationConfig: { temperature: 0.2, maxOutputTokens: 4096 },
+            }),
+          }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          if (text) return text;
+        }
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch (err) {
+      console.error('[memory-curator] Gemini extraction failed, trying fallback:', err.message);
+    }
+  }
+
+  // Fallback to intelligence runtime
   const result = await runStatelessIntelligence({
     systemPrompt,
     userPrompt,
-    requestedModel: 'claude-opus-4-6',
+    requestedModel: 'claude-opus-4-7',
     timeoutMs: 30_000,
     maxTurns: 1,
     role: 'user',

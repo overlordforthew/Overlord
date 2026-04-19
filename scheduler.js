@@ -21,9 +21,11 @@ import {
   generateDailySynthesis, formatSynthesisMessage,
   recordDailyMetrics, logFriction, getFrictionReport,
 } from './meta-learning.js';
-import { createJobRuntime, JobDelivery, JobExecutor, loadJobState, loadRecentJobRuns } from './lib/job-runtime.js';
+import { createJobRuntime, drainDeliveryQueue, JobDelivery, JobExecutor, loadJobState, loadRecentJobRuns } from './lib/job-runtime.js';
+import { createIncidentTracker, formatDuration, getIncidentStatusSummary } from './lib/incident-tracker.js';
 import { createObserverGuard } from './lib/observer-guard.js';
 import { normalizeAlertHashText, shouldIgnoreContainerLogLine } from './lib/log-alert-utils.js';
+import { describeTransientAlertLifecycle, getTransientAlertThresholdPolicy } from './lib/log-alert-policies.js';
 import { runHeartbeat } from './heartbeat.js';
 import { sweepZombies } from './session-guard.js';
 import { createTask, getActiveTasks, getRecentDoneTasks, formatTaskList, TaskStatus, closeTask, getDueGoalFollowUps, updateTask, addTaskEvent } from './task-store.js';
@@ -51,6 +53,11 @@ import {
 
 const execAsync = promisify(exec);
 
+function formatShortError(summary, detail = '', icon = '⚠️') {
+  const cleanDetail = String(detail || '').replace(/\s+/g, ' ').trim();
+  return cleanDetail ? `${icon} ${summary} ${cleanDetail}`.trim() : `${icon} ${summary}`;
+}
+
 function writeHeartbeat(jobName) {
   try {
     const dir = '/app/data/cron-heartbeats';
@@ -75,6 +82,7 @@ const ALERT_AUDIT_RETENTION_DAYS = Number(process.env.ALERT_AUDIT_RETENTION_DAYS
 const ALERT_AUDIT_FILE_PATTERN = /^alert-audit-\d{4}-\d{2}-\d{2}\.jsonl$/;
 if (!existsSync(REPORTS_DIR)) mkdirSync(REPORTS_DIR, { recursive: true });
 const observerGuard = createObserverGuard({ dataDir: DATA_DIR });
+const incidentTracker = createIncidentTracker({ dataDir: DATA_DIR });
 
 async function writeJsonFile(file, value) {
   await fs.mkdir(path.dirname(file), { recursive: true });
@@ -183,6 +191,25 @@ function createSchedulerJobRuntime(sockRef) {
 
 function truncateText(text, max = 120) {
   return String(text || '').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function formatOpenIncidentMessage(incidents = []) {
+  if (incidents.length === 0) return '';
+  const lines = [incidents.length === 1 ? '⚠️ Service degraded' : '⚠️ Services degraded'];
+  for (const incident of incidents) {
+    lines.push(`• ${incident.degradedTitle} — ${incident.degradedDetail}`);
+  }
+  lines.push('I will stay quiet until recovery or a materially different failure appears.');
+  return lines.join('\n');
+}
+
+function formatRecoveredIncidentMessage(incidents = []) {
+  if (incidents.length === 0) return '';
+  const lines = [incidents.length === 1 ? '✅ Service recovered' : '✅ Services recovered'];
+  for (const incident of incidents) {
+    lines.push(`• ${incident.recoveredTitle} — recovered after ${formatDuration(incident.lastDurationMs || 0)}`);
+  }
+  return lines.join('\n');
 }
 
 function formatJobAge(timestamp) {
@@ -476,7 +503,7 @@ export async function getRecentAlertAuditSummary(limit = 10) {
     entries.sort((a, b) => Date.parse(b.ts || 0) - Date.parse(a.ts || 0));
     return formatAlertAuditSummary(entries, scannedFiles, safeLimit);
   } catch (err) {
-    return `❌ Alert audit unavailable: ${err.message}`;
+    return formatShortError('Alert audit is unavailable.', err.message, '❌');
   }
 }
 
@@ -499,6 +526,12 @@ const CONTAINER_NAMES = {
 // Resolve Coolify hash container names to project names via Docker labels
 async function resolveContainerName(name) {
   if (CONTAINER_NAMES[name]) return CONTAINER_NAMES[name];
+  for (const [rawName, friendlyName] of Object.entries(CONTAINER_NAMES)) {
+    if (name.endsWith(`_${rawName}`) || name.endsWith(`-${rawName}`)) {
+      CONTAINER_NAMES[name] = friendlyName;
+      return friendlyName;
+    }
+  }
   try {
     // Use serviceName + projectName to build a clean friendly name
     const { stdout } = await execAsync(
@@ -670,7 +703,7 @@ export async function generateBriefing() {
     } catch (err) { console.debug('[Briefing] Beszel health unavailable:', err.message); return null; }
   }
 
-  const [uptime, memory, disk, containers, dockerStats, fail2ban, beszelHealth] = await Promise.all([
+  const [uptime, memory, disk, containers, dockerStats, fail2ban, beszelHealth, incidentSummary] = await Promise.all([
     runCmd('uptime -p'),
     runCmd("free -h | awk '/Mem/{printf \"RAM: %s used / %s total (%s free)\", $3, $2, $4}; /Swap/{printf \"\\nSwap: %s used / %s total\", $3, $2}'"),
     runCmd("df -h / | tail -1 | awk '{print $3\"/\"$2\" (\"$5\" used)\"}'"),
@@ -678,6 +711,7 @@ export async function generateBriefing() {
     runCmd('docker stats --no-stream --format "{{.Name}}: CPU {{.CPUPerc}} / MEM {{.MemUsage}}" 2>/dev/null'),
     runCmd('fail2ban-client status 2>/dev/null || echo "(not running)"'),
     getBeszelHealth(),
+    getIncidentStatusSummary(DATA_DIR, 24),
   ]);
 
   // Resolve container names to human-readable
@@ -737,6 +771,24 @@ export async function generateBriefing() {
     lines.push('', `⚠️ Recent errors (6h):\n${recentErrors.substring(0, 500)}`);
   } else {
     lines.push('', '✅ No errors in the last 6 hours');
+  }
+
+  if (incidentSummary.open.length > 0) {
+    const activeLines = incidentSummary.open
+      .slice(0, 5)
+      .map((incident) => {
+        const startedAtMs = Date.parse(incident.startedAt || incident.lastSeenAt || 0);
+        const age = startedAtMs ? formatDuration(Date.now() - startedAtMs) : 'unknown';
+        return `- ${incident.degradedTitle} (${age})`;
+      });
+    lines.push('', `🚨 Active incidents:\n${activeLines.join('\n')}`);
+  }
+
+  if (incidentSummary.recovered.length > 0) {
+    const recoveredLines = incidentSummary.recovered
+      .slice(0, 5)
+      .map((incident) => `- ${incident.recoveredTitle} (${formatDuration(incident.lastDurationMs || 0)})`);
+    lines.push('', `✅ Recovered in last 24h:\n${recoveredLines.join('\n')}`);
   }
 
   // Task status
@@ -872,6 +924,7 @@ const DEFAULT_IGNORE_PATTERNS = [
   '[LogMonitor] AI analysis failed',
   '[mc-auth] Unexpected error on idle client: terminating connection due to administrator command',
 ];
+
 async function loadLogConfig() {
   const config = await readJSON(LOG_MONITOR_FILE, {
     enabled: true,
@@ -947,7 +1000,8 @@ async function checkContainerLogs(sockRef) {
 
   const pattern = config.patterns.join('\\|');
   const ignorePatterns = config.ignorePatterns || [];
-  const alerts = [];       // structured: { container, friendly, errorText, analysis }
+  const detections = [];
+  const newAlerts = [];
 
   for (const container of containers) {
     try {
@@ -973,19 +1027,31 @@ async function checkContainerLogs(sockRef) {
               // Skip lines where "error" is part of a label/title, not an actual error
               if (/\berror watcher\b/i.test(line)) return false;
               if (/\b(postmortem|executor|knowledge base)\b/i.test(line)) return false;
-              if (/^\s*[🔧⏰☀️🌐📋🧠💓🛡️🔍📊🤖🔮🗜️👁️📨✅👤🤖📡🔗]\s/u.test(line)) return false;
             }
             return true;
           })
           .join('\n');
         if (!filtered.trim()) continue;
 
+        const friendly = await resolveContainerName(container);
         const errorHash = crypto.createHash('md5').update(normalizeAlertHashText(filtered)).digest('hex');
+        const alert = {
+          container,
+          friendly,
+          errorText: filtered.substring(0, 300),
+          errorHash,
+        };
+        const isNew = !config.alertedHashes.includes(errorHash);
+
+        detections.push({
+          ...alert,
+          thresholdPolicy: getTransientAlertThresholdPolicy(alert),
+          isNew,
+        });
 
         // Deduplicate — don't alert same errors repeatedly
-        if (!config.alertedHashes.includes(errorHash)) {
-          const friendly = await resolveContainerName(container);
-          alerts.push({ container, friendly, errorText: filtered.substring(0, 300), errorHash });
+        if (isNew) {
+          newAlerts.push(alert);
           config.alertedHashes.push(errorHash);
           // Keep only last 100 hashes
           if (config.alertedHashes.length > 100) config.alertedHashes = config.alertedHashes.slice(-100);
@@ -996,38 +1062,97 @@ async function checkContainerLogs(sockRef) {
 
   await saveLogConfig(config);
 
-  if (alerts.length > 0) {
+  const recoveredIncidents = await incidentTracker.recoverQuietIncidents();
+
+  if (detections.length > 0 || recoveredIncidents.length > 0) {
     const batchId = crypto.randomUUID();
-    // AI-powered error analysis before alerting
-    let analyzedAlerts = alerts;
+    const suppressedStatuses = new Map();
+    const incidentOpens = [];
+
+    for (const detection of detections.filter((alert) => alert.thresholdPolicy)) {
+      const lifecycle = describeTransientAlertLifecycle(detection, detection.thresholdPolicy);
+      if (!lifecycle) continue;
+
+      await incidentTracker.recordObservation(lifecycle);
+
+      const signal = await observerGuard.trackSignal({
+        key: lifecycle.key,
+        minHits: detection.thresholdPolicy.minHits,
+        windowMs: detection.thresholdPolicy.windowMs,
+        cooldownMs: detection.thresholdPolicy.cooldownMs,
+        meta: {
+          container: detection.container,
+          family: detection.thresholdPolicy.family,
+          errorHash: detection.errorHash,
+        },
+      });
+
+      if (!signal.shouldEscalate) {
+        if (detection.isNew) suppressedStatuses.set(detection.errorHash, 'suppressed_threshold');
+        continue;
+      }
+
+      const openResult = await incidentTracker.openIncident(lifecycle);
+      if (!openResult.opened) {
+        if (detection.isNew) suppressedStatuses.set(detection.errorHash, 'suppressed_open_incident');
+        continue;
+      }
+
+      incidentOpens.push({
+        ...detection,
+        lifecycle,
+        incident: openResult.incident,
+      });
+    }
+
+    const rawCandidates = newAlerts.filter((alert) => !getTransientAlertThresholdPolicy(alert));
+    let analyzedRawAlerts = rawCandidates;
     try {
-      analyzedAlerts = await Promise.all(
-        alerts.map(async (a) => {
-          const analysis = await analyzeError(a.friendly, a.errorText);
-          return { ...a, analysis };
+      analyzedRawAlerts = await Promise.all(
+        rawCandidates.map(async (alert) => {
+          const analysis = await analyzeError(alert.friendly, alert.errorText);
+          return { ...alert, analysis };
         })
       );
     } catch (err) {
       console.warn('[LogMonitor] AI analysis failed, sending raw alerts:', err.message);
-      analyzedAlerts = alerts.map(a => ({ ...a, analysis: null }));
+      analyzedRawAlerts = rawCandidates.map((alert) => ({ ...alert, analysis: null }));
     }
 
-    // Filter out noise (AI-identified harmless errors)
-    const actionable = analyzedAlerts.filter(a => !a.analysis?.noise);
-    const noiseCount = analyzedAlerts.length - actionable.length;
+    const rawActionable = [];
+    for (const alert of analyzedRawAlerts) {
+      if (alert.analysis?.noise) {
+        suppressedStatuses.set(alert.errorHash, 'suppressed_noise');
+        continue;
+      }
+      rawActionable.push(alert);
+    }
+
+    const noiseCount = Array.from(suppressedStatuses.values()).filter((status) => status === 'suppressed_noise').length;
+    const thresholdCount = Array.from(suppressedStatuses.values()).filter((status) => status === 'suppressed_threshold').length;
+    const openIncidentSuppressions = Array.from(suppressedStatuses.values()).filter((status) => status === 'suppressed_open_incident').length;
     if (noiseCount > 0) console.log(`[LogMonitor] AI filtered ${noiseCount} noise alert(s)`);
+    if (thresholdCount > 0) console.log(`[LogMonitor] Threshold-suppressed ${thresholdCount} transient alert(s)`);
+    if (openIncidentSuppressions > 0) console.log(`[LogMonitor] Suppressed ${openIncidentSuppressions} repeat alert(s) while incidents were already open`);
 
-    let actionableDeliveryStatus = actionable.length > 0 ? 'delivery_failed' : 'suppressed_noise';
-    if (actionable.length > 0) {
-      // Format WhatsApp message with AI analysis
-      const formattedAlerts = actionable.map(a => {
-        if (a.analysis && a.analysis.rootCause !== 'Analysis unavailable') {
-          return formatAnalyzedAlert(a.friendly, a.errorText, a.analysis);
+    const actionable = [...incidentOpens, ...rawActionable];
+    const outgoingSections = [];
+    if (incidentOpens.length > 0) {
+      outgoingSections.push(formatOpenIncidentMessage(incidentOpens.map((alert) => alert.incident)));
+    }
+    if (rawActionable.length > 0) {
+      const formattedAlerts = rawActionable.map((alert) => {
+        if (alert.analysis && alert.analysis.rootCause !== 'Analysis unavailable') {
+          return formatAnalyzedAlert(alert.friendly, alert.errorText, alert.analysis);
         }
-        return `\u{1F433} ${a.friendly}:\n${a.errorText}`;
+        return `\u{1F433} ${alert.friendly}:\n${alert.errorText}`;
       });
+      outgoingSections.push(`\u{26A0}\u{FE0F} Log alerts detected:\n\n${formattedAlerts.join('\n\n')}`);
+    }
 
-      const msg = `\u{26A0}\u{FE0F} Log alerts detected:\n\n${formattedAlerts.join('\n\n')}`;
+    let actionableDeliveryStatus = outgoingSections.length > 0 ? 'delivery_failed' : 'suppressed_noise';
+    if (outgoingSections.length > 0) {
+      const msg = outgoingSections.join('\n\n');
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           if (!sockRef.sock?.ws?.isOpen) {
@@ -1038,7 +1163,7 @@ async function checkContainerLogs(sockRef) {
           }
           await safeSendChunked(sockRef, ADMIN_JID, msg);
           writeReport('log-alert', msg);
-          console.log(`\u{26A0}\u{FE0F} Sent ${actionable.length} analyzed alert(s)`);
+          console.log(`\u{26A0}\u{FE0F} Sent ${actionable.length} actionable log alert(s)`);
           actionableDeliveryStatus = 'sent';
           break;
         } catch (err) {
@@ -1051,15 +1176,43 @@ async function checkContainerLogs(sockRef) {
       }
     }
 
-    await appendAlertAuditEntries(
-      analyzedAlerts.map((alert) =>
+    if (recoveredIncidents.length > 0) {
+      const recoveredMsg = formatRecoveredIncidentMessage(recoveredIncidents);
+      try {
+        if (sockRef.sock?.ws?.isOpen) {
+          await safeSendChunked(sockRef, ADMIN_JID, recoveredMsg);
+          console.log(`✅ Sent ${recoveredIncidents.length} recovery alert(s)`);
+        } else {
+          console.warn('[LogMonitor] Recovery message skipped: socket not open');
+        }
+      } catch (err) {
+        console.error('[LogMonitor] Failed to send recovery message:', err.message);
+      }
+    }
+
+    const rawActionableHashes = new Set(rawActionable.map((alert) => alert.errorHash));
+    const incidentOpenHashes = new Set(incidentOpens.map((alert) => alert.errorHash));
+    const auditEntries = newAlerts.map((alert) => {
+      let deliveryStatus = suppressedStatuses.get(alert.errorHash) || 'suppressed_noise';
+      if (rawActionableHashes.has(alert.errorHash)) {
+        deliveryStatus = actionableDeliveryStatus;
+      } else if (incidentOpenHashes.has(alert.errorHash)) {
+        deliveryStatus = actionableDeliveryStatus === 'sent' ? 'incident_opened' : actionableDeliveryStatus;
+      }
+      return buildLogAlertAuditEntry(alert, batchId, deliveryStatus);
+    });
+
+    for (const alert of incidentOpens.filter((incident) => !incident.isNew)) {
+      auditEntries.push(
         buildLogAlertAuditEntry(
           alert,
           batchId,
-          alert.analysis?.noise ? 'suppressed_noise' : actionableDeliveryStatus
+          actionableDeliveryStatus === 'sent' ? 'incident_opened' : actionableDeliveryStatus
         )
-      )
-    );
+      );
+    }
+
+    await appendAlertAuditEntries(auditEntries);
 
     // Auto-create repair tasks for actionable alerts with enriched context
     for (const alert of actionable) {
@@ -1089,24 +1242,28 @@ async function checkContainerLogs(sockRef) {
         );
 
         if (!alreadyTracked) {
-          const signal = await observerGuard.trackSignal({
-            key: `log:${alert.container}:${alert.errorHash}`,
-            minHits: alert.analysis?.severity === 'critical' ? 1 : 2,
-            cooldownMs: 30 * 60 * 1000,
-            meta: {
-              container: alert.container,
-              friendly: alert.friendly,
-              errorHash: alert.errorHash,
-            },
-          });
-          if (!signal.shouldEscalate) {
-            continue;
+          if (!alert.lifecycle) {
+            const signal = await observerGuard.trackSignal({
+              key: `log:${alert.container}:${alert.errorHash}`,
+              minHits: alert.analysis?.severity === 'critical' ? 1 : 2,
+              cooldownMs: 30 * 60 * 1000,
+              meta: {
+                container: alert.container,
+                friendly: alert.friendly,
+                errorHash: alert.errorHash,
+              },
+            });
+            if (!signal.shouldEscalate) {
+              continue;
+            }
           }
 
-          const baseAction = `Check logs for ${containerName}, identify root cause, fix it, verify recovery`;
+          const baseAction = alert.lifecycle
+            ? `Check logs for ${containerName}, restore normal service for ${alert.lifecycle.degradedTitle.toLowerCase()}, and verify recovery`
+            : `Check logs for ${containerName}, identify root cause, fix it, verify recovery`;
           const nextAction = alert.analysis
             ? buildEnrichedNextAction(containerName, alert.errorText, alert.analysis, baseAction)
-            : baseAction;
+            : (alert.lifecycle?.degradedDetail ? `${baseAction}. Context: ${alert.lifecycle.degradedDetail}` : baseAction);
           const priority = alert.analysis?.severity === 'critical' ? 'urgent' : 'high';
 
           const task = await createTask({
@@ -1241,7 +1398,7 @@ export async function startScheduler(sockRef, connectionHealth) {
       writeReport('nightly-synthesis', msg);
       // Only alert Gil on actual regressions (broken things)
       if (synthesis.regressions.count > 0) {
-        await sockRef.sock.sendMessage(ADMIN_JID, { text: `⚠️ ${synthesis.regressions.count} regression(s) detected — check /reports for details` });
+        await sockRef.sock.sendMessage(ADMIN_JID, { text: `⚠️ ${synthesis.regressions.count} regression(s) detected today. Check /reports for details.` });
       }
       writeHeartbeat('nightly-synthesis');
     } catch (err) {
@@ -1366,7 +1523,36 @@ export async function startScheduler(sockRef, connectionHealth) {
       freshnessSlaMinutes: 60,
       escalation: 'whatsapp_first',
     }, async () => {
-      const { stdout } = await execAsync('bash /app/scripts/cron-monitor.sh --alert', { timeout: 10000 });
+      const snapshot = await readJsonFile('/app/data/cron-health.json');
+      if (!snapshot) {
+        throw new Error('Host cron snapshot missing at /app/data/cron-health.json');
+      }
+
+      const generatedAtMs = Date.parse(snapshot.generatedAt || 0);
+      if (!generatedAtMs) {
+        throw new Error('Host cron snapshot is missing a valid generatedAt timestamp');
+      }
+
+      const ageMinutes = Math.floor((Date.now() - generatedAtMs) / 60000);
+      if (ageMinutes > 60) {
+        throw new Error(`Host cron snapshot is stale (${ageMinutes}m old)`);
+      }
+
+      const failCount = Number(snapshot.fail || 0);
+      const warnCount = Number(snapshot.warn || 0);
+      const total = Number(snapshot.total || 0);
+      const ok = Number(snapshot.ok || 0);
+      const skip = Number(snapshot.skip || 0);
+      const topIssues = []
+        .concat(Array.isArray(snapshot.problems) ? snapshot.problems.slice(0, 3).map((issue) => `broken: ${issue}`) : [])
+        .concat(Array.isArray(snapshot.warnings) ? snapshot.warnings.slice(0, 3).map((issue) => `warn: ${issue}`) : []);
+
+      if (failCount > 0 || warnCount > 0) {
+        const issueText = topIssues.length ? ` ${topIssues.join('; ')}` : '';
+        throw new Error(`Host cron snapshot reports ${failCount} broken and ${warnCount} warnings.${issueText}`.trim());
+      }
+
+      const stdout = `OK: ${total} jobs - all healthy (${ok} ok, ${skip} skipped)`;
       return {
         summary: stdout.trim(),
         suppressSuccessAlert: true,
@@ -1426,6 +1612,7 @@ export async function startScheduler(sockRef, connectionHealth) {
       trigger: '30 20 * * *',
       executor: JobExecutor.CONTAINER,
       delivery: JobDelivery.WHATSAPP_FIRST,
+      allowDeliveryFailure: true,
       reportType: 'self-improvement',
       freshnessSlaMinutes: 24 * 60,
       escalation: 'whatsapp_first',
@@ -1451,9 +1638,22 @@ export async function startScheduler(sockRef, connectionHealth) {
   }, { timezone: 'America/Puerto_Rico' });
   console.log('🔬 Self-improvement protocol scheduled (8:30 PM AST / 00:30 UTC) [whatsapp-first]');
 
-  // 11. File-based outbox — send messages queued by external scripts
+  // 11. Delivery retry queue + file-based outbox
   const outboxPath = '/tmp/wa-outbox.json';
-  cron.schedule('*/10 * * * * *', async () => {
+  cron.schedule('*/15 * * * * *', async () => {
+    try {
+      const deliverySummary = await drainDeliveryQueue({
+        dataDir: DATA_DIR,
+        sendAdminText: async (text, jid) => safeSendChunked(sockRef, jid || ADMIN_JID, text),
+        limit: 3,
+      });
+      if (deliverySummary.sent > 0 || deliverySummary.dropped > 0) {
+        console.log(`📬 Delivery retry queue: sent ${deliverySummary.sent}, failed ${deliverySummary.failed}, dropped ${deliverySummary.dropped}, remaining ${deliverySummary.remaining}`);
+      }
+    } catch (err) {
+      console.warn('[DeliveryQueue] Drain error:', err.message);
+    }
+
     try {
       const { readFileSync, unlinkSync, existsSync } = await import('fs');
       if (!existsSync(outboxPath)) return;
@@ -1574,17 +1774,17 @@ export async function startScheduler(sockRef, connectionHealth) {
 
       // Alert if uncompressed events are piling up (compression may be stuck)
       if (stats.uncompressed > 50) {
-        alerts.push(`⚠️ ${stats.uncompressed} uncompressed events — compression may be stuck`);
+        alerts.push(`⚠️ ${stats.uncompressed} events are still waiting for compression.`);
       }
 
       // Alert if no active observations exist (possible DB issue)
       if (stats.total_events > 100 && stats.active_obs === 0) {
-        alerts.push(`⚠️ 0 active observations despite ${stats.total_events} events — possible issue`);
+        alerts.push(`⚠️ There are 0 active observations despite ${stats.total_events} total events.`);
       }
 
       // Alert if average importance is dropping too low
       if (stats.avg_importance !== null && stats.avg_importance < 0.2) {
-        alerts.push(`⚠️ Average importance ${stats.avg_importance} — consolidation may be too aggressive`);
+        alerts.push(`⚠️ Average importance is ${stats.avg_importance}, so consolidation may be too aggressive.`);
       }
 
       if (alerts.length > 0) {

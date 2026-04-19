@@ -4,9 +4,14 @@
   "description": "WhatsApp ↔ Claude Code bridge — Overlord",
   "type": "module",
   "scripts": {
+    "test:job-runtime": "node scripts/test-job-runtime.mjs",
+    "test:self-improve": "node scripts/test-self-improve.mjs",
     "start": "node index.js",
     "dev": "node --watch index.js",
-    "test:log-alerts": "node scripts/test-log-alerts.mjs"
+    "test:incident-tracker": "node scripts/test-incident-tracker.mjs",
+    "test:log-alerts": "node scripts/test-log-alerts.mjs",
+    "test:log-alert-policies": "node scripts/test-log-alert-policies.mjs",
+    "test:optional-openrouter": "node scripts/test-optional-openrouter.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.76",

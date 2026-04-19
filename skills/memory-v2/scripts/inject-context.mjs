@@ -266,14 +266,8 @@ ${context}`;
       logInjection(sessionId, briefing, project, tokenEstimate);
     }
 
-    // Auto-compress stale events silently
-    try {
-      const db = getDb();
-      const stale = db.prepare('SELECT COUNT(*) as c FROM tool_events WHERE compressed = 0').get();
-      if (stale.c > 50) {
-        db.prepare('UPDATE tool_events SET compressed = 1 WHERE compressed = 0').run();
-      }
-    } catch { /* silent */ }
+    // Note: auto-compress is handled by auto-compress.mjs via cron/scheduler.
+    // Do NOT mark events as compressed here — that discards data without extraction.
 
     if (systemMessage) {
       process.stdout.write(JSON.stringify({ systemMessage }));

@@ -42,8 +42,8 @@ const DEFAULT_SERVICES = [
     name: 'NamiBarden',
     type: 'http',
     url: 'https://namibarden.com',
-    container: null, // Coolify-managed (ock0wowgsgwwww8w00400k00-*)
-    autoRestart: false,
+    container: 'namibarden', // Standalone docker-compose (not Coolify)
+    autoRestart: false, // Healing centralized in test-aichan.sh
     expectedStatus: 200,
   },
   {
@@ -58,8 +58,8 @@ const DEFAULT_SERVICES = [
     name: 'Lumina',
     type: 'http',
     url: 'https://lumina.namibarden.com',
-    container: null, // Coolify-managed
-    autoRestart: false,
+    container: 'lumina-app-1', // Standalone docker-compose (not Coolify)
+    autoRestart: false, // Healing centralized in test-aichan.sh
     expectedStatus: [200, 302],
   },
   {

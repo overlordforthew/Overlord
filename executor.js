@@ -52,7 +52,7 @@ async function runClaudeForTask(prompt, workDir = '/projects', timeoutMs = 600_0
       cwd: workDir,
       timeoutMs,
       role: 'task',
-      requestedModel: 'claude-opus-4-6',
+      requestedModel: 'claude-opus-4-7',
     });
     return result.text || '(no output)';
   }
@@ -64,7 +64,7 @@ async function runClaudeForTask(prompt, workDir = '/projects', timeoutMs = 600_0
     const args = [
       '-p', '--output-format', 'json',
       '--max-turns', '50',
-      '--model', 'claude-opus-4-6',
+      '--model', 'claude-opus-4-7',
     ];
 
     // Safe env: don't leak API keys to Claude CLI subprocesses

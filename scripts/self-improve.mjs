@@ -19,10 +19,16 @@
  */
 
 import { readFileSync, existsSync, readdirSync } from 'fs';
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { loadJobState, loadRecentJobRuns } from '../lib/job-runtime.js';
+import {
+  analyzeOptionalOpenRouterFailure,
+  describeOptionalOpenRouterPause,
+  getOptionalOpenRouterPause,
+  pauseOptionalOpenRouter,
+} from '../lib/optional-openrouter.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -243,6 +249,14 @@ async function fetchReadme(fullName) {
 }
 
 async function analyzeRepoForUs(repo, readme) {
+  const globalPause = getOptionalOpenRouterPause();
+  if (globalPause) {
+    return {
+      analysis: null,
+      pauseReason: describeOptionalOpenRouterPause(globalPause),
+    };
+  }
+
   // Sanitize external content before feeding to LLM
   const safeReadme = readme ? sanitizeForLLM(readme) : null;
   const safeDesc = sanitizeForLLM(repo.description || '');
@@ -271,14 +285,52 @@ ${repoInfo}
 Reply with ONLY the analysis, no preamble. Keep it under 4 sentences. Be specific about our stack.`;
 
   try {
-    // Use stdin to avoid shell escaping issues with special characters in README content
-    const result = execSync(
-      `llm -m openrouter/openrouter/free`,
-      { input: prompt, timeout: 30000, encoding: 'utf-8', env: { ...process.env } }
-    ).trim();
-    return result || null;
-  } catch {
-    return null;
+    const result = spawnSync('llm', ['-m', 'openrouter/openrouter/free'], {
+      input: prompt,
+      timeout: 30000,
+      encoding: 'utf-8',
+      env: { ...process.env },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    const stdout = String(result.stdout || '').trim();
+    const stderr = String(result.stderr || '').trim();
+    if (result.error || result.status !== 0) {
+      const failureText = [stderr, stdout, result.error?.message].filter(Boolean).join('\n');
+      const statusMatch = failureText.match(/\b(401|403|408|429|5\d\d)\b/);
+      const failure = analyzeOptionalOpenRouterFailure({
+        status: statusMatch ? Number(statusMatch[1]) : null,
+        errorText: failureText,
+      });
+      if (failure.cooldownMs) {
+        pauseOptionalOpenRouter(failure.kind, failure.summary, failure.cooldownMs);
+      }
+      const pause = getOptionalOpenRouterPause();
+      return {
+        analysis: null,
+        pauseReason: failure.cooldownMs ? describeOptionalOpenRouterPause(pause) : null,
+      };
+    }
+
+    return {
+      analysis: stdout || null,
+      pauseReason: null,
+    };
+  } catch (err) {
+    const failureText = [err?.stderr, err?.stdout, err?.message].filter(Boolean).join('\n');
+    const statusMatch = failureText.match(/\b(401|403|408|429|5\d\d)\b/);
+    const failure = analyzeOptionalOpenRouterFailure({
+      status: statusMatch ? Number(statusMatch[1]) : null,
+      errorText: failureText,
+    });
+    if (failure.cooldownMs) {
+      pauseOptionalOpenRouter(failure.kind, failure.summary, failure.cooldownMs);
+    }
+    const pause = getOptionalOpenRouterPause();
+    return {
+      analysis: null,
+      pauseReason: failure.cooldownMs ? describeOptionalOpenRouterPause(pause) : null,
+    };
   }
 }
 
@@ -361,7 +413,67 @@ function readJSON(file, fallback) {
   }
 }
 
-function summarizeJobRuns(runs, nowMs) {
+function recencyWeight(eventMs, nowMs) {
+  const age = Math.max(0, nowMs - eventMs);
+  return Math.max(0.2, 1 - (age / WEEK_MS));
+}
+
+function summarizeFailureIncidents(jobRuns, nowMs) {
+  const ordered = [...jobRuns].sort((a, b) => a.startedAtMs - b.startedAtMs);
+  const incidents = [];
+  let active = null;
+
+  for (const run of ordered) {
+    if (run.status === 'failed') {
+      if (!active) {
+        active = {
+          startedAtMs: run.startedAtMs,
+          lastAttemptAtMs: run.startedAtMs,
+          failedAttempts: 0,
+        };
+      }
+      active.failedAttempts += 1;
+      active.lastAttemptAtMs = run.startedAtMs;
+      continue;
+    }
+
+    if (run.status === 'ok' && active) {
+      incidents.push({
+        ...active,
+        resolved: true,
+        resolvedAtMs: run.startedAtMs,
+      });
+      active = null;
+    }
+  }
+
+  if (active) {
+    incidents.push({
+      ...active,
+      resolved: false,
+      resolvedAtMs: null,
+    });
+  }
+
+  const openIncidentCount = incidents.filter((incident) => !incident.resolved).length;
+  const recoveredIncidentCount = incidents.filter((incident) => incident.resolved).length;
+  const failedAttempts = incidents.reduce((sum, incident) => sum + incident.failedAttempts, 0);
+  const score = incidents.reduce((sum, incident) => {
+    const anchorMs = incident.resolvedAtMs || incident.lastAttemptAtMs || incident.startedAtMs;
+    const severity = incident.resolved ? 1 : 3;
+    return sum + (severity * recencyWeight(anchorMs, nowMs));
+  }, 0);
+
+  return {
+    incidents,
+    failedAttempts,
+    openIncidentCount,
+    recoveredIncidentCount,
+    score,
+  };
+}
+
+export function summarizeJobRuns(runs, nowMs) {
   const weekAgoMs = nowMs - WEEK_MS;
   const byJob = new Map();
 
@@ -376,22 +488,31 @@ function summarizeJobRuns(runs, nowMs) {
       failed: 0,
       skipped: 0,
       total: 0,
+      runs: [],
     };
 
     stats.total += 1;
     if (run.status === 'ok') stats.ok += 1;
     if (run.status === 'failed') stats.failed += 1;
     if (run.status === 'skipped') stats.skipped += 1;
+    stats.runs.push({
+      status: run.status,
+      startedAtMs: startedAt,
+    });
     byJob.set(run.jobId, stats);
   }
 
   return [...byJob.values()]
     .map((job) => ({
       ...job,
-      score: (job.failed * 3) + job.skipped,
+      ...summarizeFailureIncidents(job.runs, nowMs),
     }))
-    .filter((job) => job.failed > 0 || job.skipped > 1)
-    .sort((a, b) => b.score - a.score || b.failed - a.failed || b.total - a.total);
+    .filter((job) => job.failedAttempts > 0)
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      if (b.openIncidentCount !== a.openIncidentCount) return b.openIncidentCount - a.openIncidentCount;
+      return b.failedAttempts - a.failedAttempts;
+    });
 }
 
 async function summarizeReliability() {
@@ -400,7 +521,7 @@ async function summarizeReliability() {
   const recentRuns = await loadRecentJobRuns(DATA_DIR, 400);
   const tasks = readJSON(path.join(DATA_DIR, 'tasks.json'), []);
 
-  const jobs = Object.values(jobState.jobs || {});
+  const jobs = Object.values(jobState.jobs || {}).filter((job) => job.id !== 'self-improvement');
   const trackedJobs = jobs.length;
   const failingJobs = jobs.filter((job) => job.lastRunStatus === 'failed');
   const staleJobs = jobs.filter((job) => {
@@ -409,7 +530,9 @@ async function summarizeReliability() {
     return !referenceAt || (nowMs - referenceAt) > (job.freshnessSlaMinutes * 60000);
   });
 
-  const flakiestJobs = summarizeJobRuns(recentRuns, nowMs).slice(0, 5);
+  const flakiestJobs = summarizeJobRuns(recentRuns, nowMs)
+    .filter((job) => job.jobId !== 'self-improvement')
+    .slice(0, 5);
   const recentRepairTasks = tasks
     .filter((task) => task.kind === 'repair')
     .filter((task) => {
@@ -450,7 +573,7 @@ async function summarizeReliability() {
   };
 }
 
-async function generateReport() {
+export async function generateReport() {
   const startTime = Date.now();
 
   // Run all analyses
@@ -467,11 +590,21 @@ async function generateReport() {
   // Deep-analyze top repos: fetch READMEs and run LLM analysis
   const topToAnalyze = repos.highRelevance.slice(0, 6);
   const analyses = [];
+  const existingRepoAnalysisPause = getOptionalOpenRouterPause();
+  let repoAnalysisPauseReason = existingRepoAnalysisPause
+    ? describeOptionalOpenRouterPause(existingRepoAnalysisPause)
+    : null;
   for (const repo of topToAnalyze) {
+    if (repoAnalysisPauseReason) break;
     const readme = await fetchReadme(repo.full_name);
     await new Promise(r => setTimeout(r, 500)); // rate limit courtesy
-    const analysis = await analyzeRepoForUs(repo, readme);
-    analyses.push({ repo, analysis });
+    const analysisResult = await analyzeRepoForUs(repo, readme);
+    if (analysisResult?.analysis) {
+      analyses.push({ repo, analysis: analysisResult.analysis });
+    }
+    if (analysisResult?.pauseReason) {
+      repoAnalysisPauseReason = analysisResult.pauseReason;
+    }
   }
 
   const duration = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -508,9 +641,10 @@ async function generateReport() {
   }
 
   if (reliability.flakiestJobs.length > 0) {
-    lines.push('FLAKIEST JOBS (7 days):');
+    lines.push('RELIABILITY INCIDENTS (7 days):');
     for (const job of reliability.flakiestJobs) {
-      lines.push(`  ${job.label}: ${job.failed} failed, ${job.skipped} skipped, ${job.ok} ok`);
+      const status = job.openIncidentCount > 0 ? 'ongoing' : 'recovered';
+      lines.push(`  ${job.label}: ${job.incidents.length} incident(s), ${job.failedAttempts} failed attempts, ${status}`);
     }
     lines.push('');
   }
@@ -613,11 +747,17 @@ async function generateReport() {
   lines.push('');
 
   let recNum = 1;
+  const reliabilityFocus = reliability.flakiestJobs.find((job) => job.openIncidentCount > 0);
+  const recoveredReliabilityFollowUp = reliability.flakiestJobs.find((job) => job.openIncidentCount === 0);
 
-  if (reliability.flakiestJobs.length > 0) {
-    const top = reliability.flakiestJobs[0];
+  if (reliabilityFocus) {
+    const top = reliabilityFocus;
     lines.push(`${recNum}. STABILIZE "${top.label}"`);
-    lines.push(`   It failed ${top.failed} time(s) and skipped ${top.skipped} time(s) in the last 7 days.`);
+    if (top.openIncidentCount > 0) {
+      lines.push(`   It still has ${top.openIncidentCount} open incident(s) after ${top.failedAttempts} failed attempts this week.`);
+    } else {
+      lines.push(`   It recovered, but still burned ${top.failedAttempts} failed attempts across ${top.incidents.length} incident(s) this week.`);
+    }
     recNum++;
   }
 
@@ -650,8 +790,20 @@ async function generateReport() {
     recNum++;
   }
 
+  if (recoveredReliabilityFollowUp && recNum <= 3) {
+    const top = recoveredReliabilityFollowUp;
+    lines.push(`${recNum}. WATCH "${top.label}"`);
+    lines.push(`   It recovered, but had ${top.failedAttempts} failed attempts across ${top.incidents.length} incident(s) this week.`);
+    recNum++;
+  }
+
   if (recNum <= 3) {
     lines.push(`${recNum}. EVOLVE: Review Claude Code changelog for new agent SDK features`);
+    recNum++;
+  }
+
+  if (recNum <= 3) {
+    lines.push(`${recNum}. MAINTAIN: Keep the delivery retry queue empty and the operator wording concise`);
   }
 
   lines.push('');
@@ -660,6 +812,11 @@ async function generateReport() {
   if (repos.rateLimited) {
     lines.push('');
     lines.push('(GitHub API rate limited — some results incomplete)');
+  }
+
+  if (repoAnalysisPauseReason) {
+    lines.push('');
+    lines.push(`(Optional repo deep-analysis paused: ${repoAnalysisPauseReason})`);
   }
 
   lines.push('');
@@ -681,6 +838,7 @@ async function generateReport() {
       failingJobs: reliability.failingJobs.length,
       staleJobs: reliability.staleJobs.length,
       failedRepairs: reliability.failedRepairs.length,
+      repoAnalysisPauseReason,
       duration,
       rateLimited: repos.rateLimited,
     },
@@ -701,10 +859,14 @@ function frictionExplanation(type) {
 
 // ── MAIN ──────────────────────────────────────────────────────────────────────
 
-const result = await generateReport();
+const isMainModule = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
-if (process.argv.includes('--json')) {
-  console.log(JSON.stringify(result, null, 2));
-} else {
-  console.log(result.report);
+if (isMainModule) {
+  const result = await generateReport();
+
+  if (process.argv.includes('--json')) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(result.report);
+  }
 }

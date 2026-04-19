@@ -15,6 +15,12 @@ import { execSync, spawnSync } from 'child_process';
 import { evolve, extractLearningSignals } from './evolution-engine.js';
 import { getLatestScorecard } from './portfolio-scorecard.js';
 import { pickTask, recordAttempt, getPracticeStats } from './practice-engine.js';
+import {
+  analyzeOptionalOpenRouterFailure,
+  describeOptionalOpenRouterPause,
+  getOptionalOpenRouterPause,
+  pauseOptionalOpenRouter,
+} from './lib/optional-openrouter.js';
 
 const STUDY_STATE_PATH = '/app/data/study-state.json';
 const STUDY_LOG_PATH = '/app/data/study-log.jsonl';
@@ -228,7 +234,16 @@ function getFreeModels() {
 
 async function callFreeLLM(prompt, maxTokens = 1500) {
   const key = process.env.OPENROUTER_KEY;
-  if (!key) { console.error('[Study] No OPENROUTER_KEY'); return ''; }
+  if (!key) {
+    console.log('[Study] Free-model study skipped: OPENROUTER_KEY missing');
+    return '';
+  }
+
+  const globalPause = getOptionalOpenRouterPause();
+  if (globalPause) {
+    console.log(`[Study] Free-model study paused: ${describeOptionalOpenRouterPause(globalPause)}`);
+    return '';
+  }
 
   const models = getFreeModels();
   for (const model of models) {
@@ -249,12 +264,27 @@ async function callFreeLLM(prompt, maxTokens = 1500) {
         }),
         signal: AbortSignal.timeout(60000),
       });
-      const data = await res.json();
-      if (data.error) {
-        console.log(`[Study] LLM skip: ${model} — ${(data.error.message || 'provider issue').substring(0, 60)}`);
+      const raw = await res.text();
+      let data = {};
+      try {
+        data = JSON.parse(raw);
+      } catch {}
+
+      if (!res.ok || data.error) {
+        const failure = analyzeOptionalOpenRouterFailure({
+          status: res.status,
+          errorText: data?.error?.message || raw,
+        });
+        if (failure.cooldownMs) {
+          const pause = pauseOptionalOpenRouter(failure.kind, failure.summary, failure.cooldownMs);
+          console.log(`[Study] Free-model study paused: ${describeOptionalOpenRouterPause(pause)}`);
+          return '';
+        }
+        console.log(`[Study] LLM skip: ${model} — ${failure.summary}`);
         coolDownModel(model);
         continue;
       }
+
       let text = data.choices?.[0]?.message?.content?.trim() || '';
       // Strip thinking blocks from reasoning models (Qwen, etc)
       text = text.replace(/^<think>[\s\S]*?<\/think>\s*/m, '').trim();
@@ -264,7 +294,13 @@ async function callFreeLLM(prompt, maxTokens = 1500) {
       }
       console.log(`[Study] LLM skip: ${model} — empty response`);
     } catch (err) {
-      console.log(`[Study] LLM fail: ${model} — ${err.message}`);
+      const failure = analyzeOptionalOpenRouterFailure({ errorText: err.message });
+      if (failure.cooldownMs) {
+        const pause = pauseOptionalOpenRouter(failure.kind, failure.summary, failure.cooldownMs);
+        console.log(`[Study] Free-model study paused: ${describeOptionalOpenRouterPause(pause)}`);
+        return '';
+      }
+      console.log(`[Study] LLM fail: ${model} — ${failure.summary}`);
       coolDownModel(model);
     }
   }

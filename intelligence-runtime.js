@@ -33,12 +33,12 @@ function buildSafeEnv(extra = {}) {
 
 function loadIntelligenceConfig() {
   return {
-    backend: (process.env.INTELLIGENCE_BACKEND || 'codex').trim().toLowerCase(),
+    backend: (process.env.INTELLIGENCE_BACKEND || 'claude').trim().toLowerCase(),
     fallbackBackend: (process.env.INTELLIGENCE_FALLBACK_BACKEND || 'claude').trim().toLowerCase(),
     model: (process.env.INTELLIGENCE_MODEL || 'gpt-5.4').trim(),
     reasoningEffort: (process.env.INTELLIGENCE_REASONING_EFFORT || 'xhigh').trim().toLowerCase(),
     claudePath: (process.env.CLAUDE_PATH || 'claude').trim(),
-    claudeModel: (process.env.CLAUDE_MODEL || 'claude-opus-4-6').trim(),
+    claudeModel: (process.env.CLAUDE_MODEL || 'claude-opus-4-7').trim(),
     codexPath: (process.env.CODEX_PATH || 'codex').trim(),
     apiModel: (process.env.INTELLIGENCE_API_MODEL || 'deepseek/deepseek-v3.2').trim(),
     apiBaseUrl: (process.env.INTELLIGENCE_API_BASE_URL || 'https://openrouter.ai/api/v1/chat/completions').trim(),

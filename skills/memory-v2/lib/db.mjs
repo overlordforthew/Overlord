@@ -2,8 +2,8 @@ import Database from 'better-sqlite3';
 import { dirname } from 'path';
 import { mkdirSync, existsSync } from 'fs';
 
-// Container uses /app/data, host uses /root/overlord/data — same volume mount
-const DB_PATH = existsSync('/app/data') ? '/app/data/memory-v2.db' : '/root/overlord/data/memory-v2.db';
+// Container (/.dockerenv exists) uses /app/data, host uses /root/overlord/data
+const DB_PATH = existsSync('/.dockerenv') ? '/app/data/memory-v2.db' : '/root/overlord/data/memory-v2.db';
 
 let db;
 

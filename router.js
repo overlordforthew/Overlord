@@ -22,7 +22,7 @@ import { getIntelligenceBackend, runStatelessIntelligence } from './intelligence
 export const MODEL_REGISTRY = {
   // ---- Anthropic (via Claude CLI — full tool access) ----
   'opus': {
-    id: 'claude-opus-4-6',
+    id: 'claude-opus-4-7',
     provider: 'anthropic',
     tier: 'premium',
     speed: 'medium',
@@ -344,7 +344,7 @@ Plan:`;
     const result = await runStatelessIntelligence({
       systemPrompt: 'You are a planning assistant.',
       userPrompt: planPrompt,
-      requestedModel: 'claude-opus-4-6',
+      requestedModel: 'claude-opus-4-7',
       timeoutMs: 12_000,
       maxTurns: 1,
       role: 'user',
