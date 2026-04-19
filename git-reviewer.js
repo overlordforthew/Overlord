@@ -134,11 +134,11 @@ ${diff.substring(0, 8000)}`;
     return new Promise((resolve, reject) => {
       let stdout = '';
       const proc = spawnWithMemoryLimit(CLAUDE_PATH, [
-        '-p', '--output-format', 'json', '--model', 'claude-opus-4-6',
-        '--max-turns', '1',
+        '-p', '--output-format', 'json', '--model', 'claude-sonnet-4-6',
+        '--max-turns', '5',
       ], {
         cwd: path,
-        timeout: 120000,
+        timeout: 300000,
         env: { HOME: process.env.HOME || '/root', PATH: process.env.PATH, TERM: 'dumb', NODE_OPTIONS: '--max-old-space-size=1024' },
       }, getMemoryLimit('medium'));
 
