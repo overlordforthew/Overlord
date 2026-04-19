@@ -155,20 +155,30 @@ See /root/projects/CLAUDE.md for infrastructure rules, projects list, and permis
 
 ## DATABASE SCHEMAS (overlord-db)
 
-When querying the `conversations` table, use these EXACT column names:
+The `conversations` table is **turn-oriented**: one row per user-assistant
+exchange (both sides stored on the same row as `user_message` and
+`assistant_response`). It has these columns:
+
 - `id`, `chat_jid` (NOT chat_id), `sender_jid`, `sender_name`, `chat_type`
-- `user_message` (NOT content), `assistant_response`, `message_type`
+- `user_message`, `assistant_response`, `message_type`
+- `content` (generated alias of `user_message` for OpenAI-style queries)
 - `quoted_text`, `media_path`, `transcription`
 - `system_prompt`, `conversation_context`, `memory_snapshot`
 - `model_id`, `router_mode`, `task_type`, `route_via`
 - `response_time_ms`, `token_estimate`, `quality_score`
 - `flagged`, `flag_reason`, `tags`, `created_at`
 
-There is NO `role` or `content` column. To get role, check sender_name.
-For convenience, a VIEW `conversation_log` exists with aliased columns:
-- `chat_id` (maps to chat_jid), `role` (derived: assistant/user), `content` (maps to user_message)
+There is NO `role` column on the base table (a row holds both sides,
+so no single role applies). For message-oriented queries with real
+`role = 'user' | 'assistant'` rows, use the **`conversation_log` view**,
+which UNIONs a user-row and an assistant-row for every turn and exposes:
 
-Prefer using `conversation_log` for ad-hoc lookups.
+- `id`, `chat_id` (alias of chat_jid), `chat_jid`, `sender_jid`, `sender_name`
+- `role` (`'user'` or `'assistant'`)
+- `content` (user_message or assistant_response depending on role)
+- plus all the routing + metadata columns
+
+Prefer `conversation_log` for anything that cares about role/content per message.
 
 ## MEMORY SYSTEM (v2 — SQLite)
 

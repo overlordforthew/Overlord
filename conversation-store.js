@@ -69,6 +69,62 @@ CREATE INDEX IF NOT EXISTS idx_conv_model ON conversations (model_id);
 CREATE INDEX IF NOT EXISTS idx_conv_quality ON conversations (quality_score) WHERE quality_score IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_conv_flagged ON conversations (flagged) WHERE flagged = TRUE;
 CREATE INDEX IF NOT EXISTS idx_conv_tags ON conversations USING GIN (tags);
+
+-- Compatibility shim: LLM-generated SQL and ad-hoc tools keep writing
+--   SELECT ... role, content FROM conversations WHERE content ILIKE ...
+-- because that matches OpenAI/chat-completions conventions. The base table
+-- is turn-oriented (one row = one user message + its assistant response),
+-- so there is no native "role" or "content" column. Rather than keep fighting
+-- the convention:
+--   - 'content' is exposed as a generated alias of user_message on the table
+--     (cheap, deterministic, safe for WHERE clauses and indexes).
+--   - 'role' cannot be a single value per row (each row holds BOTH sides),
+--     so we do NOT fake it at the table level. The conversation_log view
+--     below emits proper role='user'/'assistant' rows via UNION.
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS content TEXT
+  GENERATED ALWAYS AS (user_message) STORED;
+
+COMMENT ON TABLE conversations IS
+  'Turn-oriented: one row per user-assistant exchange (user_message + assistant_response). '
+  'For message-oriented queries with real role=user/assistant rows, use the conversation_log view.';
+
+-- Message-oriented view. One row per message (both sides of every turn emitted
+-- separately), so LLM-written SELECTs with role/content just work. Replaces an
+-- older view whose CASE for "role" was broken (both branches returned 'user').
+DROP VIEW IF EXISTS conversation_log;
+CREATE VIEW conversation_log AS
+  SELECT
+    id,
+    chat_jid          AS chat_id,
+    chat_jid,
+    sender_jid,
+    sender_name,
+    'user'::text      AS role,
+    user_message      AS content,
+    assistant_response,
+    chat_type, message_type, quoted_text, media_path, transcription,
+    model_id, router_mode, task_type, route_via,
+    response_time_ms, token_estimate, quality_score,
+    flagged, flag_reason, tags,
+    created_at
+  FROM conversations
+  UNION ALL
+  SELECT
+    id,
+    chat_jid          AS chat_id,
+    chat_jid,
+    NULL::text        AS sender_jid,
+    'assistant'::text AS sender_name,
+    'assistant'::text AS role,
+    assistant_response AS content,
+    NULL::text        AS assistant_response,
+    chat_type, message_type,
+    NULL::text AS quoted_text, NULL::text AS media_path, NULL::text AS transcription,
+    model_id, router_mode, task_type, route_via,
+    response_time_ms, token_estimate, quality_score,
+    flagged, flag_reason, tags,
+    created_at
+  FROM conversations;
 `;
 
 /**

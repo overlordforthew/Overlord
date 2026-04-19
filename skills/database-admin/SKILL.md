@@ -72,6 +72,21 @@ db-admin.sh schema overlord-db usage_stats overlord
 db-admin.sh query overlord-db "SELECT COUNT(*) FROM conversations" overlord
 ```
 
+**overlord-db `conversations` gotcha — read before writing ad-hoc SQL:**
+
+The `conversations` table is *turn-oriented*: each row holds both the
+user_message and its assistant_response together. It has no `role`
+column. `content` works as a generated alias for `user_message` so
+filters like `WHERE content ILIKE '%foo%'` match user text only.
+
+For OpenAI-style message-oriented queries (one row per message with
+`role = 'user' | 'assistant'` and `content` covering both sides), use
+the `conversation_log` view:
+
+```bash
+db-admin.sh query overlord-db "SELECT created_at, role, LEFT(content, 300) FROM conversation_log WHERE content ILIKE '%keyword%' ORDER BY created_at DESC LIMIT 10" overlord
+```
+
 **Backup a container:**
 ```bash
 db-admin.sh backup overlord-db /root/backups
