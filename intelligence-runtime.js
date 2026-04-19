@@ -40,9 +40,9 @@ function loadIntelligenceConfig() {
     claudePath: (process.env.CLAUDE_PATH || 'claude').trim(),
     claudeModel: (process.env.CLAUDE_MODEL || 'claude-opus-4-7').trim(),
     codexPath: (process.env.CODEX_PATH || 'codex').trim(),
-    apiModel: (process.env.INTELLIGENCE_API_MODEL || 'deepseek/deepseek-v3.2').trim(),
-    apiBaseUrl: (process.env.INTELLIGENCE_API_BASE_URL || 'https://openrouter.ai/api/v1/chat/completions').trim(),
-    apiKey: process.env.OPENROUTER_KEY || '',
+    apiModel: (process.env.INTELLIGENCE_API_MODEL || 'meta/llama-3.3-70b-instruct').trim(),
+    apiBaseUrl: (process.env.INTELLIGENCE_API_BASE_URL || 'https://integrate.api.nvidia.com/v1/chat/completions').trim(),
+    apiKey: process.env.NVIDIA_API_KEY || '',
   };
 }
 
@@ -72,9 +72,9 @@ export function resolveIntelligenceModel(requestedModel = '') {
 
 export function resolveIntelligenceVia(routeVia = 'claude-cli') {
   const backend = getIntelligenceBackend();
-  if (routeVia === 'openrouter-api' || routeVia === 'gemini-api') return routeVia;
+  if (routeVia === 'nvidia-api' || routeVia === 'gemini-api') return routeVia;
   if (backend === 'claude') return 'claude-cli';
-  if (backend === 'api') return 'openrouter-api';
+  if (backend === 'api') return 'nvidia-api';
   return 'codex-cli';
 }
 
@@ -124,7 +124,7 @@ function resolveModelForBackend(backend, requestedModel = '') {
 
 function routeViaForBackend(backend) {
   if (backend === 'claude') return 'claude-cli';
-  if (backend === 'api') return 'openrouter-api';
+  if (backend === 'api') return 'nvidia-api';
   return 'codex-cli';
 }
 
@@ -316,7 +316,7 @@ async function runApiTextTask({
   jsonMode = false,
 }) {
   const config = loadIntelligenceConfig();
-  if (!config.apiKey) throw new Error('OPENROUTER_KEY not set');
+  if (!config.apiKey) throw new Error('NVIDIA_API_KEY not set');
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);

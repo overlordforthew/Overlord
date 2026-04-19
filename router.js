@@ -49,110 +49,60 @@ export const MODEL_REGISTRY = {
     via: 'claude-cli',
   },
 
-  // ---- OpenRouter Free: RELIABLE tier (tested working, lower rate-limit pressure) ----
-  'step-flash': {
-    id: 'stepfun/step-3.5-flash:free',
-    provider: 'openrouter',
-    tier: 'mid',
-    speed: 'fast',
-    cost: 'free',
-    strengths: 'Fast reasoning, 256K context, reliable availability',
-    via: 'openrouter-api',
-  },
-  'glm-air': {
-    id: 'z-ai/glm-4.5-air:free',
-    provider: 'openrouter',
-    tier: 'mid',
-    speed: 'fast',
-    cost: 'free',
-    strengths: 'Strong multilingual, 131K context, steady availability',
-    via: 'openrouter-api',
-  },
-  // solar-pro: removed 2026-03-22 — free tier ended (404)
-  'nemotron-30b': {
-    id: 'nvidia/nemotron-3-nano-30b-a3b:free',
-    provider: 'openrouter',
-    tier: 'mid',
-    speed: 'fast',
-    cost: 'free',
-    strengths: '30B param, 256K context, solid reasoning',
-    via: 'openrouter-api',
-  },
-  'trinity': {
-    id: 'arcee-ai/trinity-large-preview:free',
-    provider: 'openrouter',
-    tier: 'mid',
-    speed: 'medium',
-    cost: 'free',
-    strengths: 'Good quality, 131K context',
-    via: 'openrouter-api',
-  },
-  'nemotron-9b': {
-    id: 'nvidia/nemotron-nano-9b-v2:free',
-    provider: 'openrouter',
+  // ---- Nvidia NIM (via integrate.api.nvidia.com — text-only, no tools) ----
+  'llama-3b': {
+    id: 'meta/llama-3.2-3b-instruct',
+    provider: 'nvidia',
     tier: 'light',
     speed: 'very_fast',
-    cost: 'free',
-    strengths: 'Fast and light, good for simple tasks',
-    via: 'openrouter-api',
+    cost: 'credits',
+    strengths: 'Tiny and instant — triage/classification (~230ms)',
+    via: 'nvidia-api',
   },
-
-  // ---- OpenRouter Free: POPULAR tier (good but hit rate limits more often) ----
-  'llama-70b': {
-    id: 'meta-llama/llama-3.3-70b-instruct:free',
-    provider: 'openrouter',
-    tier: 'mid',
-    speed: 'medium',
-    cost: 'free',
-    strengths: 'Strong general chat, well-tested',
-    via: 'openrouter-api',
-  },
-  'mistral-small': {
-    id: 'mistralai/mistral-small-3.1-24b-instruct:free',
-    provider: 'openrouter',
+  'llama-8b': {
+    id: 'meta/llama-3.1-8b-instruct',
+    provider: 'nvidia',
     tier: 'light',
+    speed: 'very_fast',
+    cost: 'credits',
+    strengths: 'Fast general chat (~540ms)',
+    via: 'nvidia-api',
+  },
+  'llama-70b': {
+    id: 'meta/llama-3.3-70b-instruct',
+    provider: 'nvidia',
+    tier: 'mid',
     speed: 'fast',
-    cost: 'free',
-    strengths: 'Great speed/quality ratio, multimodal',
-    via: 'openrouter-api',
+    cost: 'credits',
+    strengths: 'Workhorse — strong general chat (~1.4s)',
+    via: 'nvidia-api',
   },
   'qwen-coder': {
-    id: 'qwen/qwen3-coder:free',
-    provider: 'openrouter',
+    id: 'qwen/qwen2.5-coder-32b-instruct',
+    provider: 'nvidia',
     tier: 'mid',
     speed: 'fast',
-    cost: 'free',
-    strengths: 'Code generation, code review, 262K context',
-    via: 'openrouter-api',
+    cost: 'credits',
+    strengths: 'Code generation and review (~510ms)',
+    via: 'nvidia-api',
   },
-  'qwen-4b': {
-    id: 'qwen/qwen3-4b:free',
-    provider: 'openrouter',
-    tier: 'light',
-    speed: 'very_fast',
-    cost: 'free',
-    strengths: 'Tiny and instant — triage/classification',
-    via: 'openrouter-api',
-  },
-  'hermes-405b': {
-    id: 'nousresearch/hermes-3-llama-3.1-405b:free',
-    provider: 'openrouter',
+  'minimax-m2.5': {
+    id: 'minimaxai/minimax-m2.5',
+    provider: 'nvidia',
     tier: 'premium',
     speed: 'slow',
-    cost: 'free',
-    strengths: 'Largest free model, complex reasoning',
-    via: 'openrouter-api',
+    cost: 'credits',
+    strengths: 'Premium quality, slow but thorough (~50s)',
+    via: 'nvidia-api',
   },
-
-  // ---- OpenRouter Paid (cheap, good value) ----
-  'deepseek': {
-    id: 'deepseek/deepseek-v3.2',
-    provider: 'openrouter',
-    tier: 'mid',
-    speed: 'fast',
-    cost: '$0.25/$0.40 per Mtok',
-    strengths: 'Excellent reasoning at low cost',
-    via: 'openrouter-api',
+  'minimax-m2.7': {
+    id: 'minimaxai/minimax-m2.7',
+    provider: 'nvidia',
+    tier: 'premium',
+    speed: 'slow',
+    cost: 'credits',
+    strengths: 'Newest MiniMax — currently intermittent upstream; falls back to m2.5',
+    via: 'nvidia-api',
   },
 
   // ---- Gemini Direct (free tier, via Google API) ----
@@ -603,26 +553,26 @@ export async function routeMessage(parsed, opts = {}) {
       };
     }
 
-    // Medium → Step Flash (free, fast, reliable, 256K context)
+    // Medium → Llama 70B on Nvidia NIM (fast, strong general chat)
     if (taskType === 'medium') {
       return {
-        model: MODEL_REGISTRY['step-flash'],
+        model: MODEL_REGISTRY['llama-70b'],
         tools: null,
         maxTurns: 1,
         taskType,
-        via: 'openrouter-api',
+        via: 'nvidia-api',
         escalatable: true,
         classifiedBy,
       };
     }
 
-    // Simple → Nemotron 9B (free, very fast, reliable)
+    // Simple → Llama 3B on Nvidia NIM (very fast, triage-tier)
     return {
-      model: MODEL_REGISTRY['nemotron-9b'],
+      model: MODEL_REGISTRY['llama-3b'],
       tools: null,
       maxTurns: 1,
       taskType,
-      via: 'openrouter-api',
+      via: 'nvidia-api',
       escalatable: true,
       classifiedBy,
     };
@@ -654,8 +604,8 @@ export function routeTriage(mode) {
   if (currentMode === 'beta') {
     return { model: MODEL_REGISTRY.haiku, via: 'claude-cli' };
   }
-  // Charlie: fast reliable free model for triage
-  return { model: MODEL_REGISTRY['nemotron-9b'], via: 'openrouter-api' };
+  // Charlie: fast cheap model for triage
+  return { model: MODEL_REGISTRY['llama-3b'], via: 'nvidia-api' };
 }
 
 // ============================================================
@@ -667,8 +617,8 @@ export function routeTriage(mode) {
  * When one model 429s, try the next in the chain before escalating to Opus.
  */
 export const FREE_FALLBACK_CHAINS = {
-  simple: ['step-flash', 'nemotron-30b', 'glm-air', 'trinity', 'nemotron-9b', 'qwen-coder', 'llama-70b', 'mistral-small', 'gemini-flash-lite', 'qwen-4b'],
-  medium: ['step-flash', 'glm-air', 'trinity', 'qwen-coder', 'nemotron-30b', 'llama-70b', 'gemini-flash'],
+  simple: ['llama-3b', 'llama-8b', 'llama-70b', 'gemini-flash-lite'],
+  medium: ['llama-70b', 'qwen-coder', 'llama-8b', 'gemini-flash'],
 };
 
 /**
@@ -680,7 +630,7 @@ export async function callWithFallback(chain, systemPrompt, userPrompt, maxToken
     const model = MODEL_REGISTRY[modelKey];
     if (!model) continue;
     try {
-      const caller = model.via === 'gemini-api' ? callGemini : callOpenRouter;
+      const caller = model.via === 'gemini-api' ? callGemini : callNvidiaNIM;
       const response = await caller(model.id, systemPrompt, userPrompt, maxTokens, { jsonMode });
       // When JSON is required, validate the response is parseable before accepting
       if (jsonMode && response) {
@@ -704,11 +654,12 @@ export async function callWithFallback(chain, systemPrompt, userPrompt, maxToken
 // ============================================================
 
 /**
- * Call OpenRouter API directly (text in → text out, no tools).
+ * Call Nvidia NIM API directly (text in → text out, no tools).
+ * OpenAI-compatible endpoint. Long timeout to tolerate MiniMax premium lane.
  */
-export async function callOpenRouter(modelId, systemPrompt, userPrompt, maxTokens = 2000, { jsonMode = false } = {}) {
-  const key = process.env.OPENROUTER_KEY;
-  if (!key) throw new Error('OPENROUTER_KEY not set');
+export async function callNvidiaNIM(modelId, systemPrompt, userPrompt, maxTokens = 2000, { jsonMode = false } = {}) {
+  const key = process.env.NVIDIA_API_KEY;
+  if (!key) throw new Error('NVIDIA_API_KEY not set');
 
   const body = {
     model: modelId,
@@ -722,28 +673,24 @@ export async function callOpenRouter(modelId, systemPrompt, userPrompt, maxToken
     body.response_format = { type: 'json_object' };
   }
 
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${key}`,
-      'HTTP-Referer': 'https://overlord.bot',
-      'X-Title': 'Overlord WhatsApp Bot',
     },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(45_000),
+    signal: AbortSignal.timeout(180_000),
   });
 
   if (!res.ok) {
     const errText = await res.text().catch(() => '');
-    throw new Error(`OpenRouter ${res.status}: ${errText.substring(0, 200)}`);
+    throw new Error(`Nvidia NIM ${res.status}: ${errText.substring(0, 200)}`);
   }
 
   const data = await res.json();
-
-  // Check for rate limit or error in response body
   if (data.error) {
-    throw new Error(`OpenRouter error: ${data.error.message || JSON.stringify(data.error).substring(0, 200)}`);
+    throw new Error(`Nvidia NIM error: ${data.error.message || JSON.stringify(data.error).substring(0, 200)}`);
   }
 
   return data.choices?.[0]?.message?.content?.trim() || '';

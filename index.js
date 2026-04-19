@@ -48,7 +48,7 @@ import {
   recordOutcome, recordExperimentOutcome,
 } from './meta-learning.js';
 import {
-  routeMessage, routeTriage, planWithOpus, callOpenRouter, callGemini, callWithFallback,
+  routeMessage, routeTriage, planWithOpus, callNvidiaNIM, callGemini, callWithFallback,
   shouldEscalate, classifyTask, classifyWithOpus, getRouterStatus, MODEL_REGISTRY, FREE_FALLBACK_CHAINS,
 } from './router.js';
 import { registerSession, unregisterSession, setOnSessionKilled } from './session-guard.js';
@@ -2319,9 +2319,9 @@ Reply ONLY: YES or NO`;
         outputFormat: 'text',
       }).catch(() => ({ text: '' }));
       triageResponse = result.text || '';
-    } else if (triageRoute.via === 'openrouter-api') {
-      // Free/cheap model via OpenRouter
-      triageResponse = await callOpenRouter(
+    } else if (triageRoute.via === 'nvidia-api') {
+      // Cheap model via Nvidia NIM
+      triageResponse = await callNvidiaNIM(
         triageRoute.model.id,
         'You are a message classifier. Reply ONLY with YES or NO. Nothing else.',
         triagePrompt,
@@ -2763,7 +2763,7 @@ async function askClaude(chatJid, senderJid, parsed, mediaResult, triageReason) 
   args.push('--append-system-prompt', sysPrompt);
 
   // ---- NON-CLAUDE PATH: Direct API call with fallback chain ----
-  if (route.via === 'openrouter-api' || route.via === 'gemini-api') {
+  if (route.via === 'nvidia-api' || route.via === 'gemini-api') {
     // Inject real-time context — free models have no tool access so they need this
     const now = new Date();
     const utc = now.toISOString().replace('T', ' ').substring(0, 19);

@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS conversations (
   model_id        TEXT NOT NULL,                -- e.g. claude-opus-4-7, claude-sonnet-4-6
   router_mode     TEXT,                         -- alpha, beta, charlie
   task_type       TEXT,                         -- complex, simple, conversational, etc.
-  route_via       TEXT,                         -- claude-cli, openrouter-api, gemini-api
+  route_via       TEXT,                         -- claude-cli, nvidia-api, gemini-api
 
   -- Performance
   response_time_ms INTEGER,
